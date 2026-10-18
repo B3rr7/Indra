@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name" translatable="false">Indra</string>
+    <string name="title_activity_main">Indra</string>
+
+    <!-- Network -->
+    <string name="network_connected">Connected to %s</string>
+    <string name="network_disconnected">Not connected</string>
+    <string name="wifi_went_down">WiFi connection lost</string>
+
+    <!-- Actions -->
+    <string name="action_scan">Scan Network</string>
+    <string name="action_stop">Stop</string>
+    <string name="action_settings">Settings</string>
+    <string name="action_about">About</string>
+
+    <!-- Dialogs -->
+    <string name="close_confirm">This will close Indra, are you sure you want to continue?</string>
+    <string name="error">Error</string>
+    <string name="warning">Warning</string>
+    <string name="info">Info</string>
+
+    <!-- Errors -->
+    <string name="arm_error"><![CDATA[<p>It seems like your device processor is not an ARM, i\'m sorry but it\'s not compatible with Indra.</p>]]></string>
+    <string name="arm_error2"><![CDATA[<p>For more info read the <a href=\"http://indra.net/#requirements\">requirements</a> section.</p>]]></string>
+    <string name="fatal_error_html"><![CDATA[<p>It seems like your ROM has the <b>LD_LIBRARY_PATH bug</b>, i\'m sorry but it\'s not compatible with Indra.</p>]]></string>
+    <string name="fatal_error_html2"><![CDATA[<p>For more info read the <a href=\"http://indra.net/#faq\">FAQ</a>.</p>]]></string>
+
+    <!-- About -->
+    <string name="about_indra_v_">About Indra v</string>
+    <string name="menu_about">About Indra</string>
+    <string name="crash_dialog_title">Indra has crashed.</string>
+
+    <!-- Notification Channel -->
+    <string name="indraChannelId" translatable="false">indra_channel</string>
+    <string name="IndraChannelDescription">Indra-related messages</string>
+
+    <!-- URLs -->
+    <string name="indra_url" translatable="false">http://www.indra.net/</string>
+    <string name="github_issues_url" translatable="false">https://github.com/indra/android/issues</string>
+    <string name="github_new_issue_url" translatable="false">https://github.com/indra/android/issues/new</string>
+
+    <!-- Plugins -->
+    <string name="plugin_port_scanner">Port Scanner</string>
+    <string name="plugin_inspector">Inspector</string>
+    <string name="plugin_traceroute">Traceroute</string>
+    <string name="plugin_mitm">MITM</string>
+    <string name="plugin_exploit_finder">Exploit Finder</string>
+    <string name="plugin_login_cracker">Login Cracker</string>
+    <string name="plugin_packet_forger">Packet Forger</string>
+    <string name="plugin_router_pwn">RouterPwn</string>
+    <string name="plugin_wifi_audit">WiFi Audit</string>
+    <string name="plugin_vuln_scanner">Vulnerability Scanner</string>
+    <string name="plugin_web_tester">Web Tester</string>
+    <string name="plugin_credential_tester">Credential Tester</string>
+
+    <!-- Settings -->
+    <string name="pref_http_proxy_port">HTTP Proxy Port</string>
+    <string name="pref_http_server_port">HTTP Server Port</string>
+    <string name="pref_https_redirector_port">HTTPS Redirector Port</string>
+    <string name="pref_msf_rpc_port">MSF RPC Port</string>
+    <string name="pref_save_path">Save Path</string>
+    <string name="pref_wake_lock">Keep Wake Lock</string>
+    <string name="pref_debug_error_logging">Debug Error Logging</string>
+
+    <!-- Core -->
+    <string name="cannot_download_core">Cannot download Indra core for your device</string>
+    <string name="new_core_found">Indra core version %s is available, do you want to update?</string>
+    <string name="no_core_no_connectivity">Indra core is not installed, internet connection required for first initialization</string>
+    <string name="no_core_found">Cannot find Indra core for your device</string>
+</resources>

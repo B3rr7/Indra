@@ -1,0 +1,133 @@
+package org.indra.android.ui.navigation
+
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.navigation.NavHostController
+import androidx.navigation.NavType
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
+import org.indra.android.ui.screens.home.HomeScreen
+import org.indra.android.ui.screens.plugins.CredentialTesterScreen
+import org.indra.android.ui.screens.plugins.ExploitFinderScreen
+import org.indra.android.ui.screens.plugins.InspectorScreen
+import org.indra.android.ui.screens.plugins.LoginCrackerScreen
+import org.indra.android.ui.screens.plugins.MitmScreen
+import org.indra.android.ui.screens.plugins.PacketForgerScreen
+import org.indra.android.ui.screens.plugins.PluginScreen
+import org.indra.android.ui.screens.plugins.PortScannerScreen
+import org.indra.android.ui.screens.plugins.RouterPwnScreen
+import org.indra.android.ui.screens.plugins.TracerouteScreen
+import org.indra.android.ui.screens.plugins.VulnScannerScreen
+import org.indra.android.ui.screens.plugins.WebTesterScreen
+import org.indra.android.ui.screens.plugins.WifiAuditScreen
+import org.indra.android.ui.screens.settings.SettingsScreen
+
+sealed class Screen(val route: String) {
+    object Home : Screen("home")
+    object PortScanner : Screen("port_scanner")
+    object Inspector : Screen("inspector")
+    object Traceroute : Screen("traceroute")
+    object Mitm : Screen("mitm")
+    object ExploitFinder : Screen("exploit_finder")
+    object LoginCracker : Screen("login_cracker")
+    object PacketForger : Screen("packet_forger")
+    object RouterPwn : Screen("router_pwn")
+    object WifiAudit : Screen("wifi_audit")
+    object VulnScanner : Screen("vuln_scanner")
+    object WebTester : Screen("web_tester")
+    object CredentialTester : Screen("credential_tester")
+    object Settings : Screen("settings")
+}
+
+@Composable
+fun IndraNavHost(
+    navController: NavHostController = rememberNavController(),
+    modifier: Modifier = Modifier
+) {
+    NavHost(
+        navController = navController,
+        startDestination = Screen.Home.route,
+        modifier = modifier
+    ) {
+        composable(Screen.Home.route) {
+            HomeScreen(
+                onNavigateToPlugin = { pluginName ->
+                    when (pluginName) {
+                        "port_scanner" -> navController.navigate(Screen.PortScanner.route)
+                        "inspector" -> navController.navigate(Screen.Inspector.route)
+                        "traceroute" -> navController.navigate(Screen.Traceroute.route)
+                        "mitm" -> navController.navigate(Screen.Mitm.route)
+                        "exploit_finder" -> navController.navigate(Screen.ExploitFinder.route)
+                        "login_cracker" -> navController.navigate(Screen.LoginCracker.route)
+                        "packet_forger" -> navController.navigate(Screen.PacketForger.route)
+                        "router_pwn" -> navController.navigate(Screen.RouterPwn.route)
+                        "wifi_audit" -> navController.navigate(Screen.WifiAudit.route)
+                        "vuln_scanner" -> navController.navigate(Screen.VulnScanner.route)
+                        "web_tester" -> navController.navigate(Screen.WebTester.route)
+                        "credential_tester" -> navController.navigate(Screen.CredentialTester.route)
+                        else -> navController.navigate("plugin/$pluginName")
+                    }
+                },
+                onNavigateToSettings = {
+                    navController.navigate(Screen.Settings.route)
+                }
+            )
+        }
+
+        composable(Screen.PortScanner.route) {
+            PortScannerScreen(onNavigateBack = { navController.popBackStack() })
+        }
+        composable(Screen.Inspector.route) {
+            InspectorScreen(onNavigateBack = { navController.popBackStack() })
+        }
+        composable(Screen.Traceroute.route) {
+            TracerouteScreen(onNavigateBack = { navController.popBackStack() })
+        }
+        composable(Screen.Mitm.route) {
+            MitmScreen(onNavigateBack = { navController.popBackStack() })
+        }
+        composable(Screen.ExploitFinder.route) {
+            ExploitFinderScreen(onNavigateBack = { navController.popBackStack() })
+        }
+        composable(Screen.LoginCracker.route) {
+            LoginCrackerScreen(onNavigateBack = { navController.popBackStack() })
+        }
+        composable(Screen.PacketForger.route) {
+            PacketForgerScreen(onNavigateBack = { navController.popBackStack() })
+        }
+        composable(Screen.RouterPwn.route) {
+            RouterPwnScreen(onNavigateBack = { navController.popBackStack() })
+        }
+        composable(Screen.WifiAudit.route) {
+            WifiAuditScreen(onNavigateBack = { navController.popBackStack() })
+        }
+        composable(Screen.VulnScanner.route) {
+            VulnScannerScreen(onNavigateBack = { navController.popBackStack() })
+        }
+        composable(Screen.WebTester.route) {
+            WebTesterScreen(onNavigateBack = { navController.popBackStack() })
+        }
+        composable(Screen.CredentialTester.route) {
+            CredentialTesterScreen(onNavigateBack = { navController.popBackStack() })
+        }
+
+        composable(
+            route = "plugin/{pluginName}",
+            arguments = listOf(
+                navArgument("pluginName") { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val pluginName = backStackEntry.arguments?.getString("pluginName") ?: ""
+            PluginScreen(
+                pluginName = pluginName,
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.Settings.route) {
+            SettingsScreen(onNavigateBack = { navController.popBackStack() })
+        }
+    }
+}

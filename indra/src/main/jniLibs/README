@@ -1,0 +1,7 @@
+Add prebuilt jni libraries here:
+
+./armeabi-v7a/libIndraClient.so
+./armeabi-v7a/libIndraCommon.so
+./armeabi/libIndraClient.so
+./armeabi/libIndraCommon.so
+etc.

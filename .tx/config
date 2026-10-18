@@ -1,9 +1,14 @@
 [main]
 host = https://www.transifex.com
 
-[csploit.strings]
-file_filter = cSploit/res/values-<lang>/strings.xml
-source_file = cSploit/res/values/strings.xml
+[o:indra:p:indra:r:strings]
+file_filter = indra/src/main/res/values-<lang>/strings.xml
+source_file = indra/src/main/res/values/strings.xml
 source_lang = en
-trans.zh    = cSploit/res/values-zh-rCN/strings.xml
+type = ANDROID
+
+[o:indra:p:indra:r:strings_pl]
+file_filter = indra/src/main/res/values-pl/strings.xml
+source_file = indra/src/main/res/values/strings.xml
+source_lang = en
 type = ANDROID

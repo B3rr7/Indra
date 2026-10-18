@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="indra_primary">#0082B2</color>
+    <color name="indra_primary_dark">#005F82</color>
+    <color name="indra_secondary">#4DB6AC</color>
+    <color name="indra_background">#FAFAFA</color>
+    <color name="indra_surface">#FFFFFF</color>
+    <color name="indra_error">#B3261E</color>
+</resources>
