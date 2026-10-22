@@ -27,6 +27,7 @@ class ScanNetworkUseCase @Inject constructor(
 class ScanPortsUseCase @Inject constructor(
     private val system: IndraSystem
 ) {
+    @Suppress("UNUSED_PARAMETER")
     suspend operator fun invoke(target: String): List<Int> {
         // TODO: Implement port scan
         return listOf(22, 80, 443)

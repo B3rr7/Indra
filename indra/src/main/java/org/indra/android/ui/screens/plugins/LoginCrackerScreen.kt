@@ -56,7 +56,7 @@ fun LoginCrackerScreen(
             OutlinedTextField(
                 value = uiState.username,
                 onValueChange = { viewModel.updateUsername(it) },
-                label = { Text("Username (or wordlist path)") },
+                label = { Text("Username") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true
             )

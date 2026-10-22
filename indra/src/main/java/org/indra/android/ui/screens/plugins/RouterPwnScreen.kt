@@ -64,7 +64,7 @@ fun RouterPwnScreen(
 
             if (uiState.vulnerabilities.isNotEmpty()) {
                 Text(
-                    text = "Found ${uiState.vulnerabilities.size} vulnerabilities",
+                    text = "Found ${uiState.vulnerabilities.size} open services",
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.error
                 )

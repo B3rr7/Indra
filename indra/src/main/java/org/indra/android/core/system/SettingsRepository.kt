@@ -51,6 +51,19 @@ class SettingsRepository @Inject constructor(
         get() = prefs.getBoolean("PREF_DEBUG_ERROR_LOGGING", false)
         set(value) = prefs.edit().putBoolean("PREF_DEBUG_ERROR_LOGGING", value).apply()
 
+    /** Endpoint of the signed OTA manifest (production default; overridable for LAN testing). */
+    var otaManifestUrl: String
+        get() = prefs.getString("OTA_MANIFEST_URL", OtaUpdateManager.OTA_MANIFEST_URL) ?: OtaUpdateManager.OTA_MANIFEST_URL
+        set(value) = prefs.edit().putString("OTA_MANIFEST_URL", value).apply()
+
+    /**
+     * Dev-only: permits OTA calls to non-pinned, plain-HTTP hosts (LAN testing via
+     * `adb reverse`). Never enable on production devices.
+     */
+    var otaAllowTestHosts: Boolean
+        get() = prefs.getBoolean("OTA_ALLOW_TEST_HOSTS", false)
+        set(value) = prefs.edit().putBoolean("OTA_ALLOW_TEST_HOSTS", value).apply()
+
     val corePath: String = context.filesDir.absolutePath
     val sessionName: String = "indra-session-${System.currentTimeMillis()}"
 }

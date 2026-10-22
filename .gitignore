@@ -17,3 +17,6 @@ indra/build/
 *.aar
 *.keystore
 !gradle-wrapper.jar
+
+# graphify knowledge graph output (generated, rebuild with `graphify update .`)
+graphify-out/

@@ -13,7 +13,8 @@ class PluginManager @Inject constructor() {
                 id = "port_scanner",
                 name = "Port Scanner",
                 description = "Scan open ports on target devices",
-                targetTypes = setOf("endpoint")
+                targetTypes = setOf("endpoint"),
+                requires = "nmap"
             )
         )
         registerPlugin(
@@ -21,7 +22,8 @@ class PluginManager @Inject constructor() {
                 id = "inspector",
                 name = "Inspector",
                 description = "Fingerprint OS and services",
-                targetTypes = setOf("endpoint")
+                targetTypes = setOf("endpoint"),
+                requires = "nmap"
             )
         )
         registerPlugin(
@@ -29,7 +31,8 @@ class PluginManager @Inject constructor() {
                 id = "traceroute",
                 name = "Traceroute",
                 description = "Trace network route to target",
-                targetTypes = setOf("endpoint")
+                targetTypes = setOf("endpoint"),
+                requires = "nmap"
             )
         )
         registerPlugin(
@@ -37,7 +40,26 @@ class PluginManager @Inject constructor() {
                 id = "mitm",
                 name = "MITM",
                 description = "Man-in-the-middle attacks",
-                targetTypes = setOf("endpoint", "network")
+                targetTypes = setOf("endpoint", "network"),
+                requires = "raw"
+            )
+        )
+        registerPlugin(
+            Plugin(
+                id = "network_radar",
+                name = "Network Radar",
+                description = "Discover hosts on the local network",
+                targetTypes = setOf("network"),
+                requires = "raw"
+            )
+        )
+        registerPlugin(
+            Plugin(
+                id = "packet_capture",
+                name = "Packet Capture",
+                description = "Capture live traffic with tcpdump",
+                targetTypes = setOf("network"),
+                requires = "raw"
             )
         )
         registerPlugin(
@@ -45,7 +67,8 @@ class PluginManager @Inject constructor() {
                 id = "exploit_finder",
                 name = "Exploit Finder",
                 description = "Find known vulnerabilities",
-                targetTypes = setOf("endpoint")
+                targetTypes = setOf("endpoint"),
+                requires = "msf"
             )
         )
         registerPlugin(
@@ -53,7 +76,8 @@ class PluginManager @Inject constructor() {
                 id = "login_cracker",
                 name = "Login Cracker",
                 description = "Brute-force login services",
-                targetTypes = setOf("endpoint")
+                targetTypes = setOf("endpoint"),
+                requires = "hydra"
             )
         )
         registerPlugin(
@@ -61,7 +85,8 @@ class PluginManager @Inject constructor() {
                 id = "packet_forger",
                 name = "Packet Forger",
                 description = "Forge TCP/UDP packets",
-                targetTypes = setOf("endpoint")
+                targetTypes = setOf("endpoint"),
+                requires = "hping3"
             )
         )
         registerPlugin(
@@ -69,7 +94,8 @@ class PluginManager @Inject constructor() {
                 id = "router_pwn",
                 name = "RouterPwn",
                 description = "Router exploitation toolkit",
-                targetTypes = setOf("endpoint")
+                targetTypes = setOf("endpoint"),
+                requires = "nmap"
             )
         )
         registerPlugin(
@@ -77,7 +103,8 @@ class PluginManager @Inject constructor() {
                 id = "wifi_audit",
                 name = "WiFi Audit",
                 description = "WiFi network auditing and cracking",
-                targetTypes = setOf("network")
+                targetTypes = setOf("network"),
+                requires = "aircrack"
             )
         )
         registerPlugin(
@@ -85,7 +112,8 @@ class PluginManager @Inject constructor() {
                 id = "vuln_scanner",
                 name = "Vulnerability Scanner",
                 description = "Automated vulnerability scanning with Nuclei",
-                targetTypes = setOf("endpoint", "network")
+                targetTypes = setOf("endpoint", "network"),
+                requires = "nuclei"
             )
         )
         registerPlugin(
@@ -93,7 +121,8 @@ class PluginManager @Inject constructor() {
                 id = "web_tester",
                 name = "Web Tester",
                 description = "Web application security testing",
-                targetTypes = setOf("endpoint")
+                targetTypes = setOf("endpoint"),
+                requires = "sqlmap"
             )
         )
         registerPlugin(
@@ -101,7 +130,8 @@ class PluginManager @Inject constructor() {
                 id = "credential_tester",
                 name = "Credential Tester",
                 description = "Test credentials against multiple services",
-                targetTypes = setOf("endpoint")
+                targetTypes = setOf("endpoint"),
+                requires = "hydra"
             )
         )
     }
@@ -123,5 +153,7 @@ data class Plugin(
     val id: String,
     val name: String,
     val description: String,
-    val targetTypes: Set<String>
+    val targetTypes: Set<String>,
+    /** SmartToolBox entry the plugin needs; unavailable tools disable the card. */
+    val requires: String = "nmap"
 )

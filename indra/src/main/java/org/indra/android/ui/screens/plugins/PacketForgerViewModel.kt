@@ -42,7 +42,7 @@ class PacketForgerViewModel @Inject constructor(
                 if (tool == null || !tool.isAvailable()) {
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
-                        result = "Packet sent successfully to ${_uiState.value.target} via ${_uiState.value.protocol.uppercase()}"
+                        error = "hping3 is not part of the native core"
                     )
                     return@launch
                 }

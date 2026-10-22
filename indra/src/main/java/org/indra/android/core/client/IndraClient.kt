@@ -14,7 +14,7 @@ class IndraClient @Inject constructor() {
                 System.loadLibrary("IndraClient")
                 librariesLoaded = true
             } catch (e: UnsatisfiedLinkError) {
-                // Native libraries not available
+                org.indra.android.core.system.Logger.e("Native libraries failed to load", e)
                 librariesLoaded = false
             }
         }

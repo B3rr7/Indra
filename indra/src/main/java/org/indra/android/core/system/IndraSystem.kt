@@ -2,6 +2,7 @@ package org.indra.android.core.system
 
 import android.content.Context
 import android.net.wifi.WifiManager
+import android.os.Build
 import android.os.PowerManager
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -52,18 +53,30 @@ class IndraSystem @Inject constructor(
     val storagePath: String get() = settings.storagePath
     val sessionName: String = "indra-session-${System.currentTimeMillis()}"
 
+    @Suppress("DEPRECATION")
+    private fun createWifiLock(manager: WifiManager?): WifiManager.WifiLock? {
+        if (manager == null) return null
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            manager.createWifiLock(WifiManager.WIFI_MODE_FULL_LOW_LATENCY, "indra-wifi-lock")
+        } else {
+            manager.createWifiLock(WifiManager.WIFI_MODE_FULL, "indra-wifi-lock")
+        }
+    }
+
     fun acquireLocks() {
         try {
             val wifiManager = context.getSystemService(Context.WIFI_SERVICE) as? WifiManager
             if (wifiLock == null) {
-                wifiLock = wifiManager?.createWifiLock(WifiManager.WIFI_MODE_FULL, "indra-wifi-lock")
+                wifiLock = createWifiLock(wifiManager)
             }
             wifiLock?.takeIf { !it.isHeld }?.acquire()
 
             if (settings.wakeLockEnabled) {
                 val powerManager = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
                 if (wakeLock == null) {
-                    wakeLock = powerManager?.newWakeLock(PowerManager.FULL_WAKE_LOCK, "indra-wake-lock")
+                    // Partial lock keeps the CPU alive for long scans without
+                    // forcing the screen on (FULL_WAKE_LOCK is deprecated).
+                    wakeLock = powerManager?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "indra-wake-lock")
                 }
                 wakeLock?.takeIf { !it.isHeld }?.acquire()
             }

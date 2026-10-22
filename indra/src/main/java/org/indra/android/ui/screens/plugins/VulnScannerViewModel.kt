@@ -34,10 +34,7 @@ class VulnScannerViewModel @Inject constructor(
                 if (tool == null || !tool.isAvailable()) {
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
-                        vulnerabilities = listOf(
-                            Vulnerability("CVE-2021-44228", "Critical", "Log4Shell - Remote code execution"),
-                            Vulnerability("CVE-2021-45046", "High", "Log4j denial of service")
-                        )
+                        error = "nuclei is not part of the native core"
                     )
                     return@launch
                 }

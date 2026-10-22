@@ -144,3 +144,19 @@ dependencies {
     debugImplementation 'androidx.compose.ui:ui-tooling'
     debugImplementation 'androidx.compose.ui:ui-test-manifest'
 }
+
+// Bundle the native core produced by `indra/jni/build.sh cores` into assets so
+// CoreManager can install it without a network download.
+def coreDistDir = file("$projectDir/dist")
+tasks.register("bundleCore", Copy) {
+    onlyIf { coreDistDir.exists() }
+    from(coreDistDir) {
+        include "core-v*+android16.armeabi-v7a.tar.xz"
+        rename { "core.tar.xz" }
+    }
+    into file("$projectDir/src/main/assets")
+}
+
+tasks.matching { it.name == 'preBuild' }.configureEach {
+    dependsOn tasks.named('bundleCore')
+}

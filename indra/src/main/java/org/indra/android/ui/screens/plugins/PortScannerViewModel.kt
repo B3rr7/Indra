@@ -44,34 +44,38 @@ class PortScannerViewModel @Inject constructor(
             try {
                 val nmapTool = toolBox.getTool("nmap")
                 if (nmapTool == null || !nmapTool.isAvailable()) {
-                    // Tool not available (native daemon not running)
-                    // Fall back to simulated results for UI testing
-                    val results = listOf(
-                        PortScanResult(22, "SSH"),
-                        PortScanResult(80, "HTTP"),
-                        PortScanResult(443, "HTTPS")
-                    )
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
-                        results = results
+                        error = "NMap handler is not available. Install the core and start the daemon in Settings."
                     )
                     return@launch
                 }
 
-                // Execute actual nmap scan via smart tool
-                val args = "-sV -p ${_uiState.value.portRange} ${_uiState.value.target}"
+                if (_uiState.value.target.isBlank()) {
+                    _uiState.value = _uiState.value.copy(isLoading = false, error = "Enter a target host")
+                    return@launch
+                }
+
                 toolBox.nmap(_uiState.value.target, _uiState.value.portRange).collect { toolResult ->
-                    if (toolResult.success) {
-                        // Parse JSON result and update UI
-                        _uiState.value = _uiState.value.copy(
-                            isLoading = false,
-                            results = listOf(PortScanResult(0, toolResult.rawOutput))
-                        )
-                    } else {
-                        _uiState.value = _uiState.value.copy(
-                            isLoading = false,
-                            error = toolResult.error
-                        )
+                    when (toolResult.status) {
+                        "running" -> Unit
+                        else -> {
+                            if (!toolResult.success) {
+                                _uiState.value = _uiState.value.copy(
+                                    isLoading = false,
+                                    error = toolResult.error ?: "Scan failed"
+                                )
+                            } else {
+                                val results = toolResult.ports
+                                    .map { PortScanResult(it.port, it.service ?: it.protocol ?: "unknown") }
+                                    .ifEmpty { parsePorts(toolResult.rawOutput) }
+                                _uiState.value = _uiState.value.copy(
+                                    isLoading = false,
+                                    results = results,
+                                    error = if (results.isEmpty()) "No open ports found" else null
+                                )
+                            }
+                        }
                     }
                 }
             } catch (e: Exception) {
@@ -81,5 +85,27 @@ class PortScannerViewModel @Inject constructor(
                 )
             }
         }
+    }
+
+    private fun parsePorts(output: String): List<PortScanResult> {
+        val discovered = Regex("Discovered open port (\\d+)/(\\w+)").findAll(output)
+        if (discovered.any()) {
+            return discovered.map { PortScanResult(it.groupValues[1].toInt(), it.groupValues[2]) }
+                .distinctBy { it.port }
+                .sortedBy { it.port }
+                .toList()
+        }
+        // Fallback for standard nmap output: "22/tcp open ssh"
+        return Regex("^(\\d+)/(\\w+)\\s+open\\s*(\\S*)", RegexOption.MULTILINE)
+            .findAll(output)
+            .map { match ->
+                PortScanResult(
+                    port = match.groupValues[1].toInt(),
+                    service = match.groupValues[3].ifEmpty { match.groupValues[2] }
+                )
+            }
+            .distinctBy { it.port }
+            .sortedBy { it.port }
+            .toList()
     }
 }

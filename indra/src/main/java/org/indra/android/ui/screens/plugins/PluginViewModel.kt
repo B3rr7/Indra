@@ -21,6 +21,7 @@ class PluginViewModel @Inject constructor() : ViewModel() {
     private val _uiState = MutableStateFlow(PluginUiState())
     val uiState: StateFlow<PluginUiState> = _uiState.asStateFlow()
 
+    @Suppress("UNUSED_PARAMETER")
     fun execute(command: String) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)

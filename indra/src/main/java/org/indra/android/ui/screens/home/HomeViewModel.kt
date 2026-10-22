@@ -8,7 +8,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.indra.android.core.system.IndraSystem
+import org.indra.android.core.system.NetworkHelper
 import org.indra.android.core.system.PluginManager
+import org.indra.android.core.system.SmartToolBox
 import org.indra.android.data.repository.NetworkRepository
 import javax.inject.Inject
 
@@ -23,14 +25,17 @@ data class HomeUiState(
 data class PluginInfo(
     val id: String,
     val name: String,
-    val description: String
+    val description: String,
+    val available: Boolean = true
 )
 
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val system: IndraSystem,
+    private val networkHelper: NetworkHelper,
     private val networkRepository: NetworkRepository,
-    private val pluginManager: PluginManager
+    private val pluginManager: PluginManager,
+    private val toolBox: SmartToolBox
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState())
@@ -40,25 +45,30 @@ class HomeViewModel @Inject constructor(
         loadData()
     }
 
+    private fun isPluginAvailable(plugin: org.indra.android.core.system.Plugin): Boolean =
+        toolBox.getTool(plugin.requires)?.isAvailable() == true
+
     private fun loadData() {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
 
             networkRepository.refreshNetworkStatus()
 
-            val networkStatus = system.networkStatus.value
+            val isConnected = networkHelper.isNetworkAvailable()
+            val networkName = networkHelper.getWifiSsid() ?: "Unknown"
 
             val plugins = pluginManager.getAllPlugins().map { plugin ->
                 PluginInfo(
                     id = plugin.id,
                     name = plugin.name,
-                    description = plugin.description
+                    description = plugin.description,
+                    available = isPluginAvailable(plugin)
                 )
             }
 
             _uiState.value = HomeUiState(
-                networkName = networkStatus.networkName.ifBlank { "Unknown" },
-                isConnected = networkStatus.isConnected,
+                networkName = networkName.ifBlank { "Unknown" },
+                isConnected = isConnected,
                 targets = emptyList(),
                 plugins = plugins,
                 isLoading = false

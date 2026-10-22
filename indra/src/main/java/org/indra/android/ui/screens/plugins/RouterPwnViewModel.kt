@@ -32,26 +32,32 @@ class RouterPwnViewModel @Inject constructor(
             try {
                 val tool = toolBox.getTool("nmap")
                 if (tool == null || !tool.isAvailable()) {
-                    val vulnerabilities = listOf(
-                        RouterVulnerability("CVE-2021-1234", "Remote code execution via HTTP admin interface"),
-                        RouterVulnerability("CVE-2020-5678", "Authentication bypass in firmware 1.x")
-                    )
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
-                        vulnerabilities = vulnerabilities,
-                        result = "Scan complete: ${vulnerabilities.size} vulnerabilities found"
+                        error = "Native daemon not available"
                     )
                     return@launch
                 }
 
-                toolBox.nmap(_uiState.value.target, "80,443,8080").collect { result ->
-                    if (result.success) {
+                val findings = LinkedHashMap<Int, RouterVulnerability>()
+
+                toolBox.nmap(_uiState.value.target, "22,80,443,8080,8443").collect { result ->
+                    if (result.status == "running") {
+                        result.ports.forEach { port ->
+                            findings[port.port] = RouterVulnerability(
+                                name = "open ${port.port}/${port.protocol ?: "tcp"}",
+                                description = port.service?.takeIf { it.isNotBlank() }
+                                    ?: "administrative service reachable"
+                            )
+                        }
+                        _uiState.value = _uiState.value.copy(
+                            vulnerabilities = findings.values.toList()
+                        )
+                    } else if (result.success) {
                         _uiState.value = _uiState.value.copy(
                             isLoading = false,
-                            vulnerabilities = listOf(
-                                RouterVulnerability("Scan Result", result.rawOutput.take(200))
-                            ),
-                            result = "Scan complete"
+                            vulnerabilities = findings.values.toList(),
+                            result = "Scan complete: ${findings.size} open ports"
                         )
                     } else {
                         _uiState.value = _uiState.value.copy(

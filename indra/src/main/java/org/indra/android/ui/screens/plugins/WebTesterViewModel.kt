@@ -38,7 +38,7 @@ class WebTesterViewModel @Inject constructor(
                 if (tool == null || !tool.isAvailable()) {
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
-                        result = "No SQL injection vulnerabilities found (simulated)"
+                        error = "sqlmap is not part of the native core"
                     )
                     return@launch
                 }

@@ -1,6 +1,7 @@
 package org.indra.android.core.system
 
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -15,6 +16,7 @@ class RootManager @Inject constructor(
 ) {
     companion object {
         private const val MAGISK_PACKAGE = "com.topjohnwu.magisk"
+        private const val ACTION_REQUEST_ROOT = "com.topjohnwu.magisk.action.REQUEST_ROOT"
         private const val SUPERSU_PACKAGE = "eu.chainfire.supersu"
         private const val SUPERUSER_APK = "com.koushikdutta.superuser"
     }
@@ -54,6 +56,18 @@ class RootManager @Inject constructor(
             magiskVersion = getMagiskVersion(),
             kernelSuVersion = getKernelSUVersion()
         )
+    }
+
+    fun requestRootAccess(): Boolean {
+        return try {
+            val intent = Intent(ACTION_REQUEST_ROOT)
+                .setPackage(MAGISK_PACKAGE)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(intent)
+            true
+        } catch (e: Exception) {
+            false
+        }
     }
 
     fun executeSu(command: String): ProcessResult {

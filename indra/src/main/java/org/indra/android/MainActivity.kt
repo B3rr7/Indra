@@ -20,8 +20,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.lifecycle.lifecycleScope
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import org.indra.android.core.system.CoreManager
 import org.indra.android.core.system.PermissionManager
+import org.indra.android.core.system.RootManager
 import org.indra.android.ui.navigation.BottomNavBar
 import org.indra.android.ui.navigation.IndraNavHost
 import org.indra.android.ui.theme.IndraTheme
@@ -33,6 +38,12 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var permissionManager: PermissionManager
 
+    @Inject
+    lateinit var rootManager: RootManager
+
+    @Inject
+    lateinit var coreManager: CoreManager
+
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
@@ -43,12 +54,20 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        val splashScreen = installSplashScreen()
+        installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
         // Request permissions
         requestPermissionsIfNeeded()
+
+        // Request root access via Magisk when not rooted
+        requestRootIfNeeded()
+
+        // Attach to (or start) the native daemon in the background
+        lifecycleScope.launch(Dispatchers.IO) {
+            coreManager.ensureDaemon()
+        }
 
         setContent {
             IndraTheme {
@@ -66,6 +85,13 @@ class MainActivity : ComponentActivity() {
         val missing = permissionManager.getMissingPermissions()
         if (missing.isNotEmpty()) {
             permissionLauncher.launch(missing.toTypedArray())
+        }
+    }
+
+    private fun requestRootIfNeeded() {
+        val rootStatus = rootManager.detectRoot()
+        if (!rootStatus.isRooted) {
+            rootManager.requestRootAccess()
         }
     }
 }

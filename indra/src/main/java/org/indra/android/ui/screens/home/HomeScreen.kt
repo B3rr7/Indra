@@ -1,18 +1,38 @@
 package org.indra.android.ui.screens.home
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import org.indra.android.ui.theme.StatusCyan
+import org.indra.android.ui.theme.StatusGreen
+import org.indra.android.ui.theme.StatusOrange
+import org.indra.android.ui.theme.StatusRed
+import org.indra.android.ui.theme.StatusBlue
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -27,19 +47,35 @@ fun HomeScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Text(
-                        "Indra",
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Security,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(28.dp)
+                        )
+                        Text(
+                            text = "INDRA",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.ExtraBold,
+                            letterSpacing = MaterialTheme.typography.titleLarge.letterSpacing
+                        )
+                    }
                 },
                 actions = {
                     IconButton(onClick = onNavigateToSettings) {
-                        Icon(Icons.Default.Settings, contentDescription = "Settings")
+                        Icon(
+                            Icons.Default.Settings,
+                            contentDescription = "Settings",
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
+                    containerColor = Color.Transparent
                 )
             )
         }
@@ -49,23 +85,30 @@ fun HomeScreen(
                 .fillMaxSize()
                 .padding(paddingValues),
             contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
-            // Network Status Card
+            // Hero Network Status Card
             item {
-                NetworkStatusCard(
-                    networkName = uiState.networkName,
-                    isConnected = uiState.isConnected,
-                    targetCount = uiState.targets.size
-                )
+                AnimatedVisibility(
+                    visible = true,
+                    enter = fadeIn(animationSpec = tween(600)) + slideInVertically(
+                        animationSpec = tween(600),
+                        initialOffsetY = { -40 }
+                    )
+                ) {
+                    NetworkStatusHeroCard(
+                        networkName = uiState.networkName,
+                        isConnected = uiState.isConnected,
+                        targetCount = uiState.targets.size
+                    )
+                }
             }
 
             // Quick Actions
             item {
-                Text(
-                    text = "Quick Actions",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.SemiBold
+                SectionTitle(
+                    title = "Quick Actions",
+                    icon = Icons.Default.Bolt
                 )
             }
 
@@ -74,103 +117,83 @@ fun HomeScreen(
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     item {
-                        QuickActionCard(
-                            icon = Icons.Default.Search,
-                            label = "Scan Network",
+                        QuickActionPill(
+                            icon = Icons.Default.Radar,
+                            label = "Network Scan",
                             onClick = { onNavigateToPlugin("port_scanner") }
                         )
                     }
                     item {
-                        QuickActionCard(
-                            icon = Icons.Default.Router,
-                            label = "Inspect Host",
+                        QuickActionPill(
+                            icon = Icons.Default.DeviceHub,
+                            label = "Inspect",
                             onClick = { onNavigateToPlugin("inspector") }
                         )
                     }
                     item {
-                        QuickActionCard(
-                            icon = Icons.Default.Route,
-                            label = "Traceroute",
+                        QuickActionPill(
+                            icon = Icons.Default.Timeline,
+                            label = "Trace Route",
                             onClick = { onNavigateToPlugin("traceroute") }
                         )
                     }
                     item {
-                        QuickActionCard(
-                            icon = Icons.Default.Security,
-                            label = "MITM",
-                            onClick = { onNavigateToPlugin("mitm") }
+                        QuickActionPill(
+                            icon = Icons.Default.SyncAlt,
+                            label = "MITM Attack",
+                            onClick = { onNavigateToPlugin("mitm") },
+                            accentColor = StatusRed
+                        )
+                    }
+                    item {
+                        QuickActionPill(
+                            icon = Icons.Default.BugReport,
+                            label = "Vuln Scan",
+                            onClick = { onNavigateToPlugin("vuln_scanner") },
+                            accentColor = StatusOrange
                         )
                     }
                 }
             }
 
-            // Targets Section
+            // Tools Section
             item {
-                Text(
-                    text = "Targets (${uiState.targets.size})",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.SemiBold
+                SectionTitle(
+                    title = "Security Tools",
+                    icon = Icons.Default.Build,
+                    subtitle = "${uiState.plugins.size} modules available"
                 )
-            }
-
-            if (uiState.targets.isEmpty()) {
-                item {
-                    EmptyStateCard(
-                        icon = Icons.Default.Devices,
-                        message = "No targets discovered yet",
-                        actionLabel = "Scan Network",
-                        onAction = { onNavigateToPlugin("port_scanner") }
-                    )
-                }
-            } else {
-                items(uiState.targets) { target ->
-                    TargetCard(
-                        target = target,
-                        onClick = { onNavigateToPlugin("inspector") }
-                    )
-                }
             }
 
             // Tools Grid
             item {
-                Text(
-                    text = "Tools",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-
-            // Group plugins into rows of 2
-            val plugins = uiState.plugins
-            val rows = plugins.chunked(2)
-            items(rows) { row ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(2),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 800.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    userScrollEnabled = false
                 ) {
-                    row.forEach { plugin ->
-                        ToolCard(
-                            name = plugin.name,
-                            description = plugin.description,
-                            modifier = Modifier.weight(1f),
+                    items(uiState.plugins) { plugin ->
+                        ModernToolCard(
+                            plugin = plugin,
                             onClick = { onNavigateToPlugin(plugin.id) }
                         )
-                    }
-                    // Fill empty space if odd number
-                    if (row.size == 1) {
-                        Spacer(modifier = Modifier.weight(1f))
                     }
                 }
             }
 
-            // Loading indicator
             if (uiState.isLoading) {
                 item {
                     Box(
                         modifier = Modifier.fillMaxWidth(),
                         contentAlignment = Alignment.Center
                     ) {
-                        CircularProgressIndicator()
+                        CircularProgressIndicator(
+                            color = MaterialTheme.colorScheme.primary
+                        )
                     }
                 }
             }
@@ -179,7 +202,7 @@ fun HomeScreen(
 }
 
 @Composable
-fun NetworkStatusCard(
+fun NetworkStatusHeroCard(
     networkName: String,
     isConnected: Boolean,
     targetCount: Int,
@@ -187,200 +210,277 @@ fun NetworkStatusCard(
 ) {
     Card(
         modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (isConnected)
-                MaterialTheme.colorScheme.primaryContainer
-            else
-                MaterialTheme.colorScheme.errorContainer
-        )
+            containerColor = Color.Transparent
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
-        Row(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(20.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .background(
+                    brush = Brush.horizontalGradient(
+                        colors = if (isConnected) {
+                            listOf(
+                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.8f),
+                                MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f)
+                            )
+                        } else {
+                            listOf(
+                                MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.8f),
+                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                            )
+                        }
+                    )
+                )
+                .padding(24.dp)
         ) {
-            Icon(
-                imageVector = if (isConnected) Icons.Default.Wifi else Icons.Default.WifiOff,
-                contentDescription = if (isConnected) "WiFi connected" else "WiFi disconnected",
-                modifier = Modifier.size(40.dp),
-                tint = if (isConnected)
-                    MaterialTheme.colorScheme.onPrimaryContainer
-                else
-                    MaterialTheme.colorScheme.onErrorContainer
-            )
-            Spacer(modifier = Modifier.width(16.dp))
-            Column {
-                Text(
-                    text = if (isConnected) "Connected" else "Not Connected",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = if (isConnected)
-                        MaterialTheme.colorScheme.onPrimaryContainer
-                    else
-                        MaterialTheme.colorScheme.onErrorContainer
-                )
-                Text(
-                    text = if (isConnected) networkName else "No network available",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = if (isConnected)
-                        MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                    else
-                        MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.7f)
-                )
-                if (isConnected && targetCount > 0) {
-                    Text(
-                        text = "$targetCount targets discovered",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (isConnected)
-                            MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                        else
-                            MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.7f)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(64.dp)
+                        .clip(CircleShape)
+                        .background(
+                            if (isConnected) StatusGreen.copy(alpha = 0.2f)
+                            else StatusRed.copy(alpha = 0.2f)
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = if (isConnected) Icons.Default.Wifi else Icons.Default.WifiOff,
+                        contentDescription = null,
+                        modifier = Modifier.size(32.dp),
+                        tint = if (isConnected) StatusGreen else StatusRed
                     )
                 }
+                
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = if (isConnected) "Network Connected" else "Disconnected",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = if (isConnected) networkName else "No active network",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    if (isConnected) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Devices,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                                tint = StatusCyan
+                            )
+                            Text(
+                                text = "$targetCount targets discovered",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = StatusCyan,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                }
+                
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
     }
 }
 
 @Composable
-fun QuickActionCard(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+fun SectionTitle(
+    title: String,
+    icon: ImageVector,
+    subtitle: String? = null,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(24.dp)
+        )
+        Column {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
+            )
+            if (subtitle != null) {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun QuickActionPill(
+    icon: ImageVector,
     label: String,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    accentColor: Color = MaterialTheme.colorScheme.primary
 ) {
-    Card(
+    FilledTonalButton(
         onClick = onClick,
-        modifier = modifier.width(100.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.secondaryContainer
+        modifier = modifier.height(48.dp),
+        shape = RoundedCornerShape(24.dp),
+        colors = ButtonDefaults.filledTonalButtonColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
         )
     ) {
-        Column(
-            modifier = Modifier
-                .padding(16.dp)
-                .fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = label,
-                modifier = Modifier.size(28.dp),
-                tint = MaterialTheme.colorScheme.onSecondaryContainer
-            )
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSecondaryContainer
-            )
-        }
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            modifier = Modifier.size(20.dp),
+            tint = accentColor
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Medium
+        )
     }
 }
 
 @Composable
-fun TargetCard(
-    target: String,
+fun ModernToolCard(
+    plugin: PluginInfo,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val toolColor = getToolColor(plugin.id)
+    
     Card(
         onClick = onClick,
-        modifier = modifier.fillMaxWidth()
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = Icons.Default.Computer,
-                contentDescription = "Target device",
-                modifier = Modifier.size(24.dp),
-                tint = MaterialTheme.colorScheme.primary
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-            Text(
-                text = target,
-                style = MaterialTheme.typography.bodyLarge
-            )
-            Spacer(modifier = Modifier.weight(1f))
-            Icon(
-                imageVector = Icons.Default.ChevronRight,
-                contentDescription = "View details",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-}
-
-@Composable
-fun ToolCard(
-    name: String,
-    description: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Card(
-        onClick = onClick,
+        enabled = plugin.available,
         modifier = modifier
-    ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            Text(
-                text = name,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold
-            )
-            Text(
-                text = description,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2
-            )
-        }
-    }
-}
-
-@Composable
-fun EmptyStateCard(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    message: String,
-    actionLabel: String,
-    onAction: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
+            .fillMaxWidth()
+            .height(110.dp),
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        )
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+            disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f)
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(32.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .fillMaxSize()
+                .padding(14.dp),
+            verticalArrangement = Arrangement.SpaceBetween
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = "No targets found",
-                modifier = Modifier.size(48.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Text(
-                text = message,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Button(onClick = onAction) {
-                Text(actionLabel)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(toolColor.copy(alpha = 0.2f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = getToolIcon(plugin.id),
+                        contentDescription = null,
+                        modifier = Modifier.size(22.dp),
+                        tint = if (plugin.available) toolColor else toolColor.copy(alpha = 0.4f)
+                    )
+                }
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Column {
+                Text(
+                    text = plugin.name,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1
+                )
+                Text(
+                    text = if (plugin.available) {
+                        plugin.description
+                    } else {
+                        "${plugin.description} · not in native core"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    lineHeight = MaterialTheme.typography.bodySmall.lineHeight
+                )
             }
         }
+    }
+}
+
+@Composable
+fun getToolIcon(id: String): ImageVector {
+    return when (id) {
+        "port_scanner" -> Icons.Default.Radar
+        "inspector" -> Icons.Default.Search
+        "traceroute" -> Icons.Default.Timeline
+        "mitm" -> Icons.Default.SyncAlt
+        "exploit_finder" -> Icons.Default.BugReport
+        "login_cracker" -> Icons.Default.Lock
+        "packet_forger" -> Icons.AutoMirrored.Filled.Send
+        "router_pwn" -> Icons.Default.Router
+        "wifi_audit" -> Icons.Default.Wifi
+        "vuln_scanner" -> Icons.Default.Security
+        "web_tester" -> Icons.Default.Language
+        "credential_tester" -> Icons.Default.Key
+        else -> Icons.Default.Extension
+    }
+}
+
+@Composable
+fun getToolColor(id: String): Color {
+    return when (id) {
+        "port_scanner" -> StatusCyan
+        "inspector" -> StatusBlue
+        "traceroute" -> Color(0xFF00BCD4)
+        "mitm" -> StatusRed
+        "exploit_finder" -> StatusOrange
+        "login_cracker" -> Color(0xFFFF6F00)
+        "packet_forger" -> Color(0xFF9C27B0)
+        "router_pwn" -> Color(0xFFE91E63)
+        "wifi_audit" -> StatusGreen
+        "vuln_scanner" -> StatusRed
+        "web_tester" -> Color(0xFF2196F3)
+        "credential_tester" -> Color(0xFFFFEB3B)
+        else -> MaterialTheme.colorScheme.primary
     }
 }

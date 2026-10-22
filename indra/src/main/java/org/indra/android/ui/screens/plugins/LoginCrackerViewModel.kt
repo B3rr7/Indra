@@ -6,15 +6,12 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
-import org.indra.android.core.system.IndraSystem
 import org.indra.android.core.system.SmartToolBox
 import javax.inject.Inject
 
 @HiltViewModel
 class LoginCrackerViewModel @Inject constructor(
-    private val system: IndraSystem,
     private val toolBox: SmartToolBox
 ) : ViewModel() {
 
@@ -35,38 +32,42 @@ class LoginCrackerViewModel @Inject constructor(
 
     fun crack() {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, error = null, result = "")
+            val state = _uiState.value
+            _uiState.value = state.copy(isLoading = true, error = null, result = "")
 
-            try {
-                val tool = toolBox.getTool("hydra")
-                if (tool == null || !tool.isAvailable()) {
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        result = "Native daemon not available"
-                    )
-                    return@launch
-                }
-
-                val args = "-l ${_uiState.value.username} -P /usr/share/wordlists/rockyou.txt ${_uiState.value.target} ${_uiState.value.service}"
-                toolBox.hydra(_uiState.value.target, _uiState.value.service, _uiState.value.username).collect { result ->
-                    if (result.success) {
-                        _uiState.value = _uiState.value.copy(
-                            isLoading = false,
-                            result = result.rawOutput
-                        )
-                    } else {
-                        _uiState.value = _uiState.value.copy(
-                            isLoading = false,
-                            error = result.error
-                        )
-                    }
-                }
-            } catch (e: Exception) {
+            val runner = toolBox.getTool("raw")
+            if (runner == null || !runner.isAvailable()) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
-                    error = e.message
+                    error = "Native daemon not available"
                 )
+                return@launch
             }
+
+            val output = StringBuilder()
+            var failure: String? = null
+
+            toolBox.hydra(state.target.trim(), state.service.trim(), state.username.trim())
+                .collect { result ->
+                    val line = result.rawOutput
+                    if (result.status == "running" && line.isNotBlank() && !line.startsWith("Executing:")) {
+                        output.appendLine(line)
+                        _uiState.value = _uiState.value.copy(result = output.toString().trim())
+                    } else if (result.status == "completed" || result.status == "timeout") {
+                        if (result.success) {
+                            if (output.isEmpty()) output.append(result.rawOutput)
+                        } else {
+                            failure = result.error
+                        }
+                    }
+                }
+
+            val text = output.toString().trim()
+            _uiState.value = _uiState.value.copy(
+                isLoading = false,
+                result = text.ifEmpty { if (failure == null) "No result reported by hydra" else "" },
+                error = failure
+            )
         }
     }
 }

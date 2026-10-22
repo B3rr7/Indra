@@ -30,11 +30,7 @@ class WifiAuditViewModel @Inject constructor(
                 if (tool == null || !tool.isAvailable()) {
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
-                        networks = listOf(
-                            WifiNetwork("HomeNetwork", -45, "WPA2", false),
-                            WifiNetwork("GuestWiFi", -62, "WPA2", false),
-                            WifiNetwork("OldRouter", -70, "WEP", true)
-                        )
+                        error = "aircrack-ng is not part of the native core"
                     )
                     return@launch
                 }

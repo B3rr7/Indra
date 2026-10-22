@@ -36,10 +36,10 @@ class UpdateChecker @Inject constructor(
                 val response = connection.inputStream.bufferedReader().readText()
                 val json = JSONObject(response)
                 val version = json.optString("tag_name", "").removePrefix("v")
-                val url = json.optString("html_url", "")
+                val htmlUrl = json.optString("html_url", "")
                 val description = json.optString("body", "")
 
-                UpdateInfo(version, url, description)
+                UpdateInfo(version, htmlUrl, description)
             } else {
                 null
             }

@@ -6,7 +6,6 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import org.indra.android.core.system.IndraSystem
 import org.indra.android.core.system.SmartToolBox
@@ -35,43 +34,52 @@ class InspectorViewModel @Inject constructor(
 
     fun inspect() {
         viewModelScope.launch {
+            val target = _uiState.value.target.trim()
             _uiState.value = _uiState.value.copy(isLoading = true, error = null, osInfo = "", services = emptyList())
 
-            try {
-                val tool = toolBox.getTool("nmap")
-                if (tool == null || !tool.isAvailable()) {
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        osInfo = "Linux 4.x/5.x (95%)\nApache httpd 2.4.x",
-                        services = listOf(
-                            ServiceInfo(22, "SSH"),
-                            ServiceInfo(80, "HTTP"),
-                            ServiceInfo(443, "HTTPS")
-                        )
-                    )
-                    return@launch
-                }
-
-                toolBox.nmap(_uiState.value.target, "1-1000").collect { result ->
-                    if (result.success) {
-                        _uiState.value = _uiState.value.copy(
-                            isLoading = false,
-                            osInfo = result.rawOutput.take(200),
-                            services = emptyList()
-                        )
-                    } else {
-                        _uiState.value = _uiState.value.copy(
-                            isLoading = false,
-                            error = result.error
-                        )
-                    }
-                }
-            } catch (e: Exception) {
+            val tool = toolBox.getTool("nmap")
+            if (tool == null || !tool.isAvailable()) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
-                    error = e.message
+                    error = "Native daemon not available"
                 )
+                return@launch
             }
+
+            val services = LinkedHashMap<Int, ServiceInfo>()
+            var osInfo = ""
+            var failure: String? = null
+
+            // XML output carries service/version for every open port, which the
+            // text parser does not report.
+            toolBox.nmapXml(target, "1-1000").collect { result ->
+                if (result.status == "running") {
+                    result.ports.forEach { port ->
+                        val version = listOfNotNull(
+                            port.service?.takeIf { it.isNotBlank() },
+                            port.version?.takeIf { it.isNotBlank() }
+                        ).joinToString(" ")
+                        services[port.port] = ServiceInfo(
+                            port.port,
+                            version.ifEmpty { port.protocol?.uppercase() ?: "unknown" }
+                        )
+                    }
+                    val osLine = result.rawOutput.lines().firstOrNull { it.contains("<osclass ") }
+                    if (osLine != null && osInfo.isEmpty()) osInfo = osLine.trim()
+                    _uiState.value = _uiState.value.copy(services = services.values.toList())
+                } else if (result.status == "completed" || result.status == "timeout") {
+                    if (!result.success) failure = result.error
+                }
+            }
+
+            _uiState.value = _uiState.value.copy(
+                isLoading = false,
+                services = services.values.toList(),
+                osInfo = osInfo.ifEmpty {
+                    if (services.isEmpty()) "No open ports found" else ""
+                },
+                error = failure
+            )
         }
     }
 }
