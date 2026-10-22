@@ -48,7 +48,8 @@ fun LoginCrackerScreen(
             OutlinedTextField(
                 value = uiState.service,
                 onValueChange = { viewModel.updateService(it) },
-                label = { Text("Service (ssh, ftp, telnet, etc.)") },
+                label = { Text("Service") },
+                supportingText = { Text("ssh, ftp, telnet, etc.") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true
             )

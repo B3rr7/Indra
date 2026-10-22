@@ -44,6 +44,7 @@ fun InspectorScreen(
                 value = uiState.target,
                 onValueChange = { viewModel.updateTarget(it) },
                 label = { Text("Target IP/Host") },
+                supportingText = { Text("IP address or hostname") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true
             )

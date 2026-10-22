@@ -3,10 +3,12 @@ package org.indra.android.ui.screens.plugins
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
@@ -54,8 +56,8 @@ fun PacketCaptureScreen(
                 OutlinedTextField(
                     value = uiState.count,
                     onValueChange = { viewModel.updateCount(it) },
-                    label = { Text("Count") },
-                    modifier = Modifier.width(110.dp),
+                    label = { Text("Max packets") },
+                    modifier = Modifier.width(140.dp),
                     singleLine = true,
                     enabled = !uiState.isActive
                 )
@@ -98,14 +100,36 @@ fun PacketCaptureScreen(
                 style = MaterialTheme.typography.titleSmall
             )
 
+            val listState = rememberLazyListState()
+            LaunchedEffect(uiState.packets.size) {
+                if (uiState.packets.isNotEmpty()) {
+                    listState.scrollToItem(uiState.packets.size - 1)
+                }
+            }
             Card(modifier = Modifier.fillMaxWidth().weight(1f)) {
-                LazyColumn(modifier = Modifier.fillMaxSize().padding(8.dp)) {
-                    items(uiState.packets) { line ->
+                if (uiState.packets.isEmpty()) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
                         Text(
-                            text = line,
-                            style = MaterialTheme.typography.bodySmall,
-                            fontFamily = FontFamily.Monospace
+                            text = if (uiState.isActive) "Waiting for packets…" else "Press Start to begin capturing",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                    }
+                } else {
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.fillMaxSize().padding(8.dp)
+                    ) {
+                        items(uiState.packets) { line ->
+                            Text(
+                                text = line,
+                                style = MaterialTheme.typography.bodySmall,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
                     }
                 }
             }

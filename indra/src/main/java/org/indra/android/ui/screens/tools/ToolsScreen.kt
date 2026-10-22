@@ -11,7 +11,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import org.indra.android.ui.screens.home.ModernToolCard
-import org.indra.android.ui.screens.home.PluginInfo
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -52,30 +51,17 @@ fun ToolsScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 items(uiState.plugins) { plugin ->
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        ModernToolCard(
-                            plugin = plugin,
-                            onClick = { onNavigateToPlugin(plugin.id) }
-                        )
-                        if (plugin.available) {
-                            TextButton(
-                                onClick = { viewModel.updateToolOta(plugin.id) },
-                                enabled = uiState.updatingToolId == null,
-                                modifier = Modifier.align(Alignment.End)
-                            ) {
-                                if (uiState.updatingToolId == plugin.id) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(16.dp),
-                                        strokeWidth = 2.dp
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text("Updating…")
-                                } else {
-                                    Text("Update binary")
-                                }
-                            }
-                        }
-                    }
+                    ModernToolCard(
+                        plugin = plugin,
+                        onClick = { onNavigateToPlugin(plugin.id) },
+                        onUpdate = if (plugin.available) {
+                            { viewModel.updateToolOta(plugin.id) }
+                        } else {
+                            null
+                        },
+                        updating = uiState.updatingToolId == plugin.id,
+                        updateEnabled = uiState.updatingToolId == null
+                    )
                 }
                 uiState.otaMessage?.let { message ->
                     item {

@@ -5,13 +5,10 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -26,6 +23,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import org.indra.android.ui.theme.StatusCyan
@@ -165,22 +163,22 @@ fun HomeScreen(
                 )
             }
 
-            // Tools Grid
+            // Tools Grid — chunked rows keep cards at natural height inside the LazyColumn
             item {
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(2),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 800.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    userScrollEnabled = false
-                ) {
-                    items(uiState.plugins) { plugin ->
-                        ModernToolCard(
-                            plugin = plugin,
-                            onClick = { onNavigateToPlugin(plugin.id) }
-                        )
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    uiState.plugins.chunked(2).forEach { rowPlugins ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            rowPlugins.forEach { plugin ->
+                                ModernToolCard(
+                                    plugin = plugin,
+                                    onClick = { onNavigateToPlugin(plugin.id) },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                            if (rowPlugins.size == 1) {
+                                Spacer(modifier = Modifier.weight(1f))
+                            }
+                        }
                     }
                 }
             }
@@ -375,7 +373,10 @@ fun QuickActionPill(
 fun ModernToolCard(
     plugin: PluginInfo,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onUpdate: (() -> Unit)? = null,
+    updating: Boolean = false,
+    updateEnabled: Boolean = true
 ) {
     val toolColor = getToolColor(plugin.id)
     
@@ -384,7 +385,7 @@ fun ModernToolCard(
         enabled = plugin.available,
         modifier = modifier
             .fillMaxWidth()
-            .height(110.dp),
+            .heightIn(min = 132.dp),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
@@ -394,9 +395,9 @@ fun ModernToolCard(
     ) {
         Column(
             modifier = Modifier
-                .fillMaxSize()
+                .fillMaxWidth()
                 .padding(14.dp),
-            verticalArrangement = Arrangement.SpaceBetween
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -417,19 +418,40 @@ fun ModernToolCard(
                         tint = if (plugin.available) toolColor else toolColor.copy(alpha = 0.4f)
                     )
                 }
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    if (onUpdate != null && plugin.available) {
+                        Text(
+                            text = if (updating) "Updating…" else "Update",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = if (updating) {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            } else {
+                                MaterialTheme.colorScheme.primary
+                            },
+                            modifier = Modifier.clickable(
+                                enabled = updateEnabled && !updating,
+                                onClick = onUpdate
+                            )
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
-            Column {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
                     text = plugin.name,
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
-                    maxLines = 1
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     text = if (plugin.available) {
@@ -440,6 +462,7 @@ fun ModernToolCard(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
                     lineHeight = MaterialTheme.typography.bodySmall.lineHeight
                 )
             }

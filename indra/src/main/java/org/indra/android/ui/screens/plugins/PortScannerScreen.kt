@@ -44,6 +44,7 @@ fun PortScannerScreen(
                 value = uiState.target,
                 onValueChange = { viewModel.updateTarget(it) },
                 label = { Text("Target IP/Host") },
+                supportingText = { Text("IP address or hostname") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true
             )
@@ -51,7 +52,8 @@ fun PortScannerScreen(
             OutlinedTextField(
                 value = uiState.portRange,
                 onValueChange = { viewModel.updatePortRange(it) },
-                label = { Text("Port Range (e.g., 1-1000)") },
+                label = { Text("Port Range") },
+                supportingText = { Text("e.g., 1-1000") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true
             )
@@ -72,8 +74,9 @@ fun PortScannerScreen(
             }
 
             if (uiState.results.isNotEmpty()) {
+                val plural = if (uiState.results.size == 1) "" else "s"
                 Text(
-                    text = "Results (${uiState.results.size} open ports)",
+                    text = "Results (${uiState.results.size} open port$plural)",
                     style = MaterialTheme.typography.titleMedium
                 )
                 LazyColumn(

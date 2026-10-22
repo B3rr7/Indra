@@ -3,10 +3,12 @@ package org.indra.android.ui.screens.plugins
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
@@ -132,22 +134,43 @@ fun MitmScreen(
                 }
             }
 
-            if (uiState.log.isNotEmpty()) {
-                Text(
-                    text = "Log",
-                    style = MaterialTheme.typography.titleSmall
-                )
-                Card(modifier = Modifier.fillMaxWidth().weight(1f)) {
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(8.dp)
-                    ) {
-                        items(uiState.log) { line ->
+            when {
+                uiState.log.isNotEmpty() -> {
+                    Text(
+                        text = "Log",
+                        style = MaterialTheme.typography.titleSmall
+                    )
+                    val logState = rememberLazyListState()
+                    LaunchedEffect(uiState.log.size) {
+                        logState.scrollToItem(uiState.log.size - 1)
+                    }
+                    Card(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                        LazyColumn(
+                            state = logState,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(8.dp)
+                        ) {
+                            items(uiState.log) { line ->
+                                Text(
+                                    text = line,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                            }
+                        }
+                    }
+                }
+                uiState.isActive -> {
+                    Card(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
                             Text(
-                                text = line,
-                                style = MaterialTheme.typography.bodySmall,
-                                fontFamily = FontFamily.Monospace
+                                text = "Waiting for arpspoof output…",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }

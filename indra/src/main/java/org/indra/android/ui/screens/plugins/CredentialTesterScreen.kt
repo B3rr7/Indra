@@ -3,10 +3,14 @@ package org.indra.android.ui.screens.plugins
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 
@@ -17,6 +21,7 @@ fun CredentialTesterScreen(
     viewModel: CredentialTesterViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    var passwordVisible by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -58,7 +63,20 @@ fun CredentialTesterScreen(
                 onValueChange = { viewModel.updatePassword(it) },
                 label = { Text("Password") },
                 modifier = Modifier.fillMaxWidth(),
-                singleLine = true
+                singleLine = true,
+                visualTransformation = if (passwordVisible) {
+                    VisualTransformation.None
+                } else {
+                    PasswordVisualTransformation()
+                },
+                trailingIcon = {
+                    IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                        Icon(
+                            imageVector = if (passwordVisible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+                            contentDescription = if (passwordVisible) "Hide password" else "Show password"
+                        )
+                    }
+                }
             )
 
             Button(
