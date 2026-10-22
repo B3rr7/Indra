@@ -1,9 +1,11 @@
 package org.indra.android.ui.screens.settings
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
@@ -12,12 +14,30 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+
+private object SettingsPalette {
+    val Network = Color(0xFF448AFF)      // blue
+    val Ports = Color(0xFF00E5FF)        // cyan
+    val HttpServer = Color(0xFF536DFE)   // indigo
+    val Https = Color(0xFF7C4DFF)        // violet
+    val MsfRpc = Color(0xFFE040FB)       // magenta
+    val General = Color(0xFFFFC107)      // amber
+    val WakeLock = Color(0xFFFF9800)     // orange
+    val DebugLog = Color(0xFFC6FF00)     // lime
+    val Core = Color(0xFF1DE9B6)         // teal
+    val Ota = Color(0xFF00B0FF)          // sky
+    val About = Color(0xFFFF4081)        // pink
+    val License = Color(0xFFFFD600)      // yellow
+    val Running = Color(0xFF00E676)      // green
+    val Stopped = Color(0xFFFF5252)      // red
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -48,12 +68,12 @@ fun SettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { 
+                title = {
                     Text(
-                        "Settings", 
+                        "Settings",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold
-                    ) 
+                    )
                 },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
@@ -71,317 +91,125 @@ fun SettingsScreen(
                 .fillMaxSize()
                 .padding(paddingValues),
             contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            // Network Configuration Section
+            // ── System status hero ───────────────────────────────────────
+            item { StatusHeroCard(uiState) }
+
+            // ── Network Configuration ────────────────────────────────────
             item {
                 SettingsSection(
                     title = "Network Configuration",
-                    icon = Icons.Default.Wifi
+                    icon = Icons.Default.Wifi,
+                    accent = SettingsPalette.Network
                 )
             }
             item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                SettingsCard {
+                    SettingsItem(
+                        title = "HTTP Proxy Port",
+                        subtitle = "Local proxy server",
+                        value = uiState.httpProxyPort.toString(),
+                        icon = Icons.Default.WifiTethering,
+                        accent = SettingsPalette.Ports,
+                        onClick = { editingPort = PortField.HTTP_PROXY }
                     )
-                ) {
-                    Column(
-                        modifier = Modifier.padding(vertical = 8.dp)
-                    ) {
-                        ModernSettingsItem(
-                            title = "HTTP Proxy Port",
-                            subtitle = "Local proxy server port",
-                            value = uiState.httpProxyPort.toString(),
-                            icon = Icons.Default.WifiTethering,
-                            onClick = { editingPort = PortField.HTTP_PROXY }
-                        )
-                        HorizontalDivider(
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                            color = MaterialTheme.colorScheme.outlineVariant
-                        )
-                        ModernSettingsItem(
-                            title = "HTTP Server Port",
-                            subtitle = "HTTP server for MITM",
-                            value = uiState.httpServerPort.toString(),
-                            icon = Icons.Default.Dns,
-                            onClick = { editingPort = PortField.HTTP_SERVER }
-                        )
-                        HorizontalDivider(
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                            color = MaterialTheme.colorScheme.outlineVariant
-                        )
-                        ModernSettingsItem(
-                            title = "HTTPS Redirector Port",
-                            subtitle = "HTTPS redirection port",
-                            value = uiState.httpsRedirectorPort.toString(),
-                            icon = Icons.Default.Https,
-                            onClick = { editingPort = PortField.HTTPS_REDIRECT }
-                        )
-                        HorizontalDivider(
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                            color = MaterialTheme.colorScheme.outlineVariant
-                        )
-                        ModernSettingsItem(
-                            title = "MSF RPC Port",
-                            subtitle = "Metasploit RPC connection",
-                            value = uiState.msfRpcPort.toString(),
-                            icon = Icons.Default.Terminal,
-                            onClick = { editingPort = PortField.MSF_RPC }
-                        )
-                    }
+                    SettingsItem(
+                        title = "HTTP Server Port",
+                        subtitle = "HTTP server for MITM",
+                        value = uiState.httpServerPort.toString(),
+                        icon = Icons.Default.Dns,
+                        accent = SettingsPalette.HttpServer,
+                        onClick = { editingPort = PortField.HTTP_SERVER }
+                    )
+                    SettingsItem(
+                        title = "HTTPS Redirector Port",
+                        subtitle = "HTTPS redirection",
+                        value = uiState.httpsRedirectorPort.toString(),
+                        icon = Icons.Default.Https,
+                        accent = SettingsPalette.Https,
+                        onClick = { editingPort = PortField.HTTPS_REDIRECT }
+                    )
+                    SettingsItem(
+                        title = "MSF RPC Port",
+                        subtitle = "Metasploit RPC connection",
+                        value = uiState.msfRpcPort.toString(),
+                        icon = Icons.Default.Terminal,
+                        accent = SettingsPalette.MsfRpc,
+                        onClick = { editingPort = PortField.MSF_RPC },
+                        last = true
+                    )
                 }
             }
 
-            // General Section
+            // ── General ──────────────────────────────────────────────────
             item {
                 SettingsSection(
                     title = "General",
-                    icon = Icons.Default.Tune
+                    icon = Icons.Default.Tune,
+                    accent = SettingsPalette.General
                 )
             }
             item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                SettingsCard {
+                    SettingsSwitchItem(
+                        title = "Keep Wake Lock",
+                        subtitle = "Prevent device from sleeping",
+                        checked = true,
+                        onCheckedChange = { },
+                        icon = Icons.Default.BrightnessHigh,
+                        accent = SettingsPalette.WakeLock
                     )
-                ) {
-                    Column(
-                        modifier = Modifier.padding(vertical = 8.dp)
-                    ) {
-                        ModernSettingsSwitchItem(
-                            title = "Keep Wake Lock",
-                            subtitle = "Prevent device from sleeping",
-                            checked = true,
-                            onCheckedChange = { }
-                        )
-                        HorizontalDivider(
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                            color = MaterialTheme.colorScheme.outlineVariant
-                        )
-                        ModernSettingsSwitchItem(
-                            title = "Debug Error Logging",
-                            subtitle = "Enable detailed logging",
-                            checked = false,
-                            onCheckedChange = { }
-                        )
-                    }
+                    SettingsSwitchItem(
+                        title = "Debug Error Logging",
+                        subtitle = "Enable detailed logging",
+                        checked = false,
+                        onCheckedChange = { },
+                        icon = Icons.Default.BugReport,
+                        accent = SettingsPalette.DebugLog,
+                        last = true
+                    )
                 }
             }
 
-            // Native Core Section
+            // ── Native Core ──────────────────────────────────────────────
             item {
                 SettingsSection(
                     title = "Native Core",
-                    icon = Icons.Default.Storage
+                    icon = Icons.Default.Storage,
+                    accent = SettingsPalette.Core
                 )
             }
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                    )
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "Installed version",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Text(
-                                    text = uiState.coreVersion,
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            }
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "Daemon",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Text(
-                                    text = if (uiState.daemonRunning) "Running" else "Stopped",
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    fontWeight = FontWeight.Medium,
-                                    color = if (uiState.daemonRunning) {
-                                        MaterialTheme.colorScheme.primary
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurfaceVariant
-                                    }
-                                )
-                            }
-                        }
+            item { NativeCoreCard(uiState, viewModel) }
 
-                        if (uiState.coreBusy) {
-                            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                        }
-
-                        uiState.coreMessage?.let { message ->
-                            Text(
-                                text = message,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Button(
-                                onClick = viewModel::installCore,
-                                enabled = !uiState.coreBusy,
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text("Install")
-                            }
-                            FilledTonalButton(
-                                onClick = viewModel::startDaemon,
-                                enabled = !uiState.coreBusy,
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text("Start")
-                            }
-                            OutlinedButton(
-                                onClick = viewModel::stopDaemon,
-                                enabled = !uiState.coreBusy && uiState.daemonRunning,
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text("Stop")
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Binary Updates (OTA) Section
+            // ── Binary Updates (OTA) ─────────────────────────────────────
             item {
                 SettingsSection(
                     title = "Binary Updates (OTA)",
-                    icon = Icons.Default.CloudDownload
+                    icon = Icons.Default.CloudDownload,
+                    accent = SettingsPalette.Ota
                 )
             }
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                    )
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        if (uiState.otaChecking || uiState.otaUpdating) {
-                            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                        }
+            item { OtaCard(uiState, viewModel) }
 
-                        uiState.otaMessage?.let { message ->
-                            Text(
-                                text = message,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Button(
-                                onClick = viewModel::checkOtaUpdates,
-                                enabled = !uiState.otaChecking && !uiState.otaUpdating,
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text("Check")
-                            }
-                            FilledTonalButton(
-                                onClick = viewModel::installOtaUpdates,
-                                enabled = !uiState.otaChecking && !uiState.otaUpdating && uiState.otaUpdateAvailable,
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text("Update")
-                            }
-                        }
-                    }
-                }
-            }
-
-            // About Section
+            // ── About ────────────────────────────────────────────────────
             item {
                 SettingsSection(
                     title = "About",
-                    icon = Icons.Default.Info
+                    icon = Icons.Default.Info,
+                    accent = SettingsPalette.About
                 )
             }
             item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                SettingsCard {
+                    SettingsItem(
+                        title = "License",
+                        subtitle = "GNU General Public License v3",
+                        value = "GPL v3",
+                        icon = Icons.Default.Gavel,
+                        accent = SettingsPalette.License,
+                        last = true
                     )
-                ) {
-                    Column(
-                        modifier = Modifier.padding(vertical = 8.dp)
-                    ) {
-                        ModernSettingsItem(
-                            title = "Version",
-                            subtitle = "Application version",
-                            value = uiState.version,
-                            icon = Icons.Default.Apps
-                        )
-                        HorizontalDivider(
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                            color = MaterialTheme.colorScheme.outlineVariant
-                        )
-                        ModernSettingsItem(
-                            title = "Core Version",
-                            subtitle = "Native core status",
-                            value = uiState.coreVersion,
-                            icon = Icons.Default.Storage
-                        )
-                        HorizontalDivider(
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                            color = MaterialTheme.colorScheme.outlineVariant
-                        )
-                        ModernSettingsItem(
-                            title = "Root Manager",
-                            subtitle = "Root access provider",
-                            value = "Magisk",
-                            icon = Icons.Default.AdminPanelSettings
-                        )
-                        HorizontalDivider(
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                            color = MaterialTheme.colorScheme.outlineVariant
-                        )
-                        ModernSettingsItem(
-                            title = "License",
-                            subtitle = "GPL v3",
-                            value = "",
-                            icon = Icons.Default.Gavel
-                        )
-                    }
                 }
             }
 
@@ -390,15 +218,15 @@ fun SettingsScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 16.dp),
+                        .padding(top = 8.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Security,
                         contentDescription = null,
-                        modifier = Modifier.size(48.dp),
-                        tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
+                        modifier = Modifier.size(40.dp),
+                        tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
                     )
                     Text(
                         text = "Indra",
@@ -418,65 +246,153 @@ fun SettingsScreen(
 }
 
 @Composable
-fun SettingsSection(
+private fun StatusHeroCard(uiState: SettingsUiState) {
+    // Graceful fallback when the settings UiState lacks fancy fields — values are read directly.
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    brush = Brush.horizontalGradient(
+                        listOf(
+                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f),
+                            MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
+                        )
+                    )
+                )
+                .padding(20.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(52.dp)
+                        .clip(CircleShape)
+                        .background(
+                            (if (uiState.daemonRunning) SettingsPalette.Running else SettingsPalette.Stopped)
+                                .copy(alpha = 0.2f)
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = if (uiState.daemonRunning) Icons.Default.CheckCircle else Icons.Default.Error,
+                        contentDescription = null,
+                        modifier = Modifier.size(28.dp),
+                        tint = if (uiState.daemonRunning) SettingsPalette.Running else SettingsPalette.Stopped
+                    )
+                }
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(3.dp)
+                ) {
+                    Text(
+                        text = if (uiState.daemonRunning) "Daemon running" else "Daemon stopped",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Core ${uiState.coreVersion} · App ${uiState.version} · Magisk root",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SettingsCard(content: @Composable ColumnScope.() -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        )
+    ) {
+        Column(content = content)
+    }
+}
+
+@Composable
+private fun SettingsSection(
     title: String,
     icon: ImageVector,
+    accent: Color,
     modifier: Modifier = Modifier
 ) {
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp),
+            .padding(top = 6.dp, bottom = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(22.dp)
-        )
+        Box(
+            modifier = Modifier
+                .size(28.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(accent.copy(alpha = 0.18f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = accent,
+                modifier = Modifier.size(18.dp)
+            )
+        }
         Text(
             text = title,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = MaterialTheme.typography.titleSmall.letterSpacing
         )
     }
 }
 
 @Composable
-fun ModernSettingsItem(
+private fun SettingsItem(
     title: String,
     subtitle: String,
     value: String,
     icon: ImageVector,
+    accent: Color,
     onClick: () -> Unit = {},
-    modifier: Modifier = Modifier
+    last: Boolean = false
 ) {
     Surface(
         onClick = onClick,
-        modifier = modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth(),
         color = Color.Transparent
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .padding(horizontal = 14.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Box(
                 modifier = Modifier
                     .size(40.dp)
                     .clip(RoundedCornerShape(10.dp))
-                    .padding(8.dp),
+                    .background(accent.copy(alpha = 0.18f)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = icon,
                     contentDescription = title,
-                    modifier = Modifier.size(22.dp),
-                    tint = MaterialTheme.colorScheme.primary
+                    modifier = Modifier.size(21.dp),
+                    tint = accent
                 )
             }
             Column(
@@ -498,8 +414,8 @@ fun ModernSettingsItem(
                 Text(
                     text = value,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Medium
+                    color = accent,
+                    fontWeight = FontWeight.SemiBold
                 )
             }
             Icon(
@@ -510,23 +426,45 @@ fun ModernSettingsItem(
             )
         }
     }
+    if (!last) {
+        HorizontalDivider(
+            modifier = Modifier.padding(horizontal = 14.dp),
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+        )
+    }
 }
 
 @Composable
-fun ModernSettingsSwitchItem(
+private fun SettingsSwitchItem(
     title: String,
     subtitle: String,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
-    modifier: Modifier = Modifier
+    icon: ImageVector,
+    accent: Color,
+    last: Boolean = false
 ) {
     Row(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(16.dp)
+        horizontalArrangement = Arrangement.spacedBy(14.dp)
     ) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(accent.copy(alpha = 0.18f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = title,
+                modifier = Modifier.size(21.dp),
+                tint = accent
+            )
+        }
         Column(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(2.dp)
@@ -546,9 +484,192 @@ fun ModernSettingsSwitchItem(
             checked = checked,
             onCheckedChange = onCheckedChange,
             colors = SwitchDefaults.colors(
-                checkedThumbColor = MaterialTheme.colorScheme.primary,
-                checkedTrackColor = MaterialTheme.colorScheme.primaryContainer
+                checkedThumbColor = accent,
+                checkedTrackColor = accent.copy(alpha = 0.35f)
             )
+        )
+    }
+    if (!last) {
+        HorizontalDivider(
+            modifier = Modifier.padding(horizontal = 14.dp),
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+        )
+    }
+}
+
+@Composable
+private fun NativeCoreCard(uiState: SettingsUiState, viewModel: SettingsViewModel) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(SettingsPalette.Core.copy(alpha = 0.18f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Memory,
+                        contentDescription = null,
+                        modifier = Modifier.size(21.dp),
+                        tint = SettingsPalette.Core
+                    )
+                }
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    Text(
+                        text = "indra daemon",
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        text = "Installed version ${uiState.coreVersion}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                StatusPill(
+                    text = if (uiState.daemonRunning) "Running" else "Stopped",
+                    color = if (uiState.daemonRunning) SettingsPalette.Running else SettingsPalette.Stopped
+                )
+            }
+
+            if (uiState.coreBusy) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            }
+
+            uiState.coreMessage?.let { message ->
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                FilledTonalButton(
+                    onClick = viewModel::installCore,
+                    enabled = !uiState.coreBusy,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Install")
+                }
+                if (uiState.daemonRunning) {
+                    OutlinedButton(
+                        onClick = viewModel::stopDaemon,
+                        enabled = !uiState.coreBusy,
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = SettingsPalette.Stopped
+                        )
+                    ) {
+                        Text("Stop")
+                    }
+                } else {
+                    Button(
+                        onClick = viewModel::startDaemon,
+                        enabled = !uiState.coreBusy,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Start")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun OtaCard(uiState: SettingsUiState, viewModel: SettingsViewModel) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            if (uiState.otaChecking || uiState.otaUpdating) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            }
+
+            uiState.otaMessage?.let { message ->
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Button(
+                    onClick = viewModel::checkOtaUpdates,
+                    enabled = !uiState.otaChecking && !uiState.otaUpdating,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Check")
+                }
+                FilledTonalButton(
+                    onClick = viewModel::installOtaUpdates,
+                    enabled = !uiState.otaChecking && !uiState.otaUpdating && uiState.otaUpdateAvailable,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Update")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatusPill(text: String, color: Color) {
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(color.copy(alpha = 0.16f))
+            .padding(horizontal = 10.dp, vertical = 5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(7.dp)
+                .clip(CircleShape)
+                .background(color)
+        )
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = color
         )
     }
 }

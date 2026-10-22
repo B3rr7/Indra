@@ -485,25 +485,30 @@ fun getToolIcon(id: String): ImageVector {
         "vuln_scanner" -> Icons.Default.Security
         "web_tester" -> Icons.Default.Language
         "credential_tester" -> Icons.Default.Key
+        "network_radar" -> Icons.Default.WifiTethering
+        "packet_capture" -> Icons.Default.Cable
         else -> Icons.Default.Extension
     }
 }
 
 @Composable
 fun getToolColor(id: String): Color {
+    // One distinct hue per tool — no repeats
     return when (id) {
-        "port_scanner" -> StatusCyan
-        "inspector" -> StatusBlue
-        "traceroute" -> Color(0xFF00BCD4)
-        "mitm" -> StatusRed
-        "exploit_finder" -> StatusOrange
-        "login_cracker" -> Color(0xFFFF6F00)
-        "packet_forger" -> Color(0xFF9C27B0)
-        "router_pwn" -> Color(0xFFE91E63)
-        "wifi_audit" -> StatusGreen
-        "vuln_scanner" -> StatusRed
-        "web_tester" -> Color(0xFF2196F3)
-        "credential_tester" -> Color(0xFFFFEB3B)
+        "port_scanner" -> Color(0xFF00E5FF)  // cyan
+        "inspector" -> Color(0xFF448AFF)     // blue
+        "traceroute" -> Color(0xFF7C4DFF)    // violet
+        "mitm" -> Color(0xFFFF5252)          // red
+        "exploit_finder" -> Color(0xFFFF9800) // orange
+        "login_cracker" -> Color(0xFFFFC107) // amber
+        "packet_forger" -> Color(0xFFE040FB) // magenta
+        "router_pwn" -> Color(0xFFFF4081)    // pink
+        "wifi_audit" -> Color(0xFF00E676)    // green
+        "vuln_scanner" -> Color(0xFFC6FF00)  // lime
+        "web_tester" -> Color(0xFF1DE9B6)    // teal
+        "credential_tester" -> Color(0xFFFFD600) // yellow
+        "network_radar" -> Color(0xFF00BFA5) // sea green
+        "packet_capture" -> Color(0xFF536DFE) // medium indigo blue
         else -> MaterialTheme.colorScheme.primary
     }
 }
