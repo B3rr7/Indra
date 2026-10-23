@@ -10,6 +10,15 @@ class PluginManager @Inject constructor() {
     init {
         registerPlugin(
             Plugin(
+                id = "masscan",
+                name = "Masscan",
+                description = "High-speed port scanner",
+                targetTypes = setOf("endpoint", "network"),
+                requires = "masscan"
+            )
+        )
+        registerPlugin(
+            Plugin(
                 id = "port_scanner",
                 name = "Port Scanner",
                 description = "Scan open ports on target devices",
@@ -41,7 +50,7 @@ class PluginManager @Inject constructor() {
                 name = "MITM",
                 description = "Man-in-the-middle attacks",
                 targetTypes = setOf("endpoint", "network"),
-                requires = "raw"
+                requires = "arpspoof"
             )
         )
         registerPlugin(
@@ -50,7 +59,7 @@ class PluginManager @Inject constructor() {
                 name = "Network Radar",
                 description = "Discover hosts on the local network",
                 targetTypes = setOf("network"),
-                requires = "raw"
+                requires = "network-radar"
             )
         )
         registerPlugin(
@@ -59,7 +68,7 @@ class PluginManager @Inject constructor() {
                 name = "Packet Capture",
                 description = "Capture live traffic with tcpdump",
                 targetTypes = setOf("network"),
-                requires = "raw"
+                requires = "tcpdump"
             )
         )
         registerPlugin(
@@ -86,7 +95,7 @@ class PluginManager @Inject constructor() {
                 name = "Packet Forger",
                 description = "Forge TCP/UDP packets",
                 targetTypes = setOf("endpoint"),
-                requires = "raw"
+                requires = "hping3"
             )
         )
         registerPlugin(
@@ -104,7 +113,7 @@ class PluginManager @Inject constructor() {
                 name = "WiFi Audit",
                 description = "WiFi network auditing and cracking",
                 targetTypes = setOf("network"),
-                requires = "raw"
+                requires = "aircrack-ng"
             )
         )
         registerPlugin(
@@ -122,7 +131,61 @@ class PluginManager @Inject constructor() {
                 name = "Web Tester",
                 description = "Web application security testing",
                 targetTypes = setOf("endpoint"),
-                requires = "sqlmap"
+                requires = "nuclei"
+            )
+        )
+        registerPlugin(
+            Plugin(
+                id = "terminal",
+                name = "Terminal",
+                description = "Run shell commands on the device",
+                targetTypes = setOf("network", "endpoint"),
+                requires = "shell"
+            )
+        )
+        registerPlugin(
+            Plugin(
+                id = "mac_changer",
+                name = "MAC Changer",
+                description = "Randomize or set the device MAC address",
+                targetTypes = setOf("network"),
+                requires = "shell"
+            )
+        )
+        registerPlugin(
+            Plugin(
+                id = "iptables",
+                name = "IPTables",
+                description = "Manage firewall rules",
+                targetTypes = setOf("network", "endpoint"),
+                requires = "shell"
+            )
+        )
+        registerPlugin(
+            Plugin(
+                id = "wifi_scanner",
+                name = "WiFi Scanner",
+                description = "Scan nearby WiFi access points",
+                targetTypes = setOf("network"),
+                requires = "shell"
+            )
+        )
+        registerPlugin(
+            Plugin(
+                id = "wifite",
+                name = "Wifite",
+                description = "Automated WiFi audit (monitor + capture + crack)",
+                targetTypes = setOf("network"),
+                requires = "shell"
+            )
+        )
+        registerPlugin(
+            Plugin(
+                id = "handshakes",
+                name = "Handshakes",
+                description = "Browse saved capture files",
+                targetTypes = setOf("network"),
+                requires = "shell"
             )
         )
         registerPlugin(

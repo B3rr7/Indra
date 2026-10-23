@@ -98,6 +98,46 @@ fun PacketCaptureScreen(
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Monitor mode (risky on some devices)",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Text(
+                        text = "Required for handshake capture. May crash certain devices.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(
+                    checked = uiState.monitorMode,
+                    onCheckedChange = { viewModel.requestMonitorMode(it) },
+                    enabled = !uiState.isActive
+                )
+            }
+
+            if (uiState.monitorWarningShown) {
+                AlertDialog(
+                    onDismissRequest = { viewModel.cancelMonitorMode() },
+                    title = { Text("Monitor mode") },
+                    text = { Text("Enabling monitor mode on this interface may crash or reboot the device on some vendor drivers (similar risk to MITM/arpspoof). Continue?") },
+                    confirmButton = {
+                        TextButton(onClick = { viewModel.confirmMonitorMode(); viewModel.cancelMonitorMode() }) {
+                            Text("Enable")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { viewModel.cancelMonitorMode() }) {
+                            Text("Cancel")
+                        }
+                    }
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Button(

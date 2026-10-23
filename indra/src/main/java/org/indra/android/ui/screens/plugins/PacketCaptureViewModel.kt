@@ -21,6 +21,8 @@ data class PacketCaptureUiState(
     val saveToFile: Boolean = false,
     val capturePath: String = "",
     val isActive: Boolean = false,
+    val monitorMode: Boolean = false,
+    val monitorWarningShown: Boolean = false,
     val packets: List<String> = emptyList(),
     val error: String? = null
 )
@@ -53,6 +55,32 @@ class PacketCaptureViewModel @Inject constructor(
 
     fun setSaveToFile(save: Boolean) {
         _uiState.value = _uiState.value.copy(saveToFile = save)
+    }
+
+    fun requestMonitorMode(enable: Boolean) {
+        _uiState.value = _uiState.value.copy(monitorWarningShown = true, monitorMode = enable)
+    }
+
+    fun confirmMonitorMode() {
+        val iface = _uiState.value.iface.trim()
+        if (iface.isEmpty()) return
+        val enable = _uiState.value.monitorMode
+        val cmd = if (enable) {
+            "ip link set $iface down && iw dev $iface set type monitor && ip link set $iface up"
+        } else {
+            "ip link set $iface down && iw dev $iface set type managed && ip link set $iface up"
+        }
+        viewModelScope.launch {
+            toolBox.shell(cmd).collect { result ->
+                if (!result.success && result.status != "running") {
+                    _uiState.value = _uiState.value.copy(error = result.error ?: "monitor mode change failed")
+                }
+            }
+        }
+    }
+
+    fun cancelMonitorMode() {
+        _uiState.value = _uiState.value.copy(monitorWarningShown = false, monitorMode = false)
     }
 
     fun start() {

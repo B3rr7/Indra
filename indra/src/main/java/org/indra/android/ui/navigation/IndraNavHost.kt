@@ -26,6 +26,12 @@ import org.indra.android.ui.screens.plugins.WebTesterScreen
 import org.indra.android.ui.screens.plugins.WifiAuditScreen
 import org.indra.android.ui.screens.settings.SettingsScreen
 import org.indra.android.ui.screens.tools.ToolsScreen
+import org.indra.android.ui.screens.tools.TerminalScreen
+import org.indra.android.ui.screens.plugins.MacChangerScreen
+import org.indra.android.ui.screens.plugins.IptablesScreen
+import org.indra.android.ui.screens.plugins.MasscanScreen
+import org.indra.android.ui.screens.plugins.WifiScannerScreen
+import org.indra.android.ui.screens.plugins.WifiteScreen
 
 sealed class Screen(val route: String) {
     object Home : Screen("home")
@@ -44,6 +50,12 @@ sealed class Screen(val route: String) {
     object VulnScanner : Screen("vuln_scanner")
     object WebTester : Screen("web_tester")
     object CredentialTester : Screen("credential_tester")
+    object Terminal : Screen("terminal")
+    object MacChanger : Screen("mac_changer")
+    object Iptables : Screen("iptables")
+    object Masscan : Screen("masscan")
+    object WifiScanner : Screen("wifi_scanner")
+    object Wifite : Screen("wifite")
     object Settings : Screen("settings")
 }
 
@@ -73,6 +85,12 @@ fun IndraNavHost(
                 "vuln_scanner" -> navController.navigate(Screen.VulnScanner.route)
                 "web_tester" -> navController.navigate(Screen.WebTester.route)
                 "credential_tester" -> navController.navigate(Screen.CredentialTester.route)
+                "terminal" -> navController.navigate(Screen.Terminal.route)
+                "mac_changer" -> navController.navigate(Screen.MacChanger.route)
+                "iptables" -> navController.navigate(Screen.Iptables.route)
+                "masscan" -> navController.navigate(Screen.Masscan.route)
+                "wifi_scanner" -> navController.navigate(Screen.WifiScanner.route)
+                "wifite" -> navController.navigate(Screen.Wifite.route)
                 else -> navController.navigate("plugin/$pluginName")
             }
         }
@@ -136,6 +154,30 @@ fun IndraNavHost(
         }
         composable(Screen.CredentialTester.route) {
             CredentialTesterScreen(onNavigateBack = { navController.popBackStack() })
+        }
+
+        composable(Screen.Terminal.route) {
+            TerminalScreen(onNavigateBack = { navController.popBackStack() })
+        }
+
+        composable(Screen.MacChanger.route) {
+            MacChangerScreen(onNavigateBack = { navController.popBackStack() })
+        }
+
+        composable(Screen.Iptables.route) {
+            IptablesScreen(onNavigateBack = { navController.popBackStack() })
+        }
+
+        composable(Screen.Masscan.route) {
+            MasscanScreen(onNavigateBack = { navController.popBackStack() })
+        }
+
+        composable(Screen.WifiScanner.route) {
+            WifiScannerScreen(onNavigateBack = { navController.popBackStack() })
+        }
+
+        composable(Screen.Wifite.route) {
+            WifiteScreen(onNavigateBack = { navController.popBackStack() })
         }
 
         composable(

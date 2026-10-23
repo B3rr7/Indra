@@ -11,7 +11,10 @@ import org.indra.android.core.system.CoreManager
 import org.indra.android.core.system.IndraSystem
 import org.indra.android.core.system.OtaUpdateManager
 import org.indra.android.core.system.SettingsRepository
+import org.indra.android.core.system.SmartToolBox
 import javax.inject.Inject
+
+data class ToolStatus(val name: String, val available: Boolean)
 
 data class SettingsUiState(
     val httpProxyPort: Int = 8080,
@@ -28,7 +31,8 @@ data class SettingsUiState(
     val otaUpdateAvailable: Boolean = false,
     val otaMessage: String? = null,
     val otaManifestUrl: String = "",
-    val otaAllowTestHosts: Boolean = false
+    val otaAllowTestHosts: Boolean = false,
+    val toolStatus: List<ToolStatus> = emptyList()
 )
 
 /** Port fields the daemon tools read from [SettingsRepository]. */
@@ -44,7 +48,8 @@ class SettingsViewModel @Inject constructor(
     private val system: IndraSystem,
     private val settings: SettingsRepository,
     private val coreManager: CoreManager,
-    private val otaManager: OtaUpdateManager
+    private val otaManager: OtaUpdateManager,
+    private val toolBox: SmartToolBox
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -65,7 +70,8 @@ class SettingsViewModel @Inject constructor(
                 coreVersion = system.getCoreVersion() ?: "Not installed",
                 daemonRunning = coreManager.isDaemonRunning,
                 otaManifestUrl = settings.otaManifestUrl,
-                otaAllowTestHosts = settings.otaAllowTestHosts
+                otaAllowTestHosts = settings.otaAllowTestHosts,
+                toolStatus = toolBox.getAllTools().map { ToolStatus(it.name, it.isAvailable()) }
             )
         }
     }
@@ -195,7 +201,9 @@ class SettingsViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(
             coreBusy = false,
             coreVersion = system.getCoreVersion() ?: "Not installed",
-            daemonRunning = coreManager.isDaemonRunning
+            daemonRunning = coreManager.isDaemonRunning,
+            toolStatus = toolBox.getAllTools().map { ToolStatus(it.name, it.isAvailable()) }
         )
+        toolBox.reload()
     }
 }

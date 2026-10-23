@@ -46,10 +46,11 @@ class SmartToolBox @Inject constructor(
         registerTool("nmap", "nmap", "Network scanner", "nmap")
         registerTool("masscan", "masscan", "High-speed port scanner", "masscan")
         registerTool("hydra", "hydra", "Login cracker", "hydra")
-        registerTool("aircrack", "aircrack", "WiFi WEP/WPA cracker", "aircrack-ng")
+        registerTool("aircrack", "raw", "WiFi WEP/WPA cracker", "aircrack-ng")
         registerTool("reaver", "reaver", "WPS PIN cracker", "reaver")
-        registerTool("hping3", "hping3", "Packet crafter", "hping3")
-        registerTool("nuclei", "nuclei", "Vulnerability scanner", "nuclei")
+        registerTool("hping3", "raw", "Packet crafter", "hping3")
+        registerTool("masscan", "raw", "High-speed port scanner", "masscan")
+        registerTool("nuclei", "raw", "Vulnerability scanner", "nuclei")
         registerTool("sqlmap", "sqlmap", "SQL injection tool", "sqlmap")
         registerTool("nikto", "nikto", "Web server scanner", "nikto")
         registerTool("wifite", "wifite", "Automated WiFi auditor", "wifite")
@@ -62,12 +63,18 @@ class SmartToolBox @Inject constructor(
         registerTool("msf", "msf", "Metasploit console", "msfconsole")
         registerTool("msfrpcd", "msfrpcd", "Metasploit RPC daemon", "msfrpcd")
         registerTool("ruby", "ruby", "Ruby interpreter", "ruby")
-        registerTool("shell", "shell", "Shell executor", "sh")
+        registerTool("shell", "raw", "Shell executor", "sh")
         registerTool("raw", "raw", "Raw socket", "raw")
         registerTool("ip", "ip", "IP utilities", "ip")
         registerTool("logcat", "logcat", "Log viewer", "logcat")
         registerTool("fusemounts", "fusemounts", "FUSE mounts", "fusemounts")
         registerTool("networkradar", "network-radar", "Network auto-scanner", "network-radar")
+        registerTool("network-radar", "network-radar", "Network auto-scanner", "network-radar")
+        // Shipped binaries that execute via the daemon's "raw" handler. Registered
+        // under their real binary name so plugin availability + OTA use the right name.
+        registerTool("arpspoof", "raw", "ARP spoofer", "arpspoof")
+        registerTool("tcpdump", "raw", "Packet capture", "tcpdump")
+        registerTool("aircrack-ng", "raw", "WiFi WEP/WPA cracker", "aircrack-ng")
         registerTool("traceroute", "traceroute", "Network path tracer", "traceroute")
         registerTool("blind", "blind", "Blind shell handler", "sh")
     }
@@ -159,13 +166,16 @@ class SmartToolBox @Inject constructor(
 
     fun ettercap(args: String): Flow<ToolResult> =
         rawCommand("ettercap", "${binary("ettercap")} $args", timeoutMs = LONG_RUNNING_TIMEOUT_MS)
-    fun nuclei(target: String, templates: String = ""): Flow<ToolResult> = execute("nuclei", "-u $target $templates")
+    fun nuclei(target: String, templates: String = ""): Flow<ToolResult> =
+        rawCommand("nuclei", "${binary("nuclei")} -u $target $templates")
     fun sqlmap(url: String): Flow<ToolResult> = execute("sqlmap", "-u $url --batch")
     fun nikto(target: String): Flow<ToolResult> = execute("nikto", "-h $target")
     fun aircrack(args: String): Flow<ToolResult> =
         rawCommand("aircrack", "${binary("aircrack-ng")} $args", timeoutMs = LONG_RUNNING_TIMEOUT_MS)
     fun hping3(target: String, args: String = ""): Flow<ToolResult> =
         rawCommand("hping3", "${binary("hping3")} $args $target")
+    fun masscan(target: String, args: String = ""): Flow<ToolResult> =
+        rawCommand("masscan", "${binary("masscan")} $args $target")
     fun bettercap(args: String = ""): Flow<ToolResult> = execute("bettercap", args)
     fun responder(iface: String = "wlan0"): Flow<ToolResult> = execute("responder", "-I $iface")
     fun shell(command: String): Flow<ToolResult> = execute("shell", command)

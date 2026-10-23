@@ -185,6 +185,16 @@ fun SettingsScreen(
             }
             item { NativeCoreCard(uiState, viewModel) }
 
+            // ── Bundled Tools ────────────────────────────────────────────
+            item {
+                SettingsSection(
+                    title = "Bundled Tools",
+                    icon = Icons.Default.Build,
+                    accent = SettingsPalette.Core
+                )
+            }
+            item { ToolsStatusCard(uiState) }
+
             // ── Binary Updates (OTA) ─────────────────────────────────────
             item {
                 SettingsSection(
@@ -608,6 +618,56 @@ private fun NativeCoreCard(uiState: SettingsUiState, viewModel: SettingsViewMode
                         Text("Start")
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ToolsStatusCard(uiState: SettingsUiState) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            uiState.toolStatus.sortedBy { it.name }.forEach { tool ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(if (tool.available) SettingsPalette.Running else SettingsPalette.Stopped)
+                    )
+                    Text(
+                        text = tool.name,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Text(
+                        text = if (tool.available) "available" else "not bundled",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            if (uiState.toolStatus.isEmpty()) {
+                Text(
+                    text = "No tool status available",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
     }
