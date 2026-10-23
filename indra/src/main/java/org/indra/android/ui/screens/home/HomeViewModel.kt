@@ -16,6 +16,7 @@ import javax.inject.Inject
 
 data class HomeUiState(
     val networkName: String = "",
+    val networkDetail: String = "",
     val isConnected: Boolean = false,
     val targets: List<String> = emptyList(),
     val plugins: List<PluginInfo> = emptyList(),
@@ -55,7 +56,27 @@ class HomeViewModel @Inject constructor(
             networkRepository.refreshNetworkStatus()
 
             val isConnected = networkHelper.isNetworkAvailable()
-            val networkName = networkHelper.getWifiSsid() ?: "Unknown"
+
+            // SSID needs location permission (and location services) on Android 9+;
+            // when it is unavailable fall back to the connection type + addresses.
+            val onWifi = networkHelper.isWifiConnected()
+            val ssid = if (onWifi) networkHelper.getWifiSsid() else null
+            val networkName = when {
+                ssid != null -> ssid
+                onWifi -> "Wi-Fi"
+                networkHelper.isCellularConnected() -> "Mobile data"
+                isConnected -> "Network"
+                else -> "Not connected"
+            }
+            val networkDetail = if (!isConnected) "" else {
+                val localIp = networkHelper.getLocalIpAddress()
+                val gateway = if (onWifi) networkHelper.getWifiGatewayAddress()
+                else networkHelper.getGatewayAddress()
+                listOfNotNull(
+                    localIp?.let { "IP $it" },
+                    gateway?.let { "GW $it" }
+                ).joinToString(" · ")
+            }
 
             val plugins = pluginManager.getAllPlugins().map { plugin ->
                 PluginInfo(
@@ -67,7 +88,8 @@ class HomeViewModel @Inject constructor(
             }
 
             _uiState.value = HomeUiState(
-                networkName = networkName.ifBlank { "Unknown" },
+                networkName = networkName,
+                networkDetail = networkDetail,
                 isConnected = isConnected,
                 targets = emptyList(),
                 plugins = plugins,

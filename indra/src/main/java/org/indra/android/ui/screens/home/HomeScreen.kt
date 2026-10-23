@@ -96,6 +96,7 @@ fun HomeScreen(
                 ) {
                     NetworkStatusHeroCard(
                         networkName = uiState.networkName,
+                        networkDetail = uiState.networkDetail,
                         isConnected = uiState.isConnected,
                         targetCount = uiState.targets.size
                     )
@@ -202,6 +203,7 @@ fun HomeScreen(
 @Composable
 fun NetworkStatusHeroCard(
     networkName: String,
+    networkDetail: String,
     isConnected: Boolean,
     targetCount: Int,
     modifier: Modifier = Modifier
@@ -272,6 +274,13 @@ fun NetworkStatusHeroCard(
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    if (isConnected && networkDetail.isNotBlank()) {
+                        Text(
+                            text = networkDetail,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                     if (isConnected) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,

@@ -56,6 +56,13 @@ class NetworkHelper @Inject constructor(
         return if (ssid.isNullOrBlank() || ssid == "<unknown ssid>") null else ssid
     }
 
+    fun isCellularConnected(): Boolean {
+        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+        return cm?.activeNetwork?.let { network ->
+            cm.getNetworkCapabilities(network)?.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) == true
+        } ?: false
+    }
+
     private fun currentWifiInfo(): WifiInfo? {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
