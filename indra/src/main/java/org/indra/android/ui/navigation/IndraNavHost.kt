@@ -32,6 +32,7 @@ import org.indra.android.ui.screens.plugins.IptablesScreen
 import org.indra.android.ui.screens.plugins.MasscanScreen
 import org.indra.android.ui.screens.plugins.WifiScannerScreen
 import org.indra.android.ui.screens.plugins.WifiteScreen
+import org.indra.android.ui.screens.plugins.HandshakesScreen
 
 sealed class Screen(val route: String) {
     object Home : Screen("home")
@@ -56,6 +57,7 @@ sealed class Screen(val route: String) {
     object Masscan : Screen("masscan")
     object WifiScanner : Screen("wifi_scanner")
     object Wifite : Screen("wifite")
+    object Handshakes : Screen("handshakes")
     object Settings : Screen("settings")
 }
 
@@ -91,6 +93,7 @@ fun IndraNavHost(
                 "masscan" -> navController.navigate(Screen.Masscan.route)
                 "wifi_scanner" -> navController.navigate(Screen.WifiScanner.route)
                 "wifite" -> navController.navigate(Screen.Wifite.route)
+                "handshakes" -> navController.navigate(Screen.Handshakes.route)
                 else -> navController.navigate("plugin/$pluginName")
             }
         }
@@ -178,6 +181,10 @@ fun IndraNavHost(
 
         composable(Screen.Wifite.route) {
             WifiteScreen(onNavigateBack = { navController.popBackStack() })
+        }
+
+        composable(Screen.Handshakes.route) {
+            HandshakesScreen(onNavigateBack = { navController.popBackStack() })
         }
 
         composable(
