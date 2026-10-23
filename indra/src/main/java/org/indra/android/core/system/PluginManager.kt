@@ -86,7 +86,7 @@ class PluginManager @Inject constructor() {
                 name = "Packet Forger",
                 description = "Forge TCP/UDP packets",
                 targetTypes = setOf("endpoint"),
-                requires = "hping3"
+                requires = "raw"
             )
         )
         registerPlugin(

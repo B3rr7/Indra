@@ -152,7 +152,8 @@ class SmartToolBox @Inject constructor(
     fun sqlmap(url: String): Flow<ToolResult> = execute("sqlmap", "-u $url --batch")
     fun nikto(target: String): Flow<ToolResult> = execute("nikto", "-h $target")
     fun aircrack(capture: String): Flow<ToolResult> = execute("aircrack", capture)
-    fun hping3(target: String, args: String = ""): Flow<ToolResult> = execute("hping3", "$args $target")
+    fun hping3(target: String, args: String = ""): Flow<ToolResult> =
+        rawCommand("hping3", "${binary("hping3")} $args $target")
     fun bettercap(args: String = ""): Flow<ToolResult> = execute("bettercap", args)
     fun responder(iface: String = "wlan0"): Flow<ToolResult> = execute("responder", "-I $iface")
     fun shell(command: String): Flow<ToolResult> = execute("shell", command)

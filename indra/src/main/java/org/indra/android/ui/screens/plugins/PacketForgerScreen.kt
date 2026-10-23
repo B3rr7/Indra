@@ -71,10 +71,22 @@ fun PacketForgerScreen(
                 )
             }
 
+            if (uiState.protocol != "icmp") {
+                OutlinedTextField(
+                    value = uiState.port,
+                    onValueChange = { viewModel.updatePort(it.filter(Char::isDigit).take(5)) },
+                    label = { Text("Destination port") },
+                    supportingText = { Text("TCP SYN / UDP target port") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+            }
+
             OutlinedTextField(
                 value = uiState.payload,
                 onValueChange = { viewModel.updatePayload(it) },
                 label = { Text("Payload (hex or text)") },
+                supportingText = { Text("Empty, even-length hex (deadbeef) or plain text") },
                 modifier = Modifier.fillMaxWidth(),
                 minLines = 3
             )
@@ -120,12 +132,3 @@ fun PacketForgerScreen(
         }
     }
 }
-
-data class PacketForgerUiState(
-    val target: String = "",
-    val protocol: String = "tcp",
-    val payload: String = "",
-    val isLoading: Boolean = false,
-    val result: String = "",
-    val error: String? = null
-)
