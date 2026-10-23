@@ -34,7 +34,14 @@ class WifiAuditViewModel @Inject constructor(
     private var pid = -1
 
     init {
-        _uiState.value = _uiState.value.copy(wordlist = toolBox.defaultWordlist())
+        _uiState.value = _uiState.value.copy(
+            wordlist = toolBox.defaultWordlist(),
+            // prefill from PacketCapture's save-to-file path when a capture
+            // already exists there
+            capture = toolBox.capturePath().takeIf { p ->
+                java.io.File(p).length() > 0
+            } ?: ""
+        )
     }
 
     fun updateCapture(capture: String) {

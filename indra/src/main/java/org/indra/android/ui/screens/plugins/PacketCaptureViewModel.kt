@@ -3,18 +3,23 @@ package org.indra.android.ui.screens.plugins
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import android.content.Context
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.indra.android.core.system.SmartToolBox
+import java.io.File
 import javax.inject.Inject
 
 data class PacketCaptureUiState(
     val iface: String = "wlan0",
     val filter: String = "",
     val count: String = "",
+    val saveToFile: Boolean = false,
+    val capturePath: String = "",
     val isActive: Boolean = false,
     val packets: List<String> = emptyList(),
     val error: String? = null
@@ -22,10 +27,13 @@ data class PacketCaptureUiState(
 
 @HiltViewModel
 class PacketCaptureViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val toolBox: SmartToolBox
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(PacketCaptureUiState())
+    private val _uiState = MutableStateFlow(
+        PacketCaptureUiState(capturePath = toolBox.capturePath())
+    )
     val uiState: StateFlow<PacketCaptureUiState> = _uiState.asStateFlow()
 
     private var job: Job? = null
@@ -41,6 +49,10 @@ class PacketCaptureViewModel @Inject constructor(
 
     fun updateCount(count: String) {
         _uiState.value = _uiState.value.copy(count = count)
+    }
+
+    fun setSaveToFile(save: Boolean) {
+        _uiState.value = _uiState.value.copy(saveToFile = save)
     }
 
     fun start() {
@@ -59,10 +71,18 @@ class PacketCaptureViewModel @Inject constructor(
         }
 
         val count = state.count.trim().toIntOrNull() ?: 0
+        val outFile = if (state.saveToFile) {
+            // The daemon runs as root and writes the file into the app's own
+            // private dir; create the dir here so the path always exists.
+            File(context.filesDir, SmartToolBox.CAPTURE_PATH)
+                .parentFile?.mkdirs()
+            toolBox.capturePath()
+        } else null
+
         _uiState.value = state.copy(isActive = true, error = null, packets = emptyList())
 
         job = viewModelScope.launch {
-            toolBox.tcpdump(iface, state.filter.trim(), count).collect { result ->
+            toolBox.tcpdump(iface, state.filter.trim(), count, outFile).collect { result ->
                 if (result.pid > 0) pid = result.pid
                 val line = result.rawOutput
                 if (result.status == "running") {

@@ -33,6 +33,10 @@ class SmartToolBox @Inject constructor(
         private const val LONG_RUNNING_TIMEOUT_MS = 30 * 60_000L
 
         private const val WORDLIST_PATH = "wordlists/common-passwords.txt"
+
+        /** Where tcpdump writes .cap files when the Packet Capture screen's
+         *  save-to-file switch is on; WiFi Audit prefill's from here too. */
+        const val CAPTURE_PATH = "captures/last.cap"
     }
 
     private val gson = Gson()
@@ -121,11 +125,18 @@ class SmartToolBox @Inject constructor(
     fun traceroute(target: String): Flow<ToolResult> =
         rawCommand("traceroute", "${binary("nmap")} -sn --traceroute -v -n $target")
 
-    fun tcpdump(iface: String = "wlan0", filter: String = "", count: Int = 0): Flow<ToolResult> =
+    fun tcpdump(iface: String = "wlan0", filter: String = "", count: Int = 0, outFile: String? = null): Flow<ToolResult> =
         rawCommand(
             "tcpdump",
             buildString {
-                append(binary("tcpdump")).append(" -i ").append(iface).append(" -nn -l")
+                append(binary("tcpdump")).append(" -i ").append(iface)
+                if (outFile != null) {
+                    // pcap file output; packet lines are suppressed by -w,
+                    // tcpdump prints its own "packets captured" summary
+                    append(" -w ").append(outFile)
+                } else {
+                    append(" -nn -l")
+                }
                 if (count > 0) append(" -c ").append(count)
                 if (filter.isNotBlank()) append(' ').append(filter)
             },
@@ -165,6 +176,10 @@ class SmartToolBox @Inject constructor(
 
     /** Bundled password list used when a screen does not supply one. */
     fun defaultWordlist(): String = File(context.filesDir, WORDLIST_PATH).absolutePath
+
+    /** Absolute path of the capture file Packet Capture saves to (and WiFi
+     *  Audit can be prefilled with). */
+    fun capturePath(): String = File(context.filesDir, CAPTURE_PATH).absolutePath
 
     /** Kills a running child started by [execute]. */
     fun stop(pid: Int) {

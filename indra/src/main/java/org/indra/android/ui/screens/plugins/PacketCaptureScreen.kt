@@ -74,6 +74,30 @@ fun PacketCaptureScreen(
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Save to capture file",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    if (uiState.capturePath.isNotBlank()) {
+                        Text(
+                            text = uiState.capturePath,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                Switch(
+                    checked = uiState.saveToFile,
+                    onCheckedChange = { viewModel.setSaveToFile(it) },
+                    enabled = !uiState.isActive
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Button(
@@ -96,7 +120,8 @@ fun PacketCaptureScreen(
             }
 
             Text(
-                text = "Captured (${uiState.packets.size} lines)",
+                text = if (uiState.saveToFile) "Saving to ${uiState.capturePath.substringAfterLast('/')}" 
+                       else "Captured (${uiState.packets.size} lines)",
                 style = MaterialTheme.typography.titleSmall
             )
 
