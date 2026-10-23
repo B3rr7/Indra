@@ -45,16 +45,14 @@ fun BottomNavBar(navController: NavController) {
                 },
                 selected = selected,
                 onClick = {
-                    if (item.route == Screen.Settings.route) {
-                        navController.navigate(item.route)
-                    } else {
-                        navController.navigate(item.route) {
-                            popUpTo(navController.graph.findStartDestination().id) {
-                                saveState = true
-                            }
-                            launchSingleTop = true
-                            restoreState = true
+                    // Top-level destinations: same options for every tab so the
+                    // stack never accumulates duplicates of the tab screens.
+                    navController.navigate(item.route) {
+                        popUpTo(navController.graph.findStartDestination().id) {
+                            saveState = true
                         }
+                        launchSingleTop = true
+                        restoreState = true
                     }
                 },
                 colors = NavigationBarItemDefaults.colors(
