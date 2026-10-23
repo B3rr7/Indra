@@ -20,7 +20,10 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.material3.Switch
+
 import androidx.hilt.navigation.compose.hiltViewModel
+import org.indra.android.BuildConfig
 
 private object SettingsPalette {
     val Network = Color(0xFF448AFF)      // blue
@@ -191,6 +194,17 @@ fun SettingsScreen(
                 )
             }
             item { OtaCard(uiState, viewModel) }
+
+            if (BuildConfig.DEBUG) {
+                item {
+                    SettingsSection(
+                        title = "OTA Test Host (dev only)",
+                        icon = Icons.Default.BugReport,
+                        accent = SettingsPalette.DebugLog
+                    )
+                }
+                item { OtaTestHostCard(uiState, viewModel) }
+            }
 
             // ── About ────────────────────────────────────────────────────
             item {
@@ -714,4 +728,63 @@ private fun PortEditDialog(
             TextButton(onClick = onDismiss) { Text("Cancel") }
         }
     )
+}
+
+@Composable
+private fun OtaTestHostCard(uiState: SettingsUiState, viewModel: SettingsViewModel) {
+    var url by remember(uiState.otaManifestUrl) { mutableStateOf(uiState.otaManifestUrl) }
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                text = "Manifest URL",
+                style = MaterialTheme.typography.labelMedium
+            )
+            OutlinedTextField(
+                value = url,
+                onValueChange = { url = it },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri)
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                FilledTonalButton(
+                    onClick = { viewModel.setOtaManifestUrl(url) },
+                    modifier = Modifier.weight(1f)
+                ) { Text("Apply URL") }
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "Allow plain-HTTP / non-pinned test hosts",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Switch(
+                    checked = uiState.otaAllowTestHosts,
+                    onCheckedChange = viewModel::setOtaAllowTestHosts
+                )
+            }
+            Text(
+                text = "Dev only. Use with `adb reverse tcp:8443 tcp:8443` and a local `python3 -m http.server`.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
 }

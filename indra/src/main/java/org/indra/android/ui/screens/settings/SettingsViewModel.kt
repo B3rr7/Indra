@@ -26,7 +26,9 @@ data class SettingsUiState(
     val otaChecking: Boolean = false,
     val otaUpdating: Boolean = false,
     val otaUpdateAvailable: Boolean = false,
-    val otaMessage: String? = null
+    val otaMessage: String? = null,
+    val otaManifestUrl: String = "",
+    val otaAllowTestHosts: Boolean = false
 )
 
 /** Port fields the daemon tools read from [SettingsRepository]. */
@@ -61,7 +63,9 @@ class SettingsViewModel @Inject constructor(
                 msfRpcPort = settings.msfRpcPort,
                 version = "2.0.0",
                 coreVersion = system.getCoreVersion() ?: "Not installed",
-                daemonRunning = coreManager.isDaemonRunning
+                daemonRunning = coreManager.isDaemonRunning,
+                otaManifestUrl = settings.otaManifestUrl,
+                otaAllowTestHosts = settings.otaAllowTestHosts
             )
         }
     }
@@ -146,6 +150,22 @@ class SettingsViewModel @Inject constructor(
                 )
             }
         }
+    }
+
+    fun setOtaManifestUrl(url: String) {
+        val trimmed = url.trim()
+        if (trimmed.isBlank()) return
+        settings.otaManifestUrl = trimmed
+        loadSettings()
+        _uiState.value = _uiState.value.copy(otaMessage = "Manifest URL updated")
+    }
+
+    fun setOtaAllowTestHosts(enabled: Boolean) {
+        settings.otaAllowTestHosts = enabled
+        loadSettings()
+        _uiState.value = _uiState.value.copy(
+            otaMessage = if (enabled) "LAN test hosts enabled (dev only)" else "LAN test hosts disabled"
+        )
     }
 
     fun installOtaUpdates() {
