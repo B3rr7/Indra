@@ -62,6 +62,37 @@ fun VulnScannerScreen(
                 Text(if (uiState.isLoading) "Scanning..." else "Scan Vulnerabilities")
             }
 
+            if (!uiState.nucleiInstalled) {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "Nuclei is not installed (~126 MB download)",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        if (uiState.isInstalling) {
+                            LinearProgressIndicator(
+                                progress = { uiState.installProgress },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Text(
+                                text = "Installing… ${(uiState.installProgress * 100).toInt()}%",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        } else {
+                            Button(
+                                onClick = { viewModel.installNuclei() },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Install Nuclei")
+                            }
+                        }
+                    }
+                }
+            }
+
             if (uiState.vulnerabilities.isNotEmpty()) {
                 Text(
                     text = "Found ${uiState.vulnerabilities.size} vulnerabilities",
@@ -121,5 +152,8 @@ data class VulnScannerUiState(
     val target: String = "",
     val isLoading: Boolean = false,
     val vulnerabilities: List<Vulnerability> = emptyList(),
-    val error: String? = null
+    val error: String? = null,
+    val nucleiInstalled: Boolean = false,
+    val isInstalling: Boolean = false,
+    val installProgress: Float = 0f
 )

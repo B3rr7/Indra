@@ -5,9 +5,12 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import okhttp3.Request
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
 import org.indra.android.core.client.IndraClient
 import org.tukaani.xz.XZInputStream
+import java.util.zip.ZipInputStream
 import java.io.File
 import java.io.InputStream
 import javax.inject.Inject
@@ -25,7 +28,15 @@ class CoreManager @Inject constructor(
         const val CORE_VERSION = "1.0.1"
 
         /** Core archive bundled in assets (produced by `indra/jni/build.sh cores`). */
-        private const val CORE_ASSET = "core.tar.xz"
+        private const val CORE_ASSET_PREFIX = "core-"
+
+        /** Picks the bundled core archive matching this device's primary ABI. */
+        private fun coreAssetName(): String {
+            val abi = android.os.Build.SUPPORTED_ABIS.firstOrNull { ab ->
+                ab == "arm64-v8a" || ab == "armeabi-v7a"
+            } ?: "armeabi-v7a"
+            return "${CORE_ASSET_PREFIX}${abi}.tar.xz"
+        }
 
         /** Small password list bundled for hydra (the core ships none). */
         private const val WORDLIST_ASSET = "wordlists/common-passwords.txt"
@@ -37,6 +48,12 @@ class CoreManager @Inject constructor(
         /** Credentials shipped inside the core package's `users` file. */
         private const val DAEMON_USER = "android"
         private const val DAEMON_PASSWORD = "DEADBEEF"
+
+        private const val NUCLEI_VERSION = "3.11.1"
+        private const val NUCLEI_SHA256_ARM64 = "8044e3d9768ba0a744b2872c1a87e813006f013da97ca9f50f7661a4203bec07"
+        private const val NUCLEI_SHA256_ARM = "22940b798dfe11aa1c67c9041c32916cec5ceaca132a6ec426e87c92282c64ae"
+
+        private const val MSF_DIR_NAME = "msf"
     }
 
     data class CoreInfo(
@@ -46,6 +63,116 @@ class CoreManager @Inject constructor(
     )
 
     val coreDir: File get() = File(system.corePath)
+
+    fun nucleiPath(): File = File(coreDir, "tools/nuclei/nuclei")
+
+    fun isNucleiInstalled(): Boolean = nucleiPath().canExecute()
+
+    fun msfPath(): File = File(coreDir, MSF_DIR_NAME)
+
+    fun isMsfInstalled(): Boolean = File(msfPath(), "msfconsole").canExecute() || File(msfPath(), "msfconsole").exists()
+
+    suspend fun installMsf(url: String, onProgress: (Float) -> Unit = {}): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            if (url.isBlank()) error("Metasploit chroot URL is not configured in Settings")
+            val target = msfPath()
+            if (!target.exists() && !target.mkdirs()) error("Cannot create msf directory")
+            val client = OkHttpClient()
+            val request = Request.Builder().url(url).build()
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) error("Download failed: ${response.code}")
+                val body = response.body ?: error("Empty response")
+                val total = body.contentLength()
+                body.byteStream().use { input ->
+                    val tmp = File(target, "msf.tar.xz.tmp")
+                    tmp.outputStream().use { out ->
+                        val buf = ByteArray(8192)
+                        var read: Int
+                        var downloaded = 0L
+                        while (input.read(buf).also { read = it } != -1) {
+                            out.write(buf, 0, read)
+                            downloaded += read
+                            if (total > 0) onProgress(downloaded.toFloat() / total.toFloat())
+                        }
+                    }
+                    // Extract (supports .tar.xz)
+                    val hasContent = tmp.inputStream().use { raw ->
+                        if (url.endsWith(".xz")) {
+                            XZInputStream(raw).use { xz -> extractTar(xz, target) }
+                        } else {
+                            extractTar(raw, target)
+                        }
+                    }
+                    if (!hasContent) error("Metasploit archive is empty or unreadable")
+                    tmp.delete()
+                }
+            }
+            Logger.i("Metasploit installed to ${target.absolutePath}")
+        }
+    }
+
+    suspend fun installNuclei(onProgress: (Float) -> Unit = {}): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            val abi = android.os.Build.SUPPORTED_ABIS.firstOrNull { it == "arm64-v8a" || it == "armeabi-v7a" } ?: "armeabi-v7a"
+            val isArm64 = abi == "arm64-v8a"
+            val url = "https://github.com/projectdiscovery/nuclei/releases/download/v$NUCLEI_VERSION/nuclei_${NUCLEI_VERSION}_linux_${if (isArm64) "arm64" else "arm"}.zip"
+            val expectedSha = if (isArm64) NUCLEI_SHA256_ARM64 else NUCLEI_SHA256_ARM
+
+            val targetDir = File(coreDir, "tools/nuclei")
+            if (!targetDir.exists() && !targetDir.mkdirs()) error("Cannot create nuclei dir")
+            val target = nucleiPath()
+
+            val client = OkHttpClient()
+            val request = Request.Builder().url(url).build()
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) error("Download failed: ${response.code}")
+                val body = response.body ?: error("Empty response")
+                val total = body.contentLength()
+                body.byteStream().use { input ->
+                    val tmp = File(targetDir, "nuclei.zip.tmp")
+                    tmp.outputStream().use { out ->
+                        val buf = ByteArray(8192)
+                        var read: Int
+                        var downloaded = 0L
+                        while (input.read(buf).also { read = it } != -1) {
+                            out.write(buf, 0, read)
+                            downloaded += read
+                            if (total > 0) onProgress(downloaded.toFloat() / total.toFloat())
+                        }
+                    }
+                    // Verify SHA-256
+                    val digest = java.security.MessageDigest.getInstance("SHA-256")
+                    tmp.inputStream().use { s ->
+                        val b = ByteArray(8192)
+                        var r: Int
+                        while (s.read(b).also { r = it } != -1) digest.update(b, 0, r)
+                    }
+                    val actual = digest.digest().joinToString("") { "%02x".format(it) }
+                    if (!actual.equals(expectedSha, ignoreCase = true)) {
+                        tmp.delete()
+                        error("SHA-256 mismatch: $actual != $expectedSha")
+                    }
+                    // Extract the binary from the zip
+                    java.util.zip.ZipInputStream(tmp.inputStream()).use { zis ->
+                        var entry = zis.nextEntry
+                        var found = false
+                        while (entry != null) {
+                            if (entry.name == "nuclei" || entry.name.endsWith("/nuclei")) {
+                                target.outputStream().use { out -> zis.copyTo(out) }
+                                found = true
+                                break
+                            }
+                            entry = zis.nextEntry
+                        }
+                        if (!found) error("nuclei binary not found in archive")
+                    }
+                    tmp.delete()
+                }
+            }
+            target.setExecutable(true)
+            Logger.i("Nuclei $NUCLEI_VERSION installed to ${target.absolutePath}")
+        }
+    }
     val socketPath: String get() = File(coreDir, SOCKET_NAME).absolutePath
     val isDaemonRunning: Boolean
         get() = File(socketPath).exists() || (IndraClient.isAvailable() && client.isConnected())
@@ -80,7 +207,7 @@ class CoreManager @Inject constructor(
                 }
             }
 
-            val hasContent = context.assets.open(CORE_ASSET).use { raw ->
+            val hasContent = context.assets.open(coreAssetName()).use { raw ->
                 XZInputStream(raw).use { xz -> extractTar(xz, dir) }
             }
             if (!hasContent) error("Core archive is empty or unreadable")

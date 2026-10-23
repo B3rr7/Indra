@@ -64,6 +64,13 @@ class SettingsRepository @Inject constructor(
         get() = prefs.getBoolean("OTA_ALLOW_TEST_HOSTS", false)
         set(value) = prefs.edit().putBoolean("OTA_ALLOW_TEST_HOSTS", value).apply()
 
+    /**
+     * URL of a Metasploit chroot tarball (optional component). Empty = not configured.
+     */
+    var msfChrootUrl: String
+        get() = prefs.getString("MSF_CHROOT_URL", "") ?: ""
+        set(value) = prefs.edit().putString("MSF_CHROOT_URL", value).apply()
+
     val corePath: String = context.filesDir.absolutePath
     val sessionName: String = "indra-session-${System.currentTimeMillis()}"
 }

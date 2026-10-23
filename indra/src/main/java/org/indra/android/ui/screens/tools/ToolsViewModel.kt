@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import org.indra.android.core.system.CoreManager
 import org.indra.android.core.system.OtaUpdateManager
 import org.indra.android.core.system.PluginManager
 import org.indra.android.core.system.SmartToolBox
@@ -24,7 +25,8 @@ data class ToolsUiState(
 class ToolsViewModel @Inject constructor(
     private val pluginManager: PluginManager,
     private val toolBox: SmartToolBox,
-    private val otaManager: OtaUpdateManager
+    private val otaManager: OtaUpdateManager,
+    private val coreManager: CoreManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ToolsUiState())
@@ -65,7 +67,9 @@ class ToolsViewModel @Inject constructor(
                     id = plugin.id,
                     name = plugin.name,
                     description = plugin.description,
-                    available = toolBox.getTool(plugin.requires)?.isAvailable() == true
+                    available = toolBox.getTool(plugin.requires)?.isAvailable() == true &&
+                        (plugin.id !in listOf("vuln_scanner", "web_tester") || coreManager.isNucleiInstalled()) &&
+                        (plugin.id != "exploit_finder" || coreManager.isMsfInstalled())
                 )
             }
             _uiState.value = _uiState.value.copy(plugins = plugins, isLoading = false)

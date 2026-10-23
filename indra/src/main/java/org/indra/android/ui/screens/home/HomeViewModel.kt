@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.indra.android.core.system.IndraSystem
 import org.indra.android.core.system.NetworkHelper
+import org.indra.android.core.system.CoreManager
 import org.indra.android.core.system.PluginManager
 import org.indra.android.core.system.SmartToolBox
 import org.indra.android.data.repository.NetworkRepository
@@ -36,7 +37,8 @@ class HomeViewModel @Inject constructor(
     private val networkHelper: NetworkHelper,
     private val networkRepository: NetworkRepository,
     private val pluginManager: PluginManager,
-    private val toolBox: SmartToolBox
+    private val toolBox: SmartToolBox,
+    private val coreManager: CoreManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState())
@@ -46,8 +48,13 @@ class HomeViewModel @Inject constructor(
         loadData()
     }
 
-    private fun isPluginAvailable(plugin: org.indra.android.core.system.Plugin): Boolean =
-        toolBox.getTool(plugin.requires)?.isAvailable() == true
+    private fun isPluginAvailable(plugin: org.indra.android.core.system.Plugin): Boolean {
+        if (toolBox.getTool(plugin.requires)?.isAvailable() != true) return false
+        // Optional components that must be installed separately.
+        if (plugin.id == "vuln_scanner" || plugin.id == "web_tester") return coreManager.isNucleiInstalled()
+        if (plugin.id == "exploit_finder") return coreManager.isMsfInstalled()
+        return true
+    }
 
     private fun loadData() {
         viewModelScope.launch {

@@ -6,8 +6,8 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
+import org.indra.android.core.system.CoreManager
 import org.indra.android.core.system.IndraSystem
 import org.indra.android.core.system.SmartToolBox
 import javax.inject.Inject
@@ -15,10 +15,11 @@ import javax.inject.Inject
 @HiltViewModel
 class WebTesterViewModel @Inject constructor(
     private val system: IndraSystem,
-    private val toolBox: SmartToolBox
+    private val toolBox: SmartToolBox,
+    private val coreManager: CoreManager
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(WebTesterUiState())
+    private val _uiState = MutableStateFlow(WebTesterUiState(nucleiInstalled = coreManager.isNucleiInstalled()))
     val uiState: StateFlow<WebTesterUiState> = _uiState.asStateFlow()
 
     fun updateTarget(target: String) {
@@ -29,27 +30,40 @@ class WebTesterViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(testType = type)
     }
 
+    fun installNuclei() {
+        if (_uiState.value.isInstalling) return
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isInstalling = true, installProgress = 0f, error = null)
+            coreManager.installNuclei { p ->
+                _uiState.value = _uiState.value.copy(installProgress = p)
+            }.onSuccess {
+                _uiState.value = _uiState.value.copy(isInstalling = false, nucleiInstalled = true, installProgress = 1f)
+            }.onFailure { e ->
+                _uiState.value = _uiState.value.copy(isInstalling = false, error = "Nuclei install failed: ${e.message}")
+            }
+        }
+    }
+
     fun test() {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null, result = "")
 
             try {
-                val tool = toolBox.getTool("sqlmap")
-                if (tool == null || !tool.isAvailable()) {
+                if (!coreManager.isNucleiInstalled()) {
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
-                        error = "sqlmap is not part of the native core"
+                        error = "Nuclei is not installed. Install it from the Vulnerability Scanner screen first."
                     )
                     return@launch
                 }
 
-                val command = when (_uiState.value.testType) {
-                    "sqli" -> "sqlmap -u ${_uiState.value.target} --batch"
-                    "xss" -> "nikto -h ${_uiState.value.target}"
-                    else -> "nikto -h ${_uiState.value.target}"
+                val templates = when (_uiState.value.testType) {
+                    "sqli" -> "-tags sqli"
+                    "xss" -> "-tags xss"
+                    else -> ""
                 }
 
-                toolBox.shell(command).collect { result ->
+                toolBox.nuclei(_uiState.value.target, templates).collect { result ->
                     if (result.success) {
                         _uiState.value = _uiState.value.copy(isLoading = false, result = result.rawOutput)
                     } else {

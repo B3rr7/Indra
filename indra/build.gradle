@@ -152,7 +152,16 @@ tasks.register("bundleCore", Copy) {
     onlyIf { coreDistDir.exists() }
     from(coreDistDir) {
         include "core-v*+android16.armeabi-v7a.tar.xz"
-        rename { "core.tar.xz" }
+        include "core-v*+android16.arm64-v8a.tar.xz"
+        rename { name ->
+            // core-vX.Y.Z+androidN.<abi>.tar.xz  ->  core-<abi>.tar.xz
+            def m = (name =~ /core-v[^+]+\+android\d+\.([^.]+)\.tar\.xz/)
+            if (m.matches()) {
+                "core-${m.group(1)}.tar.xz"
+            } else {
+                name
+            }
+        }
     }
     into file("$projectDir/src/main/assets")
 }

@@ -113,5 +113,8 @@ data class WebTesterUiState(
     val testType: String = "sqli",
     val isLoading: Boolean = false,
     val result: String = "",
-    val error: String? = null
+    val error: String? = null,
+    val nucleiInstalled: Boolean = false,
+    val isInstalling: Boolean = false,
+    val installProgress: Float = 0f
 )
