@@ -101,8 +101,8 @@ class SmartToolBox @Inject constructor(
         execute("nmap", "-sV -v -p $ports $target")
 
     /** XML output: the handler's XML parser is the only one reporting service versions. */
-    fun nmapXml(target: String, ports: String = "1-1000"): Flow<ToolResult> =
-        execute("nmap", "-sV -v -oX - -p $ports $target")
+    fun nmapXml(target: String, ports: String = "1-1000", withOs: Boolean = false): Flow<ToolResult> =
+        execute("nmap", "-sV ${if (withOs) "-O " else ""}-v -oX - -p $ports $target")
 
     fun hydra(
         target: String,
@@ -252,6 +252,7 @@ class SmartToolBox @Inject constructor(
 
         val output = StringBuilder()
         val ports = mutableListOf<ToolPort>()
+        val osMatches = mutableListOf<ToolOs>()
 
         var finished: Boolean? = null
         try {
@@ -268,7 +269,8 @@ class SmartToolBox @Inject constructor(
                                     status = "running",
                                     pid = pid,
                                     rawOutput = event.line,
-                                    ports = ports.toList()
+                                    ports = ports.toList(),
+                                    osMatches = osMatches.toList()
                                 )
                             )
                         }
@@ -284,13 +286,18 @@ class SmartToolBox @Inject constructor(
                                     status = "running",
                                     pid = pid,
                                     rawOutput = event.line,
-                                    ports = ports.toList()
+                                    ports = ports.toList(),
+                                    osMatches = osMatches.toList()
                                 )
                             )
                         }
 
                         is ProcessEvent.PortFound -> if (event.processId == pid) {
                             ports += ToolPort(event.port, event.protocol, event.service, event.version)
+                        }
+
+                        is ProcessEvent.OsFound -> if (event.processId == pid) {
+                            osMatches += ToolOs(event.accuracy, event.name, event.type)
                         }
 
                         is ProcessEvent.Message -> if (event.processId == pid) {
@@ -331,6 +338,7 @@ class SmartToolBox @Inject constructor(
                 pid = pid,
                 rawOutput = rawOutput,
                 ports = ports.toList(),
+                osMatches = osMatches.toList(),
                 error = if (finished == true) null else "$label timed out or stopped"
             )
         )
@@ -407,6 +415,13 @@ data class ToolPort(
     val version: String? = null
 )
 
+/** OS guess reported by the nmap handler's `<osclass` parser (Os events). */
+data class ToolOs(
+    val accuracy: Short,
+    val name: String? = null,
+    val type: String? = null
+)
+
 data class ToolResult(
     val tool: String,
     val success: Boolean,
@@ -414,6 +429,7 @@ data class ToolResult(
     val pid: Int = -1,
     val rawOutput: String = "",
     val ports: List<ToolPort> = emptyList(),
+    val osMatches: List<ToolOs> = emptyList(),
     val parsedData: Map<String, Any>? = null,
     val error: String? = null,
     val timestamp: Long = System.currentTimeMillis()

@@ -47,12 +47,13 @@ class InspectorViewModel @Inject constructor(
             }
 
             val services = LinkedHashMap<Int, ServiceInfo>()
-            var osInfo = ""
-            var failure: String? = null
+            var failure: String? = null            // XML output carries service/version for every open port, and the
+            // handler's <osclass parser surfaces OS guesses as Os events the
+            // toolbox collects into osMatches.
+            var osGuessList: List<String> = emptyList()
+            val osSeen = mutableSetOf<String>()
 
-            // XML output carries service/version for every open port, which the
-            // text parser does not report.
-            toolBox.nmapXml(target, "1-1000").collect { result ->
+            toolBox.nmapXml(target, "1-1000", withOs = true).collect { result ->
                 if (result.status == "running") {
                     result.ports.forEach { port ->
                         val version = listOfNotNull(
@@ -64,9 +65,19 @@ class InspectorViewModel @Inject constructor(
                             version.ifEmpty { port.protocol?.uppercase() ?: "unknown" }
                         )
                     }
-                    val osLine = result.rawOutput.lines().firstOrNull { it.contains("<osclass ") }
-                    if (osLine != null && osInfo.isEmpty()) osInfo = osLine.trim()
-                    _uiState.value = _uiState.value.copy(services = services.values.toList())
+                    result.osMatches.forEach { os ->
+                        val label = listOfNotNull(
+                            os.type?.takeIf { it.isNotBlank() },
+                            os.name
+                        ).joinToString(" ") + " (${os.accuracy}%)"
+                        if (osSeen.add(label)) {
+                            osGuessList = osGuessList + label
+                        }
+                    }
+                    _uiState.value = _uiState.value.copy(
+                        services = services.values.toList(),
+                        osInfo = osGuessList.joinToString("\n")
+                    )
                 } else if (result.status == "completed" || result.status == "timeout") {
                     if (!result.success) failure = result.error
                 }
@@ -75,8 +86,12 @@ class InspectorViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(
                 isLoading = false,
                 services = services.values.toList(),
-                osInfo = osInfo.ifEmpty {
-                    if (services.isEmpty()) "No open ports found" else ""
+                osInfo = if (osGuessList.isNotEmpty()) {
+                    osGuessList.joinToString("\n")
+                } else if (services.isEmpty()) {
+                    "No open ports found"
+                } else {
+                    ""
                 },
                 error = failure
             )

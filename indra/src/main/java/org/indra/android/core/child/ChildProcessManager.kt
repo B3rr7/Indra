@@ -9,6 +9,7 @@ import org.indra.android.core.system.Logger
 import org.indra.android.events.ChildDied
 import org.indra.android.events.ChildEnd
 import org.indra.android.events.Event
+import org.indra.android.events.Os
 import org.indra.android.events.Message
 import org.indra.android.events.Newline
 import org.indra.android.events.Port
@@ -43,6 +44,7 @@ class ChildProcessManager @Inject constructor(
                 is Newline -> ProcessEvent.Output(id, event.line)
                 is StderrNewline -> ProcessEvent.Error(id, event.line)
                 is Port -> ProcessEvent.PortFound(id, event.port, event.protocol, event.service, event.version)
+                is Os -> ProcessEvent.OsFound(id, event.accuracy, event.name, event.type)
                 is Message -> ProcessEvent.Message(id, event.severity, event.message)
                 is ChildEnd -> ProcessEvent.Ended(id)
                 is ChildDied -> ProcessEvent.Crashed(id)

@@ -16,6 +16,12 @@ sealed class ProcessEvent {
         val service: String?,
         val version: String?
     ) : ProcessEvent()
+    data class OsFound(
+        val processId: Int,
+        val accuracy: Short,
+        val name: String?,
+        val type: String?
+    ) : ProcessEvent()
     data class Message(val processId: Int, val title: String?, val body: String?) : ProcessEvent()
     data class Ended(val processId: Int) : ProcessEvent()
     data class Crashed(val processId: Int) : ProcessEvent()
