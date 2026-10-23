@@ -151,7 +151,8 @@ class SmartToolBox @Inject constructor(
     fun nuclei(target: String, templates: String = ""): Flow<ToolResult> = execute("nuclei", "-u $target $templates")
     fun sqlmap(url: String): Flow<ToolResult> = execute("sqlmap", "-u $url --batch")
     fun nikto(target: String): Flow<ToolResult> = execute("nikto", "-h $target")
-    fun aircrack(capture: String): Flow<ToolResult> = execute("aircrack", capture)
+    fun aircrack(args: String): Flow<ToolResult> =
+        rawCommand("aircrack", "${binary("aircrack-ng")} $args", timeoutMs = LONG_RUNNING_TIMEOUT_MS)
     fun hping3(target: String, args: String = ""): Flow<ToolResult> =
         rawCommand("hping3", "${binary("hping3")} $args $target")
     fun bettercap(args: String = ""): Flow<ToolResult> = execute("bettercap", args)

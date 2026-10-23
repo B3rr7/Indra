@@ -104,7 +104,7 @@ class PluginManager @Inject constructor() {
                 name = "WiFi Audit",
                 description = "WiFi network auditing and cracking",
                 targetTypes = setOf("network"),
-                requires = "aircrack"
+                requires = "raw"
             )
         )
         registerPlugin(
