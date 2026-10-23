@@ -80,6 +80,9 @@ fun IndraNavHost(
         composable(Screen.Home.route) {
             HomeScreen(
                 onNavigateToPlugin = navigateToPlugin,
+                onNavigateToNetworkRadar = {
+                    navController.navigate(Screen.NetworkRadar.route)
+                },
                 onNavigateToSettings = {
                     navController.navigate(Screen.Settings.route)
                 }

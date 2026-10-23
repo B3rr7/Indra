@@ -36,6 +36,7 @@ import org.indra.android.ui.theme.StatusBlue
 @Composable
 fun HomeScreen(
     onNavigateToPlugin: (String) -> Unit,
+    onNavigateToNetworkRadar: () -> Unit,
     onNavigateToSettings: () -> Unit,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
@@ -98,7 +99,8 @@ fun HomeScreen(
                         networkName = uiState.networkName,
                         networkDetail = uiState.networkDetail,
                         isConnected = uiState.isConnected,
-                        targetCount = uiState.targets.size
+                        targetCount = uiState.targets.size,
+                        onClick = onNavigateToNetworkRadar
                     )
                 }
             }
@@ -200,15 +202,18 @@ fun HomeScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NetworkStatusHeroCard(
     networkName: String,
     networkDetail: String,
     isConnected: Boolean,
     targetCount: Int,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit = {}
 ) {
     Card(
+        onClick = onClick,
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
