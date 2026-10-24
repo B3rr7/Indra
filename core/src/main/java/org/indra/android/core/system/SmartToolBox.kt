@@ -38,57 +38,72 @@ class SmartToolBox
             /** Where tcpdump writes .cap files when the Packet Capture screen's
              *  save-to-file switch is on; WiFi Audit prefill's from here too. */
             const val CAPTURE_PATH = "captures/last.cap"
+
+            /**
+             * Single-quotes a value for the shell that executes raw-handler command
+             * strings (POSIX `'"'"'` escaping, same rule as `CoreManager.shellQuote`).
+             * Every user-typed field interpolated into a command must go through this.
+             */
+            fun shellQuote(value: String): String = "'" + value.replace("'", "'\\''") + "'"
+
+            /** One row per registered tool. The table is the single source of
+             *  truth: a name may appear only once — repeated registrations
+             *  silently kept the LAST entry, which is how several tools ended
+             *  up bound to a dead handler. */
+            data class ToolSpec(
+                val name: String,
+                val handler: String,
+                val description: String,
+                val binary: String,
+            )
+
+            /** Handler ids the native core daemon registers (`loadHandlers()`),
+             *  kept here so the registry can be validated in a unit test. */
+            val DAEMON_HANDLERS: Set<String> =
+                setOf(
+                    "nmap", "hydra", "ettercap", "tcpdump", "arpspoof",
+                    "fusemounts", "network-radar", "msfrpcd", "raw", "blind",
+                )
+
+            /**
+             * Registry, one spec per name. Tools whose real handler exists in
+             * the daemon bind to it; every other shipped binary executes
+             * through the universal `raw` handler (output streamed verbatim;
+             * only nmap's handler also emits structured Port/Os events).
+             *
+             * Names are keyed by `Plugin.requires`, OTA updates and the
+             * Settings "Bundled tools" card — do not rename without checking
+             * `PluginManager`.
+             */
+            val TOOL_SPECS: List<ToolSpec> =
+                listOf(
+                    ToolSpec("nmap", "nmap", "Network scanner", "nmap"),
+                    ToolSpec("masscan", "raw", "High-speed port scanner", "masscan"),
+                    ToolSpec("hydra", "hydra", "Login cracker", "hydra"),
+                    ToolSpec("aircrack-ng", "raw", "WiFi WEP/WPA cracker", "aircrack-ng"),
+                    ToolSpec("reaver", "raw", "WPS PIN cracker", "reaver"),
+                    ToolSpec("hping3", "raw", "Packet crafter", "hping3"),
+                    ToolSpec("nuclei", "raw", "Vulnerability scanner", "nuclei"),
+                    ToolSpec("bettercap", "raw", "Network attack framework", "bettercap"),
+                    ToolSpec("arpspoof", "raw", "ARP spoofer", "arpspoof"),
+                    ToolSpec("tcpdump", "raw", "Packet capture", "tcpdump"),
+                    ToolSpec("ettercap", "ettercap", "MITM tool", "ettercap"),
+                    ToolSpec("fusemounts", "fusemounts", "FUSE mounts", "fusemounts"),
+                    ToolSpec("network-radar", "network-radar", "Network auto-scanner", "network-radar"),
+                    ToolSpec("msfrpcd", "msfrpcd", "Metasploit RPC daemon", "msfrpcd"),
+                    ToolSpec("shell", "raw", "Shell executor", "sh"),
+                    ToolSpec("raw", "raw", "Raw socket", "raw"),
+                    ToolSpec("blind", "blind", "Blind shell handler", "sh"),
+                )
         }
 
         private val gson = Gson()
         private val tools = java.util.concurrent.ConcurrentHashMap<String, SmartTool>()
 
         init {
-            registerTool("nmap", "nmap", "Network scanner", "nmap")
-            registerTool("masscan", "masscan", "High-speed port scanner", "masscan")
-            registerTool("hydra", "hydra", "Login cracker", "hydra")
-            registerTool("aircrack", "raw", "WiFi WEP/WPA cracker", "aircrack-ng")
-            registerTool("reaver", "reaver", "WPS PIN cracker", "reaver")
-            registerTool("hping3", "raw", "Packet crafter", "hping3")
-            registerTool("masscan", "raw", "High-speed port scanner", "masscan")
-            registerTool("reaver", "raw", "WPS PIN cracker", "reaver")
-            registerTool("nuclei", "raw", "Vulnerability scanner", "nuclei")
-            registerTool("sqlmap", "sqlmap", "SQL injection tool", "sqlmap")
-            registerTool("nikto", "nikto", "Web server scanner", "nikto")
-            registerTool("wifite", "wifite", "Automated WiFi auditor", "wifite")
-            registerTool("bettercap", "bettercap", "Network attack framework", "bettercap")
-            registerTool("responder", "responder", "LLMNR/NBT-NS poisoner", "responder")
-            registerTool("arpspoof", "arpspoof", "ARP spoofer", "arpspoof")
-            registerTool("ettercap", "ettercap", "MITM tool", "ettercap")
-        registerTool("bettercap", "raw", "Network attack framework", "bettercap")
-            registerTool("iptables", "iptables", "Firewall rules", "iptables")
-            registerTool("tcpdump", "tcpdump", "Packet capture", "tcpdump")
-            registerTool("msf", "msf", "Metasploit console", "msfconsole")
-            registerTool("msfrpcd", "msfrpcd", "Metasploit RPC daemon", "msfrpcd")
-            registerTool("ruby", "ruby", "Ruby interpreter", "ruby")
-            registerTool("shell", "raw", "Shell executor", "sh")
-            registerTool("raw", "raw", "Raw socket", "raw")
-            registerTool("ip", "ip", "IP utilities", "ip")
-            registerTool("logcat", "logcat", "Log viewer", "logcat")
-            registerTool("fusemounts", "fusemounts", "FUSE mounts", "fusemounts")
-            registerTool("networkradar", "network-radar", "Network auto-scanner", "network-radar")
-            registerTool("network-radar", "network-radar", "Network auto-scanner", "network-radar")
-            // Shipped binaries that execute via the daemon's "raw" handler. Registered
-            // under their real binary name so plugin availability + OTA use the right name.
-            registerTool("arpspoof", "raw", "ARP spoofer", "arpspoof")
-            registerTool("tcpdump", "raw", "Packet capture", "tcpdump")
-            registerTool("aircrack-ng", "raw", "WiFi WEP/WPA cracker", "aircrack-ng")
-            registerTool("traceroute", "traceroute", "Network path tracer", "traceroute")
-            registerTool("blind", "blind", "Blind shell handler", "sh")
-        }
-
-        private fun registerTool(
-            name: String,
-            handler: String,
-            description: String,
-            binary: String,
-        ) {
-            tools[name] = SmartTool(name, handler, description, binary, client, gson)
+            TOOL_SPECS.forEach { spec ->
+                tools[spec.name] = SmartTool(spec.name, spec.handler, spec.description, spec.binary, client, gson)
+            }
         }
 
         fun getTool(name: String): SmartTool? = tools[name]
@@ -115,7 +130,7 @@ class SmartToolBox
             ports: String = "1-1000",
         ): Flow<ToolResult> {
             val scanType = if (settings.rootlessMode) "-sT" else "-sS"
-            return execute("nmap", "$scanType -sV -v -p $ports $target")
+            return execute("nmap", "$scanType -sV -v -p ${shellQuote(ports)} ${shellQuote(target)}")
         }
 
         /** XML output: the handler's XML parser is the only one reporting service versions. */
@@ -123,7 +138,7 @@ class SmartToolBox
             target: String,
             ports: String = "1-1000",
             withOs: Boolean = false,
-        ): Flow<ToolResult> = execute("nmap", "-sV ${if (withOs) "-O " else ""}-v -oX - -p $ports $target")
+        ): Flow<ToolResult> = execute("nmap", "-sV ${if (withOs) "-O " else ""}-v -oX - -p ${shellQuote(ports)} ${shellQuote(target)}")
 
         /**
          * Wordlist login crack. [port] is optional — hydra's `service target`
@@ -139,9 +154,9 @@ class SmartToolBox
             rawCommand(
                 "hydra",
                 buildString {
-                    append("${binary("hydra")} -V -l $user")
-                    port?.trim()?.takeIf { it.isNotEmpty() }?.let { append(" -s $it") }
-                    append(" -P $passList $target $service")
+                    append("${binary("hydra")} -V -l ${shellQuote(user)}")
+                    port?.trim()?.takeIf { it.isNotEmpty() }?.let { append(" -s ${shellQuote(it)}") }
+                    append(" -P ${shellQuote(passList)} ${shellQuote(target)} ${shellQuote(service)}")
                 },
                 timeoutMs = LONG_RUNNING_TIMEOUT_MS,
             )
@@ -157,15 +172,15 @@ class SmartToolBox
             rawCommand(
                 "hydra",
                 buildString {
-                    append("${binary("hydra")} -V -l $user")
-                    port?.trim()?.takeIf { it.isNotEmpty() }?.let { append(" -s $it") }
-                    append(" -p $password $target $service")
+                    append("${binary("hydra")} -V -l ${shellQuote(user)}")
+                    port?.trim()?.takeIf { it.isNotEmpty() }?.let { append(" -s ${shellQuote(it)}") }
+                    append(" -p ${shellQuote(password)} ${shellQuote(target)} ${shellQuote(service)}")
                 },
                 timeoutMs = LONG_RUNNING_TIMEOUT_MS,
             )
 
         /** nmap's traceroute: its hop table is the only traceroute available on-device. */
-        fun traceroute(target: String): Flow<ToolResult> = rawCommand("traceroute", "${binary("nmap")} -sn --traceroute -v -n $target")
+        fun traceroute(target: String): Flow<ToolResult> = rawCommand("traceroute", "${binary("nmap")} -sn --traceroute -v -n ${shellQuote(target)}")
 
         fun tcpdump(
             iface: String = "wlan0",
@@ -176,16 +191,16 @@ class SmartToolBox
             rawCommand(
                 "tcpdump",
                 buildString {
-                    append(binary("tcpdump")).append(" -i ").append(iface)
+                    append(binary("tcpdump")).append(" -i ").append(shellQuote(iface))
                     if (outFile != null) {
                         // pcap file output; packet lines are suppressed by -w,
                         // tcpdump prints its own "packets captured" summary
-                        append(" -w ").append(outFile)
+                        append(" -w ").append(shellQuote(outFile))
                     } else {
                         append(" -nn -l")
                     }
                     if (count > 0) append(" -c ").append(count)
-                    if (filter.isNotBlank()) append(' ').append(filter)
+                    if (filter.isNotBlank()) append(' ').append(shellQuote(filter))
                 },
                 timeoutMs = LONG_RUNNING_TIMEOUT_MS,
             )
@@ -193,7 +208,7 @@ class SmartToolBox
         fun networkRadar(iface: String = "wlan0"): Flow<ToolResult> =
             rawCommand(
                 "network-radar",
-                "${binary("network-radar")} $iface",
+                "${binary("network-radar")} ${shellQuote(iface)}",
                 timeoutMs = LONG_RUNNING_TIMEOUT_MS,
             )
 
@@ -204,7 +219,7 @@ class SmartToolBox
         ): Flow<ToolResult> =
             rawCommand(
                 "arpspoof",
-                "${binary("arpspoof")} -i $iface -t $target $gateway",
+                "${binary("arpspoof")} -i ${shellQuote(iface)} -t ${shellQuote(target)} ${shellQuote(gateway)}",
                 timeoutMs = LONG_RUNNING_TIMEOUT_MS,
             )
 
@@ -216,11 +231,7 @@ class SmartToolBox
         fun nuclei(
             target: String,
             templates: String = "",
-        ): Flow<ToolResult> = rawCommand("nuclei", "${binary("nuclei")} -u $target $templates")
-
-        fun sqlmap(url: String): Flow<ToolResult> = execute("sqlmap", "-u $url --batch")
-
-        fun nikto(target: String): Flow<ToolResult> = execute("nikto", "-h $target")
+        ): Flow<ToolResult> = rawCommand("nuclei", "${binary("nuclei")} -u ${shellQuote(target)} $templates")
 
         fun aircrack(args: String): Flow<ToolResult> =
             rawCommand("aircrack", "${binary("aircrack-ng")} $args", timeoutMs = LONG_RUNNING_TIMEOUT_MS)
@@ -228,25 +239,21 @@ class SmartToolBox
         fun hping3(
             target: String,
             args: String = "",
-        ): Flow<ToolResult> = rawCommand("hping3", "${binary("hping3")} $args $target")
+        ): Flow<ToolResult> = rawCommand("hping3", "${binary("hping3")} $args ${shellQuote(target)}")
 
         fun masscan(
             target: String,
             args: String = "",
-        ): Flow<ToolResult> = rawCommand("masscan", "${binary("masscan")} $args $target")
+        ): Flow<ToolResult> = rawCommand("masscan", "${binary("masscan")} $args ${shellQuote(target)}")
 
         fun reaver(
             iface: String,
             bssid: String,
             args: String = "",
-        ): Flow<ToolResult> = rawCommand("reaver", "${binary("reaver")} -i $iface -b $bssid $args")
+        ): Flow<ToolResult> = rawCommand("reaver", "${binary("reaver")} -i ${shellQuote(iface)} -b ${shellQuote(bssid)} $args")
 
-
-        fun responder(iface: String = "wlan0"): Flow<ToolResult> = execute("responder", "-I $iface")
 
         fun shell(command: String): Flow<ToolResult> = execute("shell", command)
-
-        fun ip(args: String): Flow<ToolResult> = execute("ip", args)
 
         /** Path (relative to the core dir, the daemon's cwd) of a bundled tool binary. */
         private fun binary(name: String): String = "./tools/$name/$name"

@@ -82,7 +82,9 @@ class PluginManager
                     name = "Exploit Finder",
                     description = "Find known vulnerabilities",
                     targetTypes = setOf("endpoint"),
-                    requires = "msf",
+                    // The screen runs `chroot <msfDir> msfconsole` through the shell
+                    // handler; the chroot presence itself is gated on isMsfInstalled().
+                    requires = "shell",
                 ),
             )
             registerPlugin(

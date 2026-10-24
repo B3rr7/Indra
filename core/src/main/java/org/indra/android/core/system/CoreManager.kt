@@ -87,129 +87,95 @@ class CoreManager
 
         fun isBettercapInstalled(): Boolean = bettercapPath().canExecute()
 
-        suspend fun installBettercap(url: String, onProgress: (Float) -> Unit = {}): Result<Unit> = withContext(Dispatchers.IO) {
-            runCatching {
-                if (url.isBlank()) error("Bettercap tarball URL is not configured in Settings")
-                val targetDir = File(coreDir, BETTERCAP_DIR_NAME)
-                if (!targetDir.exists() && !targetDir.mkdirs()) error("Cannot create bettercap dir")
-                val target = bettercapPath()
-                val client = OkHttpClient()
-                val request = Request.Builder().url(url).build()
-                client.newCall(request).execute().use { response ->
-                    if (!response.isSuccessful) error("Download failed: ${response.code}")
-                    val body = response.body ?: error("Empty response")
-                    val total = body.contentLength()
-                    body.byteStream().use { input ->
-                        val tmp = File(targetDir, "bettercap.tar.xz.tmp")
-                        tmp.outputStream().use { out ->
-                            val buf = ByteArray(8192)
-                            var read: Int
-                            var downloaded = 0L
-                            while (input.read(buf).also { read = it } != -1) {
-                                out.write(buf, 0, read)
-                                downloaded += read
-                                if (total > 0) onProgress(downloaded.toFloat() / total.toFloat())
+        /**
+         * Shared download-and-extract pipeline for the optional tarball
+         * artifacts (Bettercap, MSF chroot, ExploitDB): download into a temp
+         * file inside [dir], extract `.tar.xz` (or plain tar) with the
+         * path-traversal guard, clean up the temp file, optionally mark
+         * [executable] runnable. Failure = incomplete/empty archive or bad URL;
+         * partial extractions remain but the artifact availability checks
+         * (e.g. `isBettercapInstalled`) keep the cards honest.
+         */
+        private suspend fun installTarballArtifact(
+            title: String,
+            url: String,
+            dir: File,
+            tmpName: String,
+            onProgress: (Float) -> Unit,
+            urlErrorMessage: String = "$title tarball URL is not configured in Settings",
+            executable: File? = null,
+        ): Result<Unit> =
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    if (url.isBlank()) error(urlErrorMessage)
+                    if (!dir.exists() && !dir.mkdirs()) error("Cannot create ${dir.name} directory")
+                    OkHttpClient().newCall(Request.Builder().url(url).build()).execute().use { response ->
+                        if (!response.isSuccessful) error("Download failed: ${response.code}")
+                        val body = response.body ?: error("Empty response")
+                        val total = body.contentLength()
+                        body.byteStream().use { input ->
+                            val tmp = File(dir, tmpName)
+                            tmp.outputStream().use { out ->
+                                val buf = ByteArray(8192)
+                                var read: Int
+                                var downloaded = 0L
+                                while (input.read(buf).also { read = it } != -1) {
+                                    out.write(buf, 0, read)
+                                    downloaded += read
+                                    if (total > 0) onProgress(downloaded.toFloat() / total.toFloat())
+                                }
                             }
+                            val hasContent =
+                                tmp.inputStream().use { raw ->
+                                    if (url.endsWith(".xz")) XZInputStream(raw).use { xz -> extractTar(xz, dir) }
+                                    else extractTar(raw, dir)
+                                }
+                            if (!hasContent) error("$title archive is empty or unreadable")
+                            tmp.delete()
                         }
-                        val hasContent = tmp.inputStream().use { raw ->
-                            if (url.endsWith(".xz")) XZInputStream(raw).use { xz -> extractTar(xz, targetDir) }
-                            else extractTar(raw, targetDir)
-                        }
-                        if (!hasContent) error("Bettercap archive is empty or unreadable")
-                        tmp.delete()
                     }
+                    executable?.setExecutable(true)
+                    Logger.i("$title installed to ${dir.absolutePath}")
                 }
-                target.setExecutable(true)
-                Logger.i("Bettercap installed to ${target.absolutePath}")
             }
-        }
+
+        suspend fun installBettercap(
+            url: String,
+            onProgress: (Float) -> Unit = {},
+        ): Result<Unit> =
+            installTarballArtifact(
+                title = "Bettercap",
+                url = url,
+                dir = File(coreDir, BETTERCAP_DIR_NAME),
+                tmpName = "bettercap.tar.xz.tmp",
+                onProgress = onProgress,
+                executable = bettercapPath(),
+            )
 
         suspend fun installMsf(
             url: String,
             onProgress: (Float) -> Unit = {},
         ): Result<Unit> =
-            withContext(Dispatchers.IO) {
-                runCatching {
-                    if (url.isBlank()) error("Metasploit chroot URL is not configured in Settings")
-                    val target = msfPath()
-                    if (!target.exists() && !target.mkdirs()) error("Cannot create msf directory")
-                    val client = OkHttpClient()
-                    val request = Request.Builder().url(url).build()
-                    client.newCall(request).execute().use { response ->
-                        if (!response.isSuccessful) error("Download failed: ${response.code}")
-                        val body = response.body ?: error("Empty response")
-                        val total = body.contentLength()
-                        body.byteStream().use { input ->
-                            val tmp = File(target, "msf.tar.xz.tmp")
-                            tmp.outputStream().use { out ->
-                                val buf = ByteArray(8192)
-                                var read: Int
-                                var downloaded = 0L
-                                while (input.read(buf).also { read = it } != -1) {
-                                    out.write(buf, 0, read)
-                                    downloaded += read
-                                    if (total > 0) onProgress(downloaded.toFloat() / total.toFloat())
-                                }
-                            }
-                            // Extract (supports .tar.xz)
-                            val hasContent =
-                                tmp.inputStream().use { raw ->
-                                    if (url.endsWith(".xz")) {
-                                        XZInputStream(raw).use { xz -> extractTar(xz, target) }
-                                    } else {
-                                        extractTar(raw, target)
-                                    }
-                                }
-                            if (!hasContent) error("Metasploit archive is empty or unreadable")
-                            tmp.delete()
-                        }
-                    }
-                    Logger.i("Metasploit installed to ${target.absolutePath}")
-                }
-            }
+            installTarballArtifact(
+                title = "Metasploit",
+                url = url,
+                dir = msfPath(),
+                tmpName = "msf.tar.xz.tmp",
+                onProgress = onProgress,
+                urlErrorMessage = "Metasploit chroot URL is not configured in Settings",
+            )
 
         suspend fun installExploitdb(
             url: String,
             onProgress: (Float) -> Unit = {},
         ): Result<Unit> =
-            withContext(Dispatchers.IO) {
-                runCatching {
-                    if (url.isBlank()) error("ExploitDB tarball URL is not configured in Settings")
-                    val target = exploitdbPath()
-                    if (!target.exists() && !target.mkdirs()) error("Cannot create exploitdb dir")
-                    val client = OkHttpClient()
-                    val request = Request.Builder().url(url).build()
-                    client.newCall(request).execute().use { response ->
-                        if (!response.isSuccessful) error("Download failed: ${response.code}")
-                        val body = response.body ?: error("Empty response")
-                        val total = body.contentLength()
-                        body.byteStream().use { input ->
-                            val tmp = File(target, "exploitdb.tar.xz.tmp")
-                            tmp.outputStream().use { out ->
-                                val buf = ByteArray(8192)
-                                var read: Int
-                                var downloaded = 0L
-                                while (input.read(buf).also { read = it } != -1) {
-                                    out.write(buf, 0, read)
-                                    downloaded += read
-                                    if (total > 0) onProgress(downloaded.toFloat() / total.toFloat())
-                                }
-                            }
-                            val hasContent =
-                                tmp.inputStream().use { raw ->
-                                    if (url.endsWith(".xz")) {
-                                        XZInputStream(raw).use { xz -> extractTar(xz, target) }
-                                    } else {
-                                        extractTar(raw, target)
-                                    }
-                                }
-                            if (!hasContent) error("ExploitDB archive is empty or unreadable")
-                            tmp.delete()
-                        }
-                    }
-                    Logger.i("ExploitDB installed to ${target.absolutePath}")
-                }
-            }
+            installTarballArtifact(
+                title = "ExploitDB",
+                url = url,
+                dir = exploitdbPath(),
+                tmpName = "exploitdb.tar.xz.tmp",
+                onProgress = onProgress,
+            )
 
         suspend fun installNuclei(onProgress: (Float) -> Unit = {}): Result<Unit> =
             withContext(Dispatchers.IO) {

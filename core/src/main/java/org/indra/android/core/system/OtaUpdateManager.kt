@@ -90,10 +90,7 @@ class OtaUpdateManager
 
         /** Rejects any OTA host other than the pinned production host (unless test mode). */
         private fun requirePinnedHost(rawUrl: String) {
-            val host = java.net.URL(rawUrl).host
-            if (host != TLS_PIN_HOST && !allowTestHosts()) {
-                throw SecurityException("Refusing OTA host '$host': only pinned host $TLS_PIN_HOST is allowed")
-            }
+            requirePinnedOtaHost(rawUrl, TLS_PIN_HOST, allowTestHosts())
         }
 
         /** Verifies the signed manifest envelope ({payload, signature}), then parses the payload. */
@@ -255,43 +252,9 @@ class OtaUpdateManager
         // Manifest parsing
         // ------------------------------------------------------------------
 
-        private fun parseManifest(json: String): OtaManifest? {
-            return try {
-                val root = JsonParser.parseString(json).asJsonObject ?: return null
-                val version = root.get("version")?.asString ?: return null
-                val binariesJson: JsonArray = root.getAsJsonArray("binaries") ?: JsonArray()
-                val binaries =
-                    (0 until binariesJson.size()).mapNotNull { i ->
-                        val bin =
-                            binariesJson
-                                .get(i)
-                                .takeIf { it.isJsonObject }
-                                ?.asJsonObject
-                                ?: return@mapNotNull null
-                        val name = bin.get("name")?.asString ?: return@mapNotNull null
-                        val binVersion = bin.get("version")?.asString ?: return@mapNotNull null
-                        val sha256 = bin.get("sha256")?.asString
-                        val url = bin.get("url")?.asString
-                        val arm64 = bin.get("arm64-v8a")?.asJsonObject
-                        val arm64Url = arm64?.get("url")?.asString
-                        val arm64Sha = arm64?.get("sha256")?.asString
-                        val arm32 = bin.get("armeabi-v7a")?.asJsonObject
-                        val arm32Url = arm32?.get("url")?.asString
-                        val arm32Sha = arm32?.get("sha256")?.asString
-                        OtaBinary(
-                            name = name,
-                            version = binVersion,
-                            artifact = if (url != null && sha256 != null) OtaArtifact(url, sha256) else null,
-                            arm64V8a = arm64Url?.let { OtaArtifact(it, arm64Sha ?: sha256 ?: "") },
-                            armeabiV7a = arm32Url?.let { OtaArtifact(it, arm32Sha ?: sha256 ?: "") },
-                        )
-                    }
-                OtaManifest(version = version, binaries = binaries)
-            } catch (e: Exception) {
-                Logger.e("Failed to parse OTA manifest", e)
-                null
-            }
-        }
+        private fun parseManifest(json: String): OtaManifest? =
+            // Pure logic lives in OtaModels.kt so it stays unit-testable.
+            parseOtaManifest(json)
 
         // ------------------------------------------------------------------
         // Local version detection (via native daemon exec probe)

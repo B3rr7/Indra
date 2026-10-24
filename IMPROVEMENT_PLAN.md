@@ -1,5 +1,20 @@
 # Indra Improvement Plan
 
+## Phase 2.5 — Code-health sprint (2026-10-24)
+
+Follow-up to the full-codebase analysis (`develop`, graph gen `2026-10-24`). Ordered by value-per-effort; executed in one sprint.
+
+- [x] **T1 — De-shadow `SmartToolBox` tool registry.** All duplicate/alias `registerTool(...)` entries collapsed into a single `TOOL_SPECS` table (later-registered duplicates silently overwrote earlier ones: masscan/reaver/bettercap/arpspoof/tcpdump). Entries for binaries never shipped (`sqlmap`, `nikto`) and unused aliases (`aircrack`, `networkradar`, dead handler rows) removed. Registry is now pure data: unit-tested for uniqueness and against the real daemon handler set (`ToolRegistryTest`).
+- [x] **T2 — `shellQuote()` at the `SmartToolBox` boundary.** User-typed fields (target, user, wordlist, port, iface, bssid, filter, output file) are quoted before they are interpolated into raw-handler command strings (they ran as root). Free-form `args` passthrough wrappers keep documented plain concatenation.
+- [x] **T3 — Remove orphaned `assets/indra.p12`** (4 KB PKCS#12 keystore referenced by no code/script — dev signing artifact shipped in the APK).
+- [x] **T4 — Retire the fake `data` use-case stubs.** `NetworkUseCases`/`PluginUseCases` classes returned hardcoded fake results (`192.168.1.1`, ports 22/80/443) against the project's no-simulation principle, were referenced by nothing, and were deleted. Repositories stay (NetworkRepository is injected by HomeViewModel; PluginRepository removed with it — both wrappers around singletons). Decision recorded in `docs/adr/0001-thin-data-module.md`.
+- [x] **T5 — `CoreManager` install-routine dedup.** `installBettercap`/`installMsf`/`installExploitdb` were the same download → extract → verify → cleanup skeleton ×3 (graph flagged them `SIMILAR_TO`); now share one `installTarballArtifact()` helper. Behaviors preserved (bettercap marks its binary executable; the others do not; per-title error strings preserved).
+- [x] **T6 — Exploit Finder gating bug.** `exploit_finder` required the dead `msf` registry key (handler `msf` is not in the daemon's handler set), so the card stayed dim forever. Requires `shell` (what the screen actually executes `msfconsole` through); the existing `isMsfInstalled()` gate now controls it.
+- [x] **T7 — `SettingsScreen` split, OTA OTA/terminal cards extracted** (`CoreCard.kt`, `UpdateCard.kt` in `indra/ui/screens/settings/`) extracting the 901-line god file one step.
+- [x] **T8 — Unit tests for OTA-critical pure logic** (`OtaUpdateManager` envelope/version logic where pure) + registry/quoting tests; `data/` repositories untouched (no fake results left in the tree).
+- [x] **T9 — `AGENTS.md` refresh** (5-module layout, SDK 35, real tool list, detekt, new gotchas).
+- [ ] **T10 — Extend detekt to `core`/`features`.** Deferred: requires re-baselining across a new module set (queued after the current detekt baseline reduction, not blocking).
+
 Derived from the deep comparison with StrykerOSS (`/home/rana/strykerapp`).
 Goal: make Indra a **better, easier-to-use pentest tool than cSploit ever was**, and competitive with StrykerOSS, while keeping its modern architecture and lightweight core.
 
