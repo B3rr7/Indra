@@ -528,6 +528,29 @@ fun getToolIcon(id: String): ImageVector =
         "credential_tester" -> Icons.Default.Key
         "network_radar" -> Icons.Default.WifiTethering
         "packet_capture" -> Icons.Default.Cable
+        "masscan" -> Icons.Default.Speed
+        "bettercap" -> Icons.Default.Terminal
+        "responder" -> Icons.Default.NetworkCheck
+        "wifite" -> Icons.Default.WifiLock
+        "reaver" -> Icons.Default.LockOpen
+        "geomac" -> Icons.Default.Map
+        "whisperpair" -> Icons.Default.Bluetooth
+        "searchsploit" -> Icons.Default.ManageSearch
+        "arsenal" -> Icons.Default.Inventory2
+        "hid" -> Icons.Default.Usb
+        "duckyscript" -> Icons.Default.Keyboard
+        "usb_arsenal" -> Icons.Default.Usb
+        "session_hijack" -> Icons.Default.PersonOff
+        "password_auditor" -> Icons.Default.Password
+        "dns_spoofer" -> Icons.Default.Dns
+        "one_tap_mitm" -> Icons.Default.FlashOn
+        "topology" -> Icons.Default.AccountTree
+        "mac_changer" -> Icons.Default.Edit
+        "wifi_scanner" -> Icons.Default.WifiFind
+        "terminal" -> Icons.Default.Terminal
+        "handshakes" -> Icons.Default.FolderOpen
+        "iptables" -> Icons.Default.Security
+        "masscan" -> Icons.Default.Speed
         else -> Icons.Default.Extension
     }
 
