@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.indra.android.core.system.SmartToolBox
+import org.indra.android.core.system.CoreManager
 import javax.inject.Inject
 
 data class TerminalUiState(
@@ -16,6 +17,8 @@ data class TerminalUiState(
     val output: List<String> = emptyList(),
     val isRunning: Boolean = false,
     val error: String? = null,
+    val chrootMode: Boolean = false,
+    val alpineInstalled: Boolean = false,
 )
 
 @HiltViewModel
@@ -23,12 +26,17 @@ class TerminalViewModel
     @Inject
     constructor(
         private val toolBox: SmartToolBox,
+        private val coreManager: CoreManager,
     ) : ViewModel() {
-        private val _uiState = MutableStateFlow(TerminalUiState())
+        private val _uiState = MutableStateFlow(TerminalUiState(alpineInstalled = coreManager.isAlpineInstalled()))
         val uiState: StateFlow<TerminalUiState> = _uiState.asStateFlow()
 
         private var job: Job? = null
         private var pid = -1
+
+        fun toggleChroot(enabled: Boolean) {
+            _uiState.value = _uiState.value.copy(chrootMode = enabled)
+        }
 
         fun updateInput(text: String) {
             _uiState.value = _uiState.value.copy(input = text)
@@ -45,8 +53,14 @@ class TerminalViewModel
                 return
             }
 
+            val chrootMode = _uiState.value.chrootMode
+            if (chrootMode && !coreManager.isAlpineInstalled()) {
+                _uiState.value = _uiState.value.copy(error = "Alpine not installed. Install it in Settings first.")
+                return
+            }
+
             // Echo the command as a prompt line.
-            val prompt = "$ $cmd"
+            val prompt = if (chrootMode) "[alpine] $ $cmd" else "$ $cmd"
             _uiState.value =
                 _uiState.value.copy(
                     isRunning = true,
@@ -57,7 +71,8 @@ class TerminalViewModel
 
             job =
                 viewModelScope.launch {
-                    toolBox.shell(cmd).collect { result ->
+                    val flow = if (chrootMode) toolBox.chroot(cmd) else toolBox.shell(cmd)
+                    flow.collect { result ->
                         if (result.pid > 0) pid = result.pid
                         val line = result.rawOutput
                         if (result.status == "running") {

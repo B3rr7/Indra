@@ -107,20 +107,45 @@ fun TerminalScreen(
                 modifier =
                     Modifier
                         .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    text = "Alpine chroot",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Switch(
+                    checked = uiState.chrootMode,
+                    onCheckedChange = viewModel::toggleChroot,
+                    enabled = !uiState.isRunning && uiState.alpineInstalled,
+                )
+                if (!uiState.alpineInstalled) {
+                    Text(
+                        text = "(install Alpine in Settings)",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
                         .padding(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                // Quick-insert chips
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    listOf("ip addr", "iw dev", "ps", "ls").forEach { cmd ->
+                    (if (uiState.chrootMode) listOf("apk update", "apk add python3", "python3 --version") else listOf("ip addr", "iw dev", "ps", "ls")).forEach { cmd ->
                         AssistChip(
                             onClick = { viewModel.updateInput(cmd) },
                             label = { Text(cmd, fontSize = 11.sp) },
-                            enabled = !uiState.isRunning
+                            enabled = !uiState.isRunning,
                         )
                     }
                 }
