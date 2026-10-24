@@ -423,9 +423,10 @@ class OtaUpdateManager
         }
 
         private fun currentAbi(): OtaAbi {
-            // TODO(ota-6.10): sniff the installed core's ELF header once 64-bit
-            //  artifacts are published; build.sh currently emits armeabi-v7a only,
-            //  so the manifest's v7a artifact must match the installed core.
-            return OtaAbi.ARMEABI_V7A
+            // Sniff the installed core's ELF class instead of trusting the device
+            // ABI: a 64-bit device may still run a 32-bit core (or vice versa).
+            // Sniffing keeps OTA from swapping an arm64 artifact onto a v7a core.
+            val daemon = File(coreManager.coreDir, INDRA_DAEMON_NAME)
+            return sniffOtaAbi(daemon) ?: OtaAbi.ARMEABI_V7A
         }
     }

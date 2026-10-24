@@ -76,6 +76,34 @@ data class OtaCheckResult(
 // ---------------------------------------------------------------------------
 
 /**
+ * Sniffs the ELF class of an installed native binary: 64-bit (ELF64) maps to
+ * arm64-v8a, 32-bit (ELF32) maps to armeabi-v7a. Returns `null` when the file
+ * is missing/unreadable/not an ELF so callers can fall back to a safe default.
+ */
+internal fun sniffOtaAbi(file: java.io.File): OtaAbi? {
+    return try {
+        if (!file.isFile || file.length() < 5) return null
+        file.inputStream().use { s ->
+            val b = ByteArray(5)
+            if (s.read(b) < 5) return null
+            if (b[0] != 0x7F.toByte() || b[1] != 0x45.toByte() || b[2] != 0x4C.toByte() || b[3] != 0x46.toByte()) return null
+            when (b[4].toInt()) {
+                2 -> OtaAbi.ARM64_V8A
+                1 -> OtaAbi.ARMEABI_V7A
+                else -> null
+            }
+        }
+    } catch (e: Exception) {
+        null
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Pure OTA logic (kept free of Android/instance dependencies so it can be
+// unit-tested in core/src/test without the daemon).
+// ---------------------------------------------------------------------------
+
+/**
  * Refuses non-pinned manifest hosts unless the dev escape hatch is on.
  * Throws [SecurityException] on refusal.
  */

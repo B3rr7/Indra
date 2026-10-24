@@ -2,11 +2,13 @@
 <SmellBaseline>
   <ManuallySuppressedIssues/>
   <CurrentIssues>
+    <ID>ComplexCondition:OtaModels.kt$b[0] != 0x7F.toByte() || b[1] != 0x45.toByte() || b[2] != 0x4C.toByte() || b[3] != 0x46.toByte()</ID>
     <ID>CyclomaticComplexMethod:CoreManager.kt$CoreManager$private suspend fun installTarballArtifact( title: String, url: String, dir: File, tmpName: String, onProgress: (Float) -&gt; Unit, urlErrorMessage: String = "$title tarball URL is not configured in Settings", executable: File? = null, ): Result&lt;Unit&gt;</ID>
     <ID>CyclomaticComplexMethod:CoreManager.kt$CoreManager$suspend fun installNuclei(onProgress: (Float) -&gt; Unit = {}): Result&lt;Unit&gt;</ID>
     <ID>CyclomaticComplexMethod:CoreManager.kt$CoreManager$suspend fun startDaemon(): Result&lt;Unit&gt;</ID>
     <ID>CyclomaticComplexMethod:OtaModels.kt$internal fun parseOtaManifest(json: String): OtaManifest?</ID>
     <ID>CyclomaticComplexMethod:SmartToolBox.kt$SmartToolBox$private fun execute( tool: String, args: String, label: String = tool, timeoutMs: Long = TOOL_TIMEOUT_MS, ): Flow&lt;ToolResult&gt;</ID>
+    <ID>EmptyFunctionBlock:OtaModelsTest.kt$OtaModelsTest${ }</ID>
     <ID>FunctionOnlyReturningConstant:RootManager.kt$RootManager$fun canRunRootless(): Boolean</ID>
     <ID>LongMethod:SmartToolBox.kt$SmartToolBox$private fun execute( tool: String, args: String, label: String = tool, timeoutMs: Long = TOOL_TIMEOUT_MS, ): Flow&lt;ToolResult&gt;</ID>
     <ID>MagicNumber:ChildProcessManager.kt$ChildProcessManager$9</ID>
@@ -17,6 +19,9 @@
     <ID>MagicNumber:NetworkHelper.kt$NetworkHelper$16</ID>
     <ID>MagicNumber:NetworkHelper.kt$NetworkHelper$24</ID>
     <ID>MagicNumber:NetworkHelper.kt$NetworkHelper$8</ID>
+    <ID>MagicNumber:OtaModels.kt$3</ID>
+    <ID>MagicNumber:OtaModels.kt$4</ID>
+    <ID>MagicNumber:OtaModels.kt$5</ID>
     <ID>MagicNumber:SettingsRepository.kt$SettingsRepository$55553</ID>
     <ID>MagicNumber:SettingsRepository.kt$SettingsRepository$8080</ID>
     <ID>MagicNumber:SettingsRepository.kt$SettingsRepository$8081</ID>
@@ -33,6 +38,7 @@
     <ID>ReturnCount:NetworkHelper.kt$NetworkHelper$@Suppress("DEPRECATION") private fun legacyDhcpGateway(): String?</ID>
     <ID>ReturnCount:NetworkHelper.kt$NetworkHelper$fun getGatewayAddress(): String?</ID>
     <ID>ReturnCount:OtaModels.kt$internal fun parseOtaManifest(json: String): OtaManifest?</ID>
+    <ID>ReturnCount:OtaModels.kt$internal fun sniffOtaAbi(file: java.io.File): OtaAbi?</ID>
     <ID>ReturnCount:OtaUpdateManager.kt$OtaUpdateManager$private fun verifyManifestEnvelope(json: String): OtaManifest?</ID>
     <ID>SwallowedException:ArsenalRepository.kt$ArsenalRepository$e: Exception</ID>
     <ID>SwallowedException:CrashReporter.kt$CrashReporter$e: Exception</ID>

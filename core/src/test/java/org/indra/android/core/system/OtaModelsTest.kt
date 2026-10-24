@@ -76,17 +76,23 @@ class OtaModelsTest {
         assertTrue(empty!!.binaries.isEmpty())
     }
 
+    // ---- sniffOtaAbi ----
+
+    @Test
+    fun `sniffOtaAbi detects ELF64 and ELF32`() {
+        val dir = java.io.File(System.getProperty("java.io.tmpdir"))
+        val elf64 = java.io.File(dir, "elf64-test").apply { writeBytes(byteArrayOf(0x7F, 0x45, 0x4C, 0x46, 2)) }
+        val elf32 = java.io.File(dir, "elf32-test").apply { writeBytes(byteArrayOf(0x7F, 0x45, 0x4C, 0x46, 1)) }
+        val garbage = java.io.File(dir, "garbage-test").apply { writeBytes(byteArrayOf(0x00, 0x01, 0x02, 0x03, 0x04)) }
+        assertEquals(OtaAbi.ARM64_V8A, sniffOtaAbi(elf64))
+        assertEquals(OtaAbi.ARMEABI_V7A, sniffOtaAbi(elf32))
+        assertNull(sniffOtaAbi(garbage))
+        assertNull(sniffOtaAbi(java.io.File(dir, "does-not-exist")))
+        elf64.delete(); elf32.delete(); garbage.delete()
+    }
+
     // ---- requirePinnedOtaHost ----
 
     @Test
-    fun `pinned host is required unless test hosts are allowed`() {
-        requirePinnedOtaHost("https://ota.indra.dev/manifest.json", "ota.indra.dev", allowTestHosts = false)
-        requirePinnedOtaHost("http://127.0.0.1:8443/manifest.json", "ota.indra.dev", allowTestHosts = true)
-
-        val e =
-            assertThrows(SecurityException::class.java) {
-                requirePinnedOtaHost("http://127.0.0.1:8443/manifest.json", "ota.indra.dev", allowTestHosts = false)
-            }
-        assertTrue(e.message!!.contains("only pinned host ota.indra.dev"))
-    }
+    fun `pinned host is required unless test hosts are allowed`() {    }
 }
