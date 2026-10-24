@@ -87,6 +87,20 @@ class CoreManager
 
         fun isBettercapInstalled(): Boolean = bettercapPath().canExecute()
 
+        /** True when the running kernel exposes netfilter/iptables (userspace binary
+         *  is always present on rooted devices, but containers/kernels may lack it). */
+        fun isIptablesSupported(): Boolean =
+            runCatching {
+                val root = rootManager.detectRoot()
+                val cmd =
+                    if (root.isRooted && root.suPath != null) {
+                        listOf(root.suPath!!, "-c", "iptables -L -n >/dev/null 2>&1")
+                    } else {
+                        listOf("iptables", "-L", "-n")
+                    }
+                ProcessBuilder(cmd).redirectErrorStream(true).start().waitFor() == 0
+            }.getOrDefault(false)
+
         /**
          * Shared download-and-extract pipeline for the optional tarball
          * artifacts (Bettercap, MSF chroot, ExploitDB): download into a temp

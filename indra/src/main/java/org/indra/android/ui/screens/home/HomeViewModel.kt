@@ -60,6 +60,7 @@ class HomeViewModel
             // without a bundled interpreter; keep the cards dimmed until a
             // real binary ships (see IMPROVEMENT_PLAN Phase 2 "infeasible").
             if (plugin.id == "responder" || plugin.id == "wifite") return false
+            if (plugin.id == "iptables") return coreManager.isIptablesSupported()
             // Rootless gating: disable raw-socket features when running without root.
             if (plugin.requiresRoot && settings.rootlessMode) {
                 return false

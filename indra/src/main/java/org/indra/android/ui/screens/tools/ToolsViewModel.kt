@@ -77,6 +77,7 @@ class ToolsViewModel
                                     (plugin.id !in listOf("vuln_scanner", "web_tester") || coreManager.isNucleiInstalled()) &&
                                     (plugin.id != "exploit_finder" || coreManager.isMsfInstalled()) &&
                                     (plugin.id !in listOf("responder", "wifite")) &&
+                                    (plugin.id != "iptables" || coreManager.isIptablesSupported()) &&
                                     (!plugin.requiresRoot || !settings.rootlessMode),
                         )
                     }
