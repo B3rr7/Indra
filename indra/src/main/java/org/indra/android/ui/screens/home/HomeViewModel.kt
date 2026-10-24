@@ -56,6 +56,10 @@ class HomeViewModel
             // Optional components that must be installed separately.
             if (plugin.id == "vuln_scanner" || plugin.id == "web_tester") return coreManager.isNucleiInstalled()
             if (plugin.id == "exploit_finder") return coreManager.isMsfInstalled()
+            // Responder and Wifite are Python-based and infeasible on Android
+            // without a bundled interpreter; keep the cards dimmed until a
+            // real binary ships (see IMPROVEMENT_PLAN Phase 2 "infeasible").
+            if (plugin.id == "responder" || plugin.id == "wifite") return false
             // Rootless gating: disable raw-socket features when running without root.
             if (plugin.requiresRoot && settings.rootlessMode) {
                 return false

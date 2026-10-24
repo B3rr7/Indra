@@ -76,6 +76,7 @@ class ToolsViewModel
                                 toolBox.getTool(plugin.requires)?.isAvailable() == true &&
                                     (plugin.id !in listOf("vuln_scanner", "web_tester") || coreManager.isNucleiInstalled()) &&
                                     (plugin.id != "exploit_finder" || coreManager.isMsfInstalled()) &&
+                                    (plugin.id !in listOf("responder", "wifite")) &&
                                     (!plugin.requiresRoot || !settings.rootlessMode),
                         )
                     }
