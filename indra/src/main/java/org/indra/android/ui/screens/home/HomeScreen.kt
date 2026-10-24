@@ -535,14 +535,13 @@ fun getToolIcon(id: String): ImageVector =
         "credential_tester" -> Icons.Default.Key
         "network_radar" -> Icons.Default.WifiTethering
         "packet_capture" -> Icons.Default.Cable
-        "masscan" -> Icons.Default.Speed
         "bettercap" -> Icons.Default.Terminal
         "responder" -> Icons.Default.NetworkCheck
         "wifite" -> Icons.Default.WifiLock
         "reaver" -> Icons.Default.LockOpen
         "geomac" -> Icons.Default.Map
         "whisperpair" -> Icons.Default.Bluetooth
-        "searchsploit" -> Icons.Default.ManageSearch
+        "searchsploit" -> Icons.AutoMirrored.Filled.ManageSearch
         "arsenal" -> Icons.Default.Inventory2
         "hid" -> Icons.Default.Usb
         "duckyscript" -> Icons.Default.Keyboard
@@ -601,9 +600,6 @@ fun getToolColor(id: String): Color {
         "handshakes" -> Color(0xFF8E24AA) // purple
         "iptables" -> Color(0xFF5D4037) // dark brown
         "terminal" -> Color(0xFF212121) // near black
-        "exploit_finder" -> Color(0xFFFF9800) // orange
-        "vuln_scanner" -> Color(0xFFC6FF00) // lime
-        "web_tester" -> Color(0xFF1DE9B6) // teal
         else -> MaterialTheme.colorScheme.primary
     }
 }

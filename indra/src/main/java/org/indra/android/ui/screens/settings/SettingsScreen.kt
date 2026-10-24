@@ -143,16 +143,16 @@ fun SettingsScreen(
                     SettingsSwitchItem(
                         title = "Keep Wake Lock",
                         subtitle = "Prevent device from sleeping",
-                        checked = true,
-                        onCheckedChange = { },
+                        checked = uiState.wakeLockEnabled,
+                        onCheckedChange = { viewModel.setWakeLockEnabled(it) },
                         icon = Icons.Default.BrightnessHigh,
                         accent = SettingsPalette.WakeLock,
                     )
                     SettingsSwitchItem(
                         title = "Debug Error Logging",
                         subtitle = "Enable detailed logging",
-                        checked = false,
-                        onCheckedChange = { },
+                        checked = uiState.debugErrorLogging,
+                        onCheckedChange = { viewModel.setDebugErrorLogging(it) },
                         icon = Icons.Default.BugReport,
                         accent = SettingsPalette.DebugLog,
                         last = true,

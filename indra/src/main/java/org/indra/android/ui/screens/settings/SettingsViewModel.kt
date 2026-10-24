@@ -41,6 +41,7 @@ data class SettingsUiState(
     val otaAllowTestHosts: Boolean = false,
     val toolStatus: List<ToolStatus> = emptyList(),
     val rootlessMode: Boolean = false,
+    val wakeLockEnabled: Boolean = true,
     val alpineInstalled: Boolean = false,
     val alpineBusy: Boolean = false,
     val alpineMessage: String? = null,
@@ -100,6 +101,7 @@ class SettingsViewModel
                         otaManifestUrl = settings.otaManifestUrl,
                         otaAllowTestHosts = settings.otaAllowTestHosts,
                         rootlessMode = settings.rootlessMode,
+                        wakeLockEnabled = settings.wakeLockEnabled,
                         alpineInstalled = coreManager.isAlpineInstalled(),
                         debugErrorLogging = settings.debugErrorLogging,
                         crashLogCount = crashReporter.getCrashFiles().size,
@@ -309,6 +311,11 @@ class SettingsViewModel
                 _uiState.value.copy(
                     coreMessage = if (enabled) "Rootless mode enabled (restart daemon)" else "Root mode enabled",
                 )
+        }
+
+        fun setWakeLockEnabled(enabled: Boolean) {
+            settings.wakeLockEnabled = enabled
+            _uiState.value = _uiState.value.copy(wakeLockEnabled = enabled)
         }
 
         fun installOtaUpdates() {
