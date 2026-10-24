@@ -87,6 +87,24 @@ class CoreManager
 
         fun isBettercapInstalled(): Boolean = bettercapPath().canExecute()
 
+        /** True when the kernel/chipset can put [iface] into monitor mode (needed for
+         *  airodump-ng-style capture). Stock Android rarely supports this; users with
+         *  a USB WiFi dongle can load its driver via the Terminal and re-check. */
+        fun isMonitorModeSupported(iface: String = "wlan0"): Boolean =
+            runCatching {
+                val root = rootManager.detectRoot()
+                if (!root.isRooted || root.suPath == null) return@runCatching false
+                // Read-only probe: `iw list` prints the supported interface modes per phy;
+                // mutating `iw dev ... set type monitor` would disrupt the live connection.
+                val out = ProcessBuilder(root.suPath!!, "-c", "iw list 2>/dev/null")
+                    .redirectErrorStream(true)
+                    .start()
+                    .inputStream
+                    .bufferedReader()
+                    .readText()
+                out.contains("monitor", ignoreCase = true)
+            }.getOrDefault(false)
+
         /** True when the running kernel exposes netfilter/iptables (userspace binary
          *  is always present on rooted devices, but containers/kernels may lack it). */
         fun isIptablesSupported(): Boolean =
