@@ -125,6 +125,7 @@ fun HomeScreen(
                             icon = Icons.Default.Radar,
                             label = "Network Scan",
                             onClick = { onNavigateToPlugin("port_scanner") },
+                            enabled = uiState.plugins.find { it.id == "port_scanner" }?.available ?: true,
                         )
                     }
                     item {
@@ -132,6 +133,7 @@ fun HomeScreen(
                             icon = Icons.Default.DeviceHub,
                             label = "Inspect",
                             onClick = { onNavigateToPlugin("inspector") },
+                            enabled = uiState.plugins.find { it.id == "inspector" }?.available ?: true,
                         )
                     }
                     item {
@@ -139,6 +141,7 @@ fun HomeScreen(
                             icon = Icons.Default.Timeline,
                             label = "Trace Route",
                             onClick = { onNavigateToPlugin("traceroute") },
+                            enabled = uiState.plugins.find { it.id == "traceroute" }?.available ?: true,
                         )
                     }
                     item {
@@ -147,6 +150,7 @@ fun HomeScreen(
                             label = "MITM Attack",
                             onClick = { onNavigateToPlugin("mitm") },
                             accentColor = StatusRed,
+                            enabled = uiState.plugins.find { it.id == "mitm" }?.available ?: true,
                         )
                     }
                     item {
@@ -155,6 +159,7 @@ fun HomeScreen(
                             label = "Vuln Scan",
                             onClick = { onNavigateToPlugin("vuln_scanner") },
                             accentColor = StatusOrange,
+                            enabled = uiState.plugins.find { it.id == "vuln_scanner" }?.available ?: true,
                         )
                     }
                 }
@@ -369,9 +374,11 @@ fun QuickActionPill(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     accentColor: Color = MaterialTheme.colorScheme.primary,
+    enabled: Boolean = true,
 ) {
     FilledTonalButton(
         onClick = onClick,
+        enabled = enabled,
         modifier = modifier.height(48.dp),
         shape = RoundedCornerShape(24.dp),
         colors =
@@ -556,7 +563,7 @@ fun getToolIcon(id: String): ImageVector =
 
 @Composable
 fun getToolColor(id: String): Color {
-    // One distinct hue per tool — no repeats
+    // One distinct hue per tool — no repeats, no fallback to the theme primary.
     return when (id) {
         "port_scanner" -> Color(0xFF00E5FF) // cyan
         "inspector" -> Color(0xFF448AFF) // blue
@@ -571,7 +578,32 @@ fun getToolColor(id: String): Color {
         "web_tester" -> Color(0xFF1DE9B6) // teal
         "credential_tester" -> Color(0xFFFFD600) // yellow
         "network_radar" -> Color(0xFF00BFA5) // sea green
-        "packet_capture" -> Color(0xFF536DFE) // medium indigo blue
+        "packet_capture" -> Color(0xFF536DFE) // medium indigo
+        "masscan" -> Color(0xFF00B0FF) // light blue
+        "bettercap" -> Color(0xFF651FFF) // deep purple
+        "responder" -> Color(0xFF00C853) // emerald
+        "wifite" -> Color(0xFF64DD17) // light green
+        "reaver" -> Color(0xFFFF6D00) // deep orange
+        "geomac" -> Color(0xFF2979FF) // strong blue
+        "whisperpair" -> Color(0xFFD500F9) // purple
+        "searchsploit" -> Color(0xFF3D5AFE) // indigo
+        "arsenal" -> Color(0xFF8D6E63) // brown
+        "hid" -> Color(0xFF78909C) // blue grey
+        "duckyscript" -> Color(0xFF546E7A) // dark blue grey
+        "usb_arsenal" -> Color(0xFF607D8B) // grey blue
+        "session_hijack" -> Color(0xFFD32F2F) // dark red
+        "password_auditor" -> Color(0xFFFFA000) // amber dark
+        "dns_spoofer" -> Color(0xFF00897B) // teal dark
+        "one_tap_mitm" -> Color(0xFFE53935) // red
+        "topology" -> Color(0xFF1976D2) // blue
+        "mac_changer" -> Color(0xFF5E35B1) // deep purple
+        "wifi_scanner" -> Color(0xFF43A047) // green
+        "handshakes" -> Color(0xFF8E24AA) // purple
+        "iptables" -> Color(0xFF5D4037) // dark brown
+        "terminal" -> Color(0xFF212121) // near black
+        "exploit_finder" -> Color(0xFFFF9800) // orange
+        "vuln_scanner" -> Color(0xFFC6FF00) // lime
+        "web_tester" -> Color(0xFF1DE9B6) // teal
         else -> MaterialTheme.colorScheme.primary
     }
 }
