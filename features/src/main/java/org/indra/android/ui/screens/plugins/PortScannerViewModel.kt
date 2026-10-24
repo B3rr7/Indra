@@ -8,7 +8,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
-import org.indra.android.core.system.IndraSystem
 import org.indra.android.core.system.SmartToolBox
 import javax.inject.Inject
 
@@ -24,7 +23,6 @@ data class PortScannerUiState(
 class PortScannerViewModel
     @Inject
     constructor(
-        private val system: IndraSystem,
         private val toolBox: SmartToolBox,
     ) : ViewModel() {
         private val _uiState = MutableStateFlow(PortScannerUiState())

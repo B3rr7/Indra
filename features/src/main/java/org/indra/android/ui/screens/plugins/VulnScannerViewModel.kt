@@ -8,7 +8,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.indra.android.core.system.CoreManager
-import org.indra.android.core.system.IndraSystem
 import org.indra.android.core.system.SmartToolBox
 import javax.inject.Inject
 
@@ -16,7 +15,6 @@ import javax.inject.Inject
 class VulnScannerViewModel
     @Inject
     constructor(
-        private val system: IndraSystem,
         private val toolBox: SmartToolBox,
         private val coreManager: CoreManager,
     ) : ViewModel() {

@@ -32,7 +32,7 @@ import org.indra.android.ui.screens.plugins.MitmScreen
 import org.indra.android.ui.screens.plugins.NetworkRadarScreen
 import org.indra.android.ui.screens.plugins.PacketCaptureScreen
 import org.indra.android.ui.screens.plugins.PacketForgerScreen
-import org.indra.android.ui.screens.plugins.PluginScreen
+
 import org.indra.android.ui.screens.plugins.PortScannerScreen
 import org.indra.android.ui.screens.plugins.ReaverScreen
 import org.indra.android.ui.screens.plugins.ResponderScreen
@@ -175,7 +175,7 @@ fun IndraNavHost(
                 "dns_spoofer" -> navController.navigate(Screen.DnsSpoofer.route)
                 "one_tap_mitm" -> navController.navigate(Screen.OneTapMitm.route)
                 "topology" -> navController.navigate(Screen.Topology.route)
-                else -> navController.navigate("plugin/$pluginName")
+                else -> { /* unknown plugin; ignore */ }
             }
         }
 
@@ -326,20 +326,6 @@ fun IndraNavHost(
 
         composable(Screen.Topology.route) {
             TopologyScreen(onNavigateBack = { navController.popBackStack() })
-        }
-
-        composable(
-            route = "plugin/{pluginName}",
-            arguments =
-                listOf(
-                    navArgument("pluginName") { type = NavType.StringType },
-                ),
-        ) { backStackEntry ->
-            val pluginName = backStackEntry.arguments?.getString("pluginName") ?: ""
-            PluginScreen(
-                pluginName = pluginName,
-                onNavigateBack = { navController.popBackStack() },
-            )
         }
 
         composable(Screen.Settings.route) {

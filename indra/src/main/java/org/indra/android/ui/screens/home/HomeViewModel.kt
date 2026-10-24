@@ -8,7 +8,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.indra.android.core.system.CoreManager
-import org.indra.android.core.system.IndraSystem
 import org.indra.android.core.system.NetworkHelper
 import org.indra.android.core.system.PluginManager
 import org.indra.android.core.system.SettingsRepository
@@ -36,7 +35,6 @@ data class PluginInfo(
 class HomeViewModel
     @Inject
     constructor(
-        private val system: IndraSystem,
         private val networkHelper: NetworkHelper,
         private val networkRepository: NetworkRepository,
         private val pluginManager: PluginManager,

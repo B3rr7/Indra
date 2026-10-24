@@ -7,7 +7,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import org.indra.android.core.system.IndraSystem
 import org.indra.android.core.system.SmartToolBox
 import javax.inject.Inject
 
@@ -25,7 +24,6 @@ private val HOP_LINE = Regex("""^\s*(\d+)\s+([\d.]+\s*ms|\*+|--)\s+(\S+)\s*$""")
 class TracerouteViewModel
     @Inject
     constructor(
-        private val system: IndraSystem,
         private val toolBox: SmartToolBox,
     ) : ViewModel() {
         private val _uiState = MutableStateFlow(TracerouteUiState())
