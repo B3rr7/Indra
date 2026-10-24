@@ -7,8 +7,13 @@ import dagger.hilt.android.HiltAndroidApp
 class IndraApplication : Application() {
     override fun onCreate() {
         super.onCreate()
+        org.indra.android.core.system.Logger.init(this)
         org.indra.android.core.system.Logger
             .setDebugEnabled(BuildConfig.DEBUG)
+
+        val prefs = getSharedPreferences("indra_prefs", MODE_PRIVATE)
+        org.indra.android.core.system.Logger
+            .setFileLogging(prefs.getBoolean("PREF_DEBUG_ERROR_LOGGING", false))
 
         // Install crash reporter
         val previousHandler = Thread.getDefaultUncaughtExceptionHandler()

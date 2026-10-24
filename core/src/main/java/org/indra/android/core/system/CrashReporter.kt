@@ -56,4 +56,13 @@ class CrashReporter
             } catch (e: Exception) {
                 "unknown"
             }
+
+        fun getCrashFiles(): List<File> =
+            File(context.filesDir, "crashes").listFiles()?.sortedByDescending { it.lastModified() }?.toList() ?: emptyList()
+
+        fun clearCrashes() {
+            getCrashFiles().forEach { runCatching { it.delete() } }
+        }
+
+        fun getLogFile(): File? = Logger.getLogFile()
     }

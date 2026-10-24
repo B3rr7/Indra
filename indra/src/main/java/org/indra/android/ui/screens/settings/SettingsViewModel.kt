@@ -7,7 +7,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import org.indra.android.core.system.AppUpdateManager
 import org.indra.android.core.system.CoreManager
+import org.indra.android.core.system.CrashReporter
+import org.indra.android.core.system.Logger
 import org.indra.android.core.system.IndraSystem
 import org.indra.android.core.system.OtaUpdateManager
 import org.indra.android.core.system.SettingsRepository
@@ -40,6 +43,12 @@ data class SettingsUiState(
     val alpineInstalled: Boolean = false,
     val alpineBusy: Boolean = false,
     val alpineMessage: String? = null,
+    val debugErrorLogging: Boolean = false,
+    val crashLogCount: Int = 0,
+    val appUpdateChecking: Boolean = false,
+    val appUpdateAvailable: Boolean = false,
+    val appUpdateVersion: String? = null,
+    val appUpdateMessage: String? = null,
 )
 
 /** Port fields the daemon tools read from [SettingsRepository]. */
@@ -61,6 +70,8 @@ class SettingsViewModel
         private val coreManager: CoreManager,
         private val otaManager: OtaUpdateManager,
         private val toolBox: SmartToolBox,
+        private val crashReporter: CrashReporter,
+        private val appUpdateManager: AppUpdateManager,
     ) : ViewModel() {
         private val _uiState = MutableStateFlow(SettingsUiState())
         val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
@@ -84,6 +95,8 @@ class SettingsViewModel
                         otaAllowTestHosts = settings.otaAllowTestHosts,
                         rootlessMode = settings.rootlessMode,
                         alpineInstalled = coreManager.isAlpineInstalled(),
+                        debugErrorLogging = settings.debugErrorLogging,
+                        crashLogCount = crashReporter.getCrashFiles().size,
                         toolStatus = toolBox.getAllTools().map { ToolStatus(it.name, it.isAvailable()) },
                     )
             }
@@ -143,6 +156,65 @@ class SettingsViewModel
                 loadSettings()
             }
         }
+
+        fun setDebugErrorLogging(enabled: Boolean) {
+            settings.debugErrorLogging = enabled
+            Logger.setFileLogging(enabled)
+            _uiState.value = _uiState.value.copy(debugErrorLogging = enabled)
+        }
+
+        fun checkAppUpdate() {
+            if (_uiState.value.appUpdateChecking) return
+            viewModelScope.launch {
+                _uiState.value = _uiState.value.copy(appUpdateChecking = true, appUpdateMessage = "Checking for app updates…")
+                val info = appUpdateManager.checkForUpdate()
+                if (info == null) {
+                    _uiState.value = _uiState.value.copy(appUpdateChecking = false, appUpdateMessage = "Update check failed")
+                } else if (appUpdateManager.isNewer(info.version)) {
+                    _uiState.value = _uiState.value.copy(
+                        appUpdateChecking = false,
+                        appUpdateAvailable = true,
+                        appUpdateVersion = info.version,
+                        appUpdateMessage = "Update available: ${info.version} (current ${appUpdateManager.currentVersion()})",
+                    )
+                } else {
+                    _uiState.value = _uiState.value.copy(
+                        appUpdateChecking = false,
+                        appUpdateAvailable = false,
+                        appUpdateMessage = "App is up to date (${appUpdateManager.currentVersion()})",
+                    )
+                }
+            }
+        }
+
+        fun installAppUpdate() {
+            if (!_uiState.value.appUpdateAvailable) return
+            viewModelScope.launch {
+                _uiState.value = _uiState.value.copy(appUpdateMessage = "Downloading update…")
+                val info = appUpdateManager.checkForUpdate() ?: return@launch
+                appUpdateManager
+                    .downloadAndInstall(info) { p ->
+                        _uiState.value = _uiState.value.copy(appUpdateMessage = "Downloading update… ${(p * 100).toInt()}%")
+                    }.onSuccess {
+                        _uiState.value = _uiState.value.copy(appUpdateMessage = "Installer launched")
+                    }.onFailure { e ->
+                        _uiState.value = _uiState.value.copy(appUpdateMessage = "Update failed: ${e.message}")
+                    }
+            }
+        }
+
+        fun clearCrashLogs() {
+            crashReporter.clearCrashes()
+            _uiState.value = _uiState.value.copy(crashLogCount = 0)
+        }
+
+        fun clearDebugLog() {
+            Logger.clearLog()
+        }
+
+        fun getCrashLogFiles(): List<java.io.File> = crashReporter.getCrashFiles()
+
+        fun getDebugLogFile(): java.io.File? = crashReporter.getLogFile()
 
         fun startDaemon() {
             if (_uiState.value.coreBusy) return

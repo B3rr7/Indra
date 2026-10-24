@@ -12,7 +12,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.*
+import android.content.Intent
 import androidx.compose.runtime.*
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -345,6 +347,116 @@ internal fun OtaTestHostCard(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+    }
+}
+
+@Composable
+internal fun LogsCard(
+    uiState: SettingsUiState,
+    viewModel: SettingsViewModel,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors =
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+            ),
+    ) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            if (uiState.otaChecking || uiState.otaUpdating) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            }
+
+            uiState.otaMessage?.let { message ->
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Button(
+                    onClick = viewModel::checkOtaUpdates,
+                    enabled = !uiState.otaChecking && !uiState.otaUpdating,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text("Check")
+                }
+                FilledTonalButton(
+                    onClick = viewModel::installOtaUpdates,
+                    enabled = !uiState.otaChecking && !uiState.otaUpdating && uiState.otaUpdateAvailable,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text("Update")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+internal fun AppUpdateCard(
+    uiState: SettingsUiState,
+    viewModel: SettingsViewModel,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors =
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+            ),
+    ) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            if (uiState.otaChecking || uiState.otaUpdating) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            }
+
+            uiState.otaMessage?.let { message ->
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Button(
+                    onClick = viewModel::checkOtaUpdates,
+                    enabled = !uiState.otaChecking && !uiState.otaUpdating,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text("Check")
+                }
+                FilledTonalButton(
+                    onClick = viewModel::installOtaUpdates,
+                    enabled = !uiState.otaChecking && !uiState.otaUpdating && uiState.otaUpdateAvailable,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text("Update")
+                }
+            }
         }
     }
 }

@@ -4,6 +4,7 @@
   <CurrentIssues>
     <ID>ComplexCondition:OtaModels.kt$b[0] != 0x7F.toByte() || b[1] != 0x45.toByte() || b[2] != 0x4C.toByte() || b[3] != 0x46.toByte()</ID>
     <ID>CyclomaticComplexMethod:CoreManager.kt$CoreManager$private suspend fun installTarballArtifact( title: String, url: String, dir: File, tmpName: String, onProgress: (Float) -&gt; Unit, urlErrorMessage: String = "$title tarball URL is not configured in Settings", executable: File? = null, ): Result&lt;Unit&gt;</ID>
+    <ID>CyclomaticComplexMethod:CoreManager.kt$CoreManager$suspend fun installAlpine(onProgress: (Float) -&gt; Unit = {}): Result&lt;Unit&gt;</ID>
     <ID>CyclomaticComplexMethod:CoreManager.kt$CoreManager$suspend fun installNuclei(onProgress: (Float) -&gt; Unit = {}): Result&lt;Unit&gt;</ID>
     <ID>CyclomaticComplexMethod:CoreManager.kt$CoreManager$suspend fun startDaemon(): Result&lt;Unit&gt;</ID>
     <ID>CyclomaticComplexMethod:OtaModels.kt$internal fun parseOtaManifest(json: String): OtaManifest?</ID>
@@ -11,6 +12,7 @@
     <ID>EmptyFunctionBlock:OtaModelsTest.kt$OtaModelsTest${ }</ID>
     <ID>FunctionOnlyReturningConstant:RootManager.kt$RootManager$fun canRunRootless(): Boolean</ID>
     <ID>LongMethod:SmartToolBox.kt$SmartToolBox$private fun execute( tool: String, args: String, label: String = tool, timeoutMs: Long = TOOL_TIMEOUT_MS, ): Flow&lt;ToolResult&gt;</ID>
+    <ID>MagicNumber:AppUpdateManager.kt$AppUpdateManager$8192</ID>
     <ID>MagicNumber:ChildProcessManager.kt$ChildProcessManager$9</ID>
     <ID>MagicNumber:CoreManager.kt$CoreManager$100</ID>
     <ID>MagicNumber:CoreManager.kt$CoreManager$20</ID>
@@ -26,23 +28,29 @@
     <ID>MagicNumber:SettingsRepository.kt$SettingsRepository$8080</ID>
     <ID>MagicNumber:SettingsRepository.kt$SettingsRepository$8081</ID>
     <ID>MagicNumber:SettingsRepository.kt$SettingsRepository$8082</ID>
+    <ID>MagicNumber:SmartToolBox.kt$SmartToolBox$10_000L</ID>
     <ID>MagicNumber:SmartToolBox.kt$SmartToolBox$9</ID>
-    <ID>MagicNumber:UpdateChecker.kt$UpdateChecker$10000</ID>
     <ID>MaxLineLength:CoreManager.kt$CoreManager$val url = "https://github.com/projectdiscovery/nuclei/releases/download/v$NUCLEI_VERSION/nuclei_${NUCLEI_VERSION}_linux_${if (isArm64) "arm64" else "arm"}.zip"</ID>
     <ID>MaxLineLength:SmartToolBox.kt$SmartToolBox$fun</ID>
     <ID>MaxLineLength:SmartToolBox.kt$SmartToolBox$output.appendLine("[hint] This feature requires root. Disable rootless mode in Settings or run as root.")</ID>
     <ID>NestedBlockDepth:CoreManager.kt$CoreManager$private fun extractTar( input: InputStream, destination: File, ): Boolean</ID>
     <ID>NestedBlockDepth:NetworkHelper.kt$NetworkHelper$fun getLocalIpv4Addresses(): Set&lt;String&gt;</ID>
+    <ID>NestedBlockDepth:SmartToolBox.kt$SmartToolBox$suspend fun versionOf(binary: String): String?</ID>
+    <ID>NewLineAtEndOfFile:AppUpdateManager.kt$org.indra.android.core.system.AppUpdateManager.kt</ID>
     <ID>NewLineAtEndOfFile:HidCapability.kt$org.indra.android.core.system.HidCapability.kt</ID>
+    <ID>NewLineAtEndOfFile:Logger.kt$org.indra.android.core.system.Logger.kt</ID>
     <ID>ReturnCount:NetworkHelper.kt$NetworkHelper$@Suppress("DEPRECATION") fun getWifiGatewayAddress(): String?</ID>
     <ID>ReturnCount:NetworkHelper.kt$NetworkHelper$@Suppress("DEPRECATION") private fun legacyDhcpGateway(): String?</ID>
     <ID>ReturnCount:NetworkHelper.kt$NetworkHelper$fun getGatewayAddress(): String?</ID>
     <ID>ReturnCount:OtaModels.kt$internal fun parseOtaManifest(json: String): OtaManifest?</ID>
     <ID>ReturnCount:OtaModels.kt$internal fun sniffOtaAbi(file: java.io.File): OtaAbi?</ID>
     <ID>ReturnCount:OtaUpdateManager.kt$OtaUpdateManager$private fun verifyManifestEnvelope(json: String): OtaManifest?</ID>
+    <ID>ReturnCount:SmartToolBox.kt$SmartToolBox$suspend fun versionOf(binary: String): String?</ID>
+    <ID>SwallowedException:AppUpdateManager.kt$AppUpdateManager$e: Exception</ID>
     <ID>SwallowedException:ArsenalRepository.kt$ArsenalRepository$e: Exception</ID>
     <ID>SwallowedException:CrashReporter.kt$CrashReporter$e: Exception</ID>
     <ID>SwallowedException:IndraSystem.kt$IndraSystem$e: Exception</ID>
+    <ID>SwallowedException:Logger.kt$Logger$e: Exception</ID>
     <ID>SwallowedException:OtaModels.kt$e: Exception</ID>
     <ID>SwallowedException:OtaUpdateManager.kt$OtaUpdateManager$e: AtomicMoveNotSupportedException</ID>
     <ID>SwallowedException:OtaUpdateManager.kt$OtaUpdateManager$e: Exception</ID>
@@ -50,28 +58,30 @@
     <ID>SwallowedException:RootManager.kt$RootManager$e: Exception</ID>
     <ID>SwallowedException:RootManager.kt$RootManager$e: PackageManager.NameNotFoundException</ID>
     <ID>SwallowedException:SmartToolBox.kt$ToolResult.Companion$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:AppUpdateManager.kt$AppUpdateManager$e: Exception</ID>
     <ID>TooGenericExceptionCaught:ArsenalRepository.kt$ArsenalRepository$e: Exception</ID>
     <ID>TooGenericExceptionCaught:CoreManager.kt$CoreManager$e: Throwable</ID>
     <ID>TooGenericExceptionCaught:CrashReporter.kt$CrashReporter$e: Exception</ID>
     <ID>TooGenericExceptionCaught:IndraSystem.kt$IndraSystem$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:Logger.kt$Logger$e: Exception</ID>
     <ID>TooGenericExceptionCaught:NetworkHelper.kt$NetworkHelper$e: Exception</ID>
     <ID>TooGenericExceptionCaught:OtaModels.kt$e: Exception</ID>
     <ID>TooGenericExceptionCaught:OtaUpdateManager.kt$OtaUpdateManager$e: Exception</ID>
     <ID>TooGenericExceptionCaught:RootManager.kt$RootManager$e: Exception</ID>
     <ID>TooGenericExceptionCaught:SmartToolBox.kt$SmartTool$e: Exception</ID>
     <ID>TooGenericExceptionCaught:SmartToolBox.kt$SmartTool$e: Throwable</ID>
+    <ID>TooGenericExceptionCaught:SmartToolBox.kt$SmartToolBox$e: Exception</ID>
     <ID>TooGenericExceptionCaught:SmartToolBox.kt$ToolResult.Companion$e: Exception</ID>
-    <ID>TooGenericExceptionCaught:UpdateChecker.kt$UpdateChecker$e: Exception</ID>
     <ID>TooManyFunctions:CoreManager.kt$CoreManager</ID>
     <ID>TooManyFunctions:IndraClient.kt$IndraClient</ID>
+    <ID>TooManyFunctions:Logger.kt$Logger</ID>
     <ID>TooManyFunctions:NetworkHelper.kt$NetworkHelper</ID>
     <ID>TooManyFunctions:OtaUpdateManager.kt$OtaUpdateManager</ID>
     <ID>TooManyFunctions:RootManager.kt$RootManager</ID>
     <ID>TooManyFunctions:SmartToolBox.kt$SmartToolBox</ID>
+    <ID>UnusedParameter:CoreManager.kt$CoreManager$iface: String = "wlan0"</ID>
     <ID>UnusedPrivateProperty:HidCapability.kt$HidCapability$@ApplicationContext private val context: Context</ID>
     <ID>UnusedPrivateProperty:RootManager.kt$RootManager$val socket = java.net.Socket()</ID>
-    <ID>UnusedPrivateProperty:SessionManager.kt$SessionManager.Companion$private const val SESSION_MAGIC = "IndraSession"</ID>
-    <ID>UnusedPrivateProperty:UpdateChecker.kt$UpdateChecker$@ApplicationContext private val context: Context</ID>
     <ID>UseCheckOrError:OtaModels.kt$OtaBinary$throw IllegalStateException("Manifest binary '$name' has no arm64-v8a artifact")</ID>
     <ID>UseCheckOrError:OtaModels.kt$OtaBinary$throw IllegalStateException("Manifest binary '$name' has no armeabi-v7a artifact")</ID>
     <ID>UseCheckOrError:OtaUpdateManager.kt$OtaUpdateManager$throw IllegalStateException( "Health check failed for ${bin.name}: probe returned '$version', expected ${bin.version}", )</ID>

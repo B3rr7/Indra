@@ -205,6 +205,26 @@ fun SettingsScreen(
             }
             item { OtaCard(uiState, viewModel) }
 
+            // ── App Update ───────────────────────────────────────────────
+            item {
+                SettingsSection(
+                    title = "App Update",
+                    icon = Icons.Default.SystemUpdate,
+                    accent = SettingsPalette.Ota,
+                )
+            }
+            item { AppUpdateCard(uiState, viewModel) }
+
+            // ── Logs & Reports ───────────────────────────────────────────
+            item {
+                SettingsSection(
+                    title = "Logs & Reports",
+                    icon = Icons.Default.BugReport,
+                    accent = SettingsPalette.About,
+                )
+            }
+            item { LogsCard(uiState, viewModel) }
+
             if (BuildConfig.DEBUG) {
                 item {
                     SettingsSection(
