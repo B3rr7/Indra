@@ -57,11 +57,11 @@ Both core tarballs produced (~5.4 MB v7, ~5.6 MB arm64). JNI libs built for both
 
 Current core is `armeabi-v7a` only. Most modern devices are 64-bit-only and won't install/run it.
 
-- [ ] **Add `arm64-v8a` to `Application.mk`** (`APP_ABI=armeabi-v7a arm64-v8a`) and rebuild the JNI libs (`libIndraClient.so`, `libIndraCommon.so`).
-- [ ] **Rebuild every bundled tool for arm64** (nmap, hydra, tcpdump, arpspoof, ettercap, hping3, aircrack-ng, network-radar, fusemounts). Add per-ABI output dirs under `jniLibs/arm64-v8a/` and `tools/<name>/`.
-- [ ] **Multi-ABI core tarballs**: `core-vX.Y.Z+android9.arm64-v8a.tar.xz` (+ armeabi-v7a kept for old devices). Update `OtaManifest`/`OtaAbi` to select by `Build.SUPPORTED_ABIS`.
-- [ ] **Update `CoreManager`** to pick the matching tarball from assets/OTA and verify SHA-256 per ABI.
-- [ ] **CI**: build both ABIs in `nightly-build.sh`; publish both.
+- [x] **Add `arm64-v8a` to `Application.mk`** (`APP_ABI=armeabi-v7a arm64-v8a`) and rebuild the JNI libs (`libIndraClient.so`, `libIndraCommon.so`).
+- [x] **Rebuild every bundled tool for arm64** (nmap, hydra, tcpdump, arpspoof, ettercap, hping3, aircrack-ng, network-radar, fusemounts). Add per-ABI output dirs under `jniLibs/arm64-v8a/` and `tools/<name>/`.
+- [x] **Multi-ABI core tarballs**: `core-vX.Y.Z+android9.arm64-v8a.tar.xz` (+ armeabi-v7a kept for old devices). Update `OtaManifest`/`OtaAbi` to select by `Build.SUPPORTED_ABIS`.
+- [x] **Update `CoreManager`** to pick the matching tarball from assets/OTA and verify SHA-256 per ABI.
+- [x] **CI**: build both ABIs in `nightly-build.sh`; publish both.
 - Acceptance: APK installs and daemon starts on a 64-bit-only device (e.g. Pixel); `isAvailable()` returns true for all handlers.
 
 ---
