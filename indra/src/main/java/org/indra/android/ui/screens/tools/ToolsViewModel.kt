@@ -3,6 +3,8 @@ package org.indra.android.ui.screens.tools
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -66,8 +68,10 @@ class ToolsViewModel
         private fun loadPlugins() {
             viewModelScope.launch {
                 _uiState.value = _uiState.value.copy(isLoading = true)
+                val allPlugins = pluginManager.getAllPlugins()
+                val requiresById = allPlugins.associate { it.id to it.requires }
                 val plugins =
-                    pluginManager.getAllPlugins().map { plugin ->
+                    allPlugins.map { plugin ->
                         PluginInfo(
                             id = plugin.id,
                             name = plugin.name,
@@ -81,6 +85,31 @@ class ToolsViewModel
                         )
                     }
                 _uiState.value = _uiState.value.copy(plugins = plugins, isLoading = false)
+
+                val versions =
+                    plugins.map { plugin ->
+                        async {
+                            val v =
+                                if (plugin.available) {
+                                    try {
+                                        toolBox.versionOf(requiresById[plugin.id] ?: plugin.id)
+                                    } catch (e: Exception) {
+                                        null
+                                    }
+                                } else {
+                                    null
+                                }
+                            plugin.id to v
+                        }
+                    }.awaitAll()
+                _uiState.value =
+                    _uiState.value.copy(
+                        plugins =
+                            _uiState.value.plugins.map { p ->
+                                val v = versions.firstOrNull { it.first == p.id }?.second
+                                if (v != null) p.copy(version = v) else p
+                            },
+                    )
             }
         }
     }

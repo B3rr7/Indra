@@ -12,6 +12,7 @@ import org.indra.android.core.client.IndraClient
 import org.tukaani.xz.XZInputStream
 import java.io.File
 import java.io.InputStream
+import java.util.zip.GZIPInputStream
 import java.util.zip.ZipInputStream
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -60,6 +61,11 @@ class CoreManager
             private const val MSF_DIR_NAME = "msf"
             private const val EXPLOITDB_DIR_NAME = "exploitdb"
             private const val BETTERCAP_DIR_NAME = "bettercap"
+
+            private const val ALPINE_VERSION = "3.20.0"
+            private const val ALPINE_DIR_NAME = "alpine"
+            private const val ALPINE_SHA256_ARM64 = "83a79199bf3112c65e62ddf1732b051daf62ed2ddf5a8413c440dc25956116f0"
+            private const val ALPINE_SHA256_ARM = "63bcbb89b60cf22067d6c6100929f421b98ccb0a92d8e162830b7ebddc17e93c"
         }
 
         data class CoreInfo(
@@ -86,6 +92,72 @@ class CoreManager
         fun bettercapPath(): File = File(coreDir, "$BETTERCAP_DIR_NAME/bettercap")
 
         fun isBettercapInstalled(): Boolean = bettercapPath().canExecute()
+
+        fun alpinePath(): File = File(coreDir, ALPINE_DIR_NAME)
+
+        fun isAlpineInstalled(): Boolean = File(alpinePath(), "bin/sh").canExecute()
+
+        /** Downloads + extracts the Alpine minirootfs (musl) for this device's ABI,
+         *  giving the Terminal a real Linux userspace (python3, perl, aircrack-ng,
+         *  ... via `apk add`) so the Python/Perl tools can run natively. */
+        suspend fun installAlpine(onProgress: (Float) -> Unit = {}): Result<Unit> =
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    val isArm64 = android.os.Build.SUPPORTED_ABIS.firstOrNull { it == "arm64-v8a" } == "arm64-v8a"
+                    val abi = if (isArm64) "aarch64" else "armv7"
+                    val expectedSha = if (isArm64) ALPINE_SHA256_ARM64 else ALPINE_SHA256_ARM
+                    val url = "https://dl-cdn.alpinelinux.org/alpine/v3.20/releases/$abi/alpine-minirootfs-$ALPINE_VERSION-$abi.tar.gz"
+
+                    val dir = alpinePath()
+                    if (!dir.exists() && !dir.mkdirs()) error("Cannot create alpine directory")
+                    // Wipe a partial install so extraction starts clean.
+                    dir.listFiles()?.forEach { it.deleteRecursively() }
+
+                    val client = OkHttpClient()
+                    val request = Request.Builder().url(url).build()
+                    client.newCall(request).execute().use { response ->
+                        if (!response.isSuccessful) error("Download failed: ${response.code}")
+                        val body = response.body ?: error("Empty response")
+                        val total = body.contentLength()
+                        val tmp = File(coreDir, "alpine.tar.gz.tmp")
+                        body.byteStream().use { input ->
+                            tmp.outputStream().use { out ->
+                                val buf = ByteArray(8192)
+                                var read: Int
+                                var downloaded = 0L
+                                while (input.read(buf).also { read = it } != -1) {
+                                    out.write(buf, 0, read)
+                                    downloaded += read
+                                    if (total > 0) onProgress(downloaded.toFloat() / total.toFloat())
+                                }
+                            }
+                        }
+                        // Verify SHA-256
+                        val digest = java.security.MessageDigest.getInstance("SHA-256")
+                        tmp.inputStream().use { s ->
+                            val b = ByteArray(8192)
+                            var r: Int
+                            while (s.read(b).also { r = it } != -1) digest.update(b, 0, r)
+                        }
+                        val actual = digest.digest().joinToString("") { "%02x".format(it) }
+                        if (!actual.equals(expectedSha, ignoreCase = true)) {
+                            tmp.delete()
+                            error("SHA-256 mismatch: $actual != $expectedSha")
+                        }
+                        // Extract
+                        val hasContent =
+                            tmp.inputStream().use { raw ->
+                                GZIPInputStream(raw).use { gz ->
+                                    extractTar(gz, dir)
+                                }
+                            }
+                        if (!hasContent) error("Alpine archive is empty or unreadable")
+                        tmp.delete()
+                    }
+                    File(dir, "bin/sh").setExecutable(true, false)
+                    Logger.i("Alpine $ALPINE_VERSION installed to ${dir.absolutePath}")
+                }
+            }
 
         /** True when the kernel/chipset can put [iface] into monitor mode (needed for
          *  airodump-ng-style capture). Stock Android rarely supports this; users with

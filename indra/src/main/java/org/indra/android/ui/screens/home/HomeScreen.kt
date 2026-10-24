@@ -497,6 +497,15 @@ fun ModernToolCard(
                     overflow = TextOverflow.Ellipsis,
                     lineHeight = MaterialTheme.typography.bodySmall.lineHeight,
                 )
+                plugin.version?.let { version ->
+                    Text(
+                        text = version,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
         }
     }

@@ -29,6 +29,7 @@ data class PluginInfo(
     val name: String,
     val description: String,
     val available: Boolean = true,
+    val version: String? = null,
 )
 
 @HiltViewModel

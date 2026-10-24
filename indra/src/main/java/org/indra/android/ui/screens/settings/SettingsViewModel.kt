@@ -36,7 +36,10 @@ data class SettingsUiState(
     val otaManifestUrl: String = "",
     val otaAllowTestHosts: Boolean = false,
     val toolStatus: List<ToolStatus> = emptyList(),
-    val rootlessMode: Boolean = false
+    val rootlessMode: Boolean = false,
+    val alpineInstalled: Boolean = false,
+    val alpineBusy: Boolean = false,
+    val alpineMessage: String? = null,
 )
 
 /** Port fields the daemon tools read from [SettingsRepository]. */
@@ -80,6 +83,7 @@ class SettingsViewModel
                         otaManifestUrl = settings.otaManifestUrl,
                         otaAllowTestHosts = settings.otaAllowTestHosts,
                         rootlessMode = settings.rootlessMode,
+                        alpineInstalled = coreManager.isAlpineInstalled(),
                         toolStatus = toolBox.getAllTools().map { ToolStatus(it.name, it.isAvailable()) },
                     )
             }
@@ -116,6 +120,27 @@ class SettingsViewModel
                         _uiState.value = _uiState.value.copy(coreMessage = "Install failed: ${error.message}")
                     }
                 refreshCoreState()
+            }
+        }
+
+        fun installAlpine() {
+            if (_uiState.value.alpineBusy) return
+            viewModelScope.launch {
+                _uiState.value = _uiState.value.copy(alpineBusy = true, alpineMessage = "Installing Alpine Linux…")
+                coreManager
+                    .installAlpine { p ->
+                        _uiState.value = _uiState.value.copy(alpineMessage = "Installing Alpine Linux… ${(p * 100).toInt()}%")
+                    }.onSuccess {
+                        _uiState.value =
+                            _uiState.value.copy(
+                                alpineMessage = "Alpine installed",
+                                alpineInstalled = true,
+                            )
+                    }.onFailure { error ->
+                        _uiState.value = _uiState.value.copy(alpineMessage = "Install failed: ${error.message}")
+                    }
+                _uiState.value = _uiState.value.copy(alpineBusy = false)
+                loadSettings()
             }
         }
 

@@ -170,6 +170,8 @@ fun SettingsScreen(
             }
             item { NativeCoreCard(uiState, viewModel) }
 
+            item { AlpineCard(uiState, viewModel) }
+
             item {
                 SettingsCard {
                     SettingsSwitchItem(

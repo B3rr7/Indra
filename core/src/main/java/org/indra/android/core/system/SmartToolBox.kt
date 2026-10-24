@@ -7,6 +7,7 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.last
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
@@ -25,6 +26,7 @@ class SmartToolBox
         @ApplicationContext private val context: Context,
         private val client: IndraClient,
         private val settings: SettingsRepository,
+        private val coreManager: CoreManager,
     ) {
         companion object {
             /** Tools that never emit ChildEnd (long-running daemons) are bounded by this. */
@@ -278,6 +280,19 @@ class SmartToolBox
             timeoutMs: Long = TOOL_TIMEOUT_MS,
         ): Flow<ToolResult> = execute("raw", command, label, timeoutMs)
 
+        /** Runs [command] inside the Alpine chroot (real Linux userspace) via the
+         *  daemon's raw handler. Requires [CoreManager.isAlpineInstalled]. */
+        fun chroot(
+            command: String,
+            label: String = "alpine",
+            timeoutMs: Long = TOOL_TIMEOUT_MS,
+        ): Flow<ToolResult> =
+            rawCommand(
+                label,
+                "chroot ${shellQuote(coreManager.alpinePath().absolutePath)} /bin/sh -c ${shellQuote(command)}",
+                timeoutMs,
+            )
+
         /**
          * Public wrapper running an arbitrary command through the daemon's raw handler.
          * Used by OTA version probes (`<binary> --version`) outside tool screens.
@@ -287,6 +302,37 @@ class SmartToolBox
             command: String,
             timeoutMs: Long = TOOL_TIMEOUT_MS,
         ): Flow<ToolResult> = execute("raw", command, label, timeoutMs)
+
+        /**
+         * Best-effort version string for a tool binary. Tries a handful of common
+         * version flags and returns the first non-blank line of the first one that
+         * produces output, or null when nothing responds. Used by the Tools screen
+         * to annotate each card.
+         */
+        suspend fun versionOf(binary: String): String? {
+            val versionRegex = Regex("\\d+\\.\\d+")
+            for (flag in listOf("--version", "-V", "-v", "-version", "--help", "-h")) {
+                try {
+                    val result =
+                        rawProbe("version", "${binary(binary)} $flag", 10_000L).last()
+                    if (result.success) {
+                        val line =
+                            result.rawOutput.lineSequence()
+                                .firstOrNull { versionRegex.containsMatchIn(it) }
+                                ?.trim()
+                        if (!line.isNullOrBlank()) return line
+                    }
+                    val line =
+                        result.rawOutput.lineSequence()
+                            .firstOrNull { versionRegex.containsMatchIn(it) }
+                            ?.trim()
+                    if (!line.isNullOrBlank()) return line
+                } catch (e: Exception) {
+                    Logger.w("versionOf($binary, $flag) failed: ${e.message}")
+                }
+            }
+            return null
+        }
 
         private fun execute(
             tool: String,
