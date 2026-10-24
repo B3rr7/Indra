@@ -21,6 +21,22 @@ class NetworkRepository
         private val _targets = MutableStateFlow<List<Target>>(emptyList())
         val targets: Flow<List<Target>> = _targets.asStateFlow()
 
+        private val _discoveredHosts = MutableStateFlow<List<String>>(emptyList())
+        val discoveredHosts: Flow<List<String>> = _discoveredHosts.asStateFlow()
+
+        fun addDiscoveredHost(host: String) {
+            val h = host.trim()
+            if (h.isBlank()) return
+            if (h in _discoveredHosts.value) return
+            _discoveredHosts.value = _discoveredHosts.value + h
+        }
+
+        fun clearDiscoveredHosts() {
+            _discoveredHosts.value = emptyList()
+        }
+
+        fun discoveredHostsSnapshot(): List<String> = _discoveredHosts.value
+
         fun refreshNetworkStatus() {
             _networkStatus.value =
                 Network(

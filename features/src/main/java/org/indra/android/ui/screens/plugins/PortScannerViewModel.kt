@@ -8,7 +8,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
+import org.indra.android.core.system.NetworkHelper
 import org.indra.android.core.system.SmartToolBox
+import org.indra.android.data.repository.NetworkRepository
 import javax.inject.Inject
 
 data class PortScannerUiState(
@@ -17,6 +19,7 @@ data class PortScannerUiState(
     val isLoading: Boolean = false,
     val results: List<PortScanResult> = emptyList(),
     val error: String? = null,
+    val suggestions: List<String> = emptyList(),
 )
 
 @HiltViewModel
@@ -24,9 +27,26 @@ class PortScannerViewModel
     @Inject
     constructor(
         private val toolBox: SmartToolBox,
+        private val networkHelper: NetworkHelper,
+        private val networkRepository: NetworkRepository,
     ) : ViewModel() {
         private val _uiState = MutableStateFlow(PortScannerUiState())
         val uiState: StateFlow<PortScannerUiState> = _uiState.asStateFlow()
+
+        init {
+            refreshSuggestions()
+            viewModelScope.launch {
+                networkRepository.discoveredHosts.collect { refreshSuggestions() }
+            }
+        }
+
+        private fun refreshSuggestions() {
+            val list = linkedSetOf<String>()
+            networkHelper.getLocalIpAddress()?.let { list += it }
+            networkHelper.getGatewayAddress()?.let { list += it }
+            list += networkRepository.discoveredHostsSnapshot()
+            _uiState.value = _uiState.value.copy(suggestions = list.toList())
+        }
 
         fun updateTarget(target: String) {
             _uiState.value = _uiState.value.copy(target = target)

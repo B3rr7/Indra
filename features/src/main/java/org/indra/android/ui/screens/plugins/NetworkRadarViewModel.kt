@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.indra.android.core.system.SmartToolBox
+import org.indra.android.data.repository.NetworkRepository
 import javax.inject.Inject
 
 data class RadarHost(
@@ -58,6 +59,7 @@ class NetworkRadarViewModel
     @Inject
     constructor(
         private val toolBox: SmartToolBox,
+        private val networkRepository: NetworkRepository,
     ) : ViewModel() {
         private val _uiState = MutableStateFlow(NetworkRadarUiState())
         val uiState: StateFlow<NetworkRadarUiState> = _uiState.asStateFlow()
@@ -125,6 +127,7 @@ class NetworkRadarViewModel
                     }
                 }
             _uiState.value = _uiState.value.copy(hosts = updated.sortedBy { it.ip })
+            if (action != "HOST_DEL") networkRepository.addDiscoveredHost(ip)
         }
 
         fun stop() {
