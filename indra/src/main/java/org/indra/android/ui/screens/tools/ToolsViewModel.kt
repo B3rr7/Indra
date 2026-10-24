@@ -79,6 +79,7 @@ class ToolsViewModel
                             available =
                                 toolBox.getTool(plugin.requires)?.isAvailable() == true &&
                                     (plugin.id !in listOf("vuln_scanner", "web_tester") || coreManager.isNucleiInstalled()) &&
+                                    (plugin.id != "gobuster" || coreManager.isGobusterInstalled()) &&
                                     (plugin.id != "exploit_finder" || coreManager.isMsfInstalled()) &&
                                     (plugin.id != "iptables" || coreManager.isIptablesSupported()) &&
                                     (!plugin.requiresRoot || !settings.rootlessMode),

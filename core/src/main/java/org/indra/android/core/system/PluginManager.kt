@@ -145,6 +145,15 @@ class PluginManager
             )
             registerPlugin(
                 Plugin(
+                    id = "gobuster",
+                    name = "Gobuster",
+                    description = "Directory/file brute-forcer",
+                    targetTypes = setOf("endpoint"),
+                    requires = "gobuster",
+                ),
+            )
+            registerPlugin(
+                Plugin(
                     id = "terminal",
                     name = "Terminal",
                     description = "Run shell commands on the device",

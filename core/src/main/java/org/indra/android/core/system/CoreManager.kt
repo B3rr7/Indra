@@ -80,6 +80,10 @@ class CoreManager
 
         fun isNucleiInstalled(): Boolean = nucleiPath().canExecute()
 
+        fun gobusterPath(): File = File(coreDir, "tools/gobuster/gobuster")
+
+        fun isGobusterInstalled(): Boolean = gobusterPath().canExecute()
+
         fun msfPath(): File = File(coreDir, MSF_DIR_NAME)
 
         fun isMsfInstalled(): Boolean = File(msfPath(), "msfconsole").canExecute() || File(msfPath(), "msfconsole").exists()
@@ -344,6 +348,35 @@ class CoreManager
                     }
                     target.setExecutable(true)
                     Logger.i("Nuclei $NUCLEI_VERSION installed to ${target.absolutePath}")
+                }
+            }
+
+        suspend fun installGobuster(url: String, onProgress: (Float) -> Unit = {}): Result<Unit> =
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    if (url.isBlank()) error("Gobuster binary URL is not configured in Settings")
+                    val targetDir = File(coreDir, "tools/gobuster")
+                    if (!targetDir.exists() && !targetDir.mkdirs()) error("Cannot create gobuster dir")
+                    val target = gobusterPath()
+                    OkHttpClient().newCall(Request.Builder().url(url).build()).execute().use { response ->
+                        if (!response.isSuccessful) error("Download failed: ${response.code}")
+                        val body = response.body ?: error("Empty response")
+                        val total = body.contentLength()
+                        body.byteStream().use { input ->
+                            target.outputStream().use { out ->
+                                val buf = ByteArray(8192)
+                                var read: Int
+                                var downloaded = 0L
+                                while (input.read(buf).also { read = it } != -1) {
+                                    out.write(buf, 0, read)
+                                    downloaded += read
+                                    if (total > 0) onProgress(downloaded.toFloat() / total.toFloat())
+                                }
+                            }
+                        }
+                    }
+                    target.setExecutable(true)
+                    Logger.i("Gobuster installed to ${target.absolutePath}")
                 }
             }
 

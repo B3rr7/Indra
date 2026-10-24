@@ -22,6 +22,7 @@ import org.indra.android.ui.screens.plugins.TopologyScreen
 import org.indra.android.ui.screens.plugins.CredentialTesterScreen
 import org.indra.android.ui.screens.plugins.ExploitFinderScreen
 import org.indra.android.ui.screens.plugins.GeoMacScreen
+import org.indra.android.ui.screens.plugins.GobusterScreen
 import org.indra.android.ui.screens.plugins.HandshakesScreen
 import org.indra.android.ui.screens.plugins.InspectorScreen
 import org.indra.android.ui.screens.plugins.IptablesScreen
@@ -81,6 +82,8 @@ sealed class Screen(
     object VulnScanner : Screen("vuln_scanner")
 
     object WebTester : Screen("web_tester")
+
+    object Gobuster : Screen("gobuster")
 
     object CredentialTester : Screen("credential_tester")
 
@@ -152,6 +155,7 @@ fun IndraNavHost(
                 "wifi_audit" -> navController.navigate(Screen.WifiAudit.route)
                 "vuln_scanner" -> navController.navigate(Screen.VulnScanner.route)
                 "web_tester" -> navController.navigate(Screen.WebTester.route)
+                "gobuster" -> navController.navigate(Screen.Gobuster.route)
                 "credential_tester" -> navController.navigate(Screen.CredentialTester.route)
                 "terminal" -> navController.navigate(Screen.Terminal.route)
                 "mac_changer" -> navController.navigate(Screen.MacChanger.route)
@@ -235,6 +239,9 @@ fun IndraNavHost(
         }
         composable(Screen.WebTester.route) {
             WebTesterScreen(onNavigateBack = { navController.popBackStack() })
+        }
+        composable(Screen.Gobuster.route) {
+            GobusterScreen(onNavigateBack = { navController.popBackStack() })
         }
         composable(Screen.CredentialTester.route) {
             CredentialTesterScreen(onNavigateBack = { navController.popBackStack() })

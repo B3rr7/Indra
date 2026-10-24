@@ -49,7 +49,7 @@ class ToolRegistryTest {
             setOf(
                 "masscan", "nmap", "arpspoof", "network-radar", "tcpdump",
                 "shell", "hydra", "hping3", "aircrack-ng", "nuclei",
-                "reaver", "bettercap", "raw",
+                "reaver", "bettercap", "gobuster", "raw",
             )
         val registered = SmartToolBox.TOOL_SPECS.map { it.name }.toSet()
         val missing = gatedKeys - registered

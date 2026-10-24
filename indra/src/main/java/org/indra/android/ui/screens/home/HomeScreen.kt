@@ -532,6 +532,7 @@ fun getToolIcon(id: String): ImageVector =
         "wifi_audit" -> Icons.Default.Wifi
         "vuln_scanner" -> Icons.Default.Security
         "web_tester" -> Icons.Default.Language
+        "gobuster" -> Icons.Default.FolderOpen
         "credential_tester" -> Icons.Default.Key
         "network_radar" -> Icons.Default.WifiTethering
         "packet_capture" -> Icons.Default.Cable
@@ -575,6 +576,7 @@ fun getToolColor(id: String): Color {
         "wifi_audit" -> Color(0xFF00E676) // green
         "vuln_scanner" -> Color(0xFFC6FF00) // lime
         "web_tester" -> Color(0xFF1DE9B6) // teal
+        "gobuster" -> Color(0xFFFFAB00) // amber
         "credential_tester" -> Color(0xFFFFD600) // yellow
         "network_radar" -> Color(0xFF00BFA5) // sea green
         "packet_capture" -> Color(0xFF536DFE) // medium indigo

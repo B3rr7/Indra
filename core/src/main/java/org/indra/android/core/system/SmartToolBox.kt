@@ -86,6 +86,7 @@ class SmartToolBox
                     ToolSpec("reaver", "raw", "WPS PIN cracker", "reaver"),
                     ToolSpec("hping3", "raw", "Packet crafter", "hping3"),
                     ToolSpec("nuclei", "raw", "Vulnerability scanner", "nuclei"),
+                    ToolSpec("gobuster", "raw", "Directory/file brute-forcer", "gobuster"),
                     ToolSpec("bettercap", "raw", "Network attack framework", "bettercap"),
                     ToolSpec("arpspoof", "raw", "ARP spoofer", "arpspoof"),
                     ToolSpec("tcpdump", "raw", "Packet capture", "tcpdump"),
@@ -237,6 +238,9 @@ class SmartToolBox
 
         fun aircrack(args: String): Flow<ToolResult> =
             rawCommand("aircrack", "${binary("aircrack-ng")} $args", timeoutMs = LONG_RUNNING_TIMEOUT_MS)
+
+        fun gobuster(args: String): Flow<ToolResult> =
+            rawCommand("gobuster", "${binary("gobuster")} $args", timeoutMs = LONG_RUNNING_TIMEOUT_MS)
 
         fun hping3(
             target: String,

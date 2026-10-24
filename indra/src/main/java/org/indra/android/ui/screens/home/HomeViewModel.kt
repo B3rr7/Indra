@@ -54,6 +54,7 @@ class HomeViewModel
             if (toolBox.getTool(plugin.requires)?.isAvailable() != true) return false
             // Optional components that must be installed separately.
             if (plugin.id == "vuln_scanner" || plugin.id == "web_tester") return coreManager.isNucleiInstalled()
+            if (plugin.id == "gobuster") return coreManager.isGobusterInstalled()
             if (plugin.id == "exploit_finder") return coreManager.isMsfInstalled()
             // Responder and Wifite are Python-based and infeasible on Android
             // without a bundled interpreter; keep the cards dimmed until a
