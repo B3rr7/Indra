@@ -74,7 +74,7 @@ internal fun RootAccessCard(
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Memory,
+                        imageVector = Icons.Default.AdminPanelSettings,
                         contentDescription = null,
                         modifier = Modifier.size(21.dp),
                         tint = SettingsPalette.Core,
@@ -85,65 +85,28 @@ internal fun RootAccessCard(
                     verticalArrangement = Arrangement.spacedBy(2.dp),
                 ) {
                     Text(
-                        text = "indra daemon",
+                        text = "Root access",
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.Medium,
                     )
                     Text(
-                        text = "Installed version ${uiState.coreVersion}",
+                        text = uiState.rootType,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 StatusPill(
-                    text = if (uiState.daemonRunning) "Running" else "Stopped",
-                    color = if (uiState.daemonRunning) SettingsPalette.Running else SettingsPalette.Stopped,
+                    text = if (uiState.isRooted) "Granted" else "Not granted",
+                    color = if (uiState.isRooted) SettingsPalette.Running else SettingsPalette.Stopped,
                 )
             }
 
-            if (uiState.coreBusy) {
-                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-            }
-
-            uiState.coreMessage?.let { message ->
-                Text(
-                    text = message,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                FilledTonalButton(
-                    onClick = viewModel::installCore,
-                    enabled = !uiState.coreBusy,
-                    modifier = Modifier.weight(1f),
+            if (!uiState.isRooted) {
+                Button(
+                    onClick = viewModel::requestRootAccess,
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text("Install")
-                }
-                if (uiState.daemonRunning) {
-                    OutlinedButton(
-                        onClick = viewModel::stopDaemon,
-                        enabled = !uiState.coreBusy,
-                        modifier = Modifier.weight(1f),
-                        colors =
-                            ButtonDefaults.outlinedButtonColors(
-                                contentColor = SettingsPalette.Stopped,
-                            ),
-                    ) {
-                        Text("Stop")
-                    }
-                } else {
-                    Button(
-                        onClick = viewModel::startDaemon,
-                        enabled = !uiState.coreBusy,
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        Text("Start")
-                    }
+                    Text("Request root access")
                 }
             }
         }
