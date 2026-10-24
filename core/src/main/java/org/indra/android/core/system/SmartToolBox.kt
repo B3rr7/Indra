@@ -125,12 +125,26 @@ class SmartToolBox
             withOs: Boolean = false,
         ): Flow<ToolResult> = execute("nmap", "-sV ${if (withOs) "-O " else ""}-v -oX - -p $ports $target")
 
+        /**
+         * Wordlist login crack. [port] is optional — hydra's `service target`
+         * two-arg form has no way to carry a port, so it is passed via `-s`.
+         */
         fun hydra(
             target: String,
             service: String,
             user: String,
             passList: String = defaultWordlist(),
-        ): Flow<ToolResult> = rawCommand("hydra", "${binary("hydra")} -V -l $user -P $passList $target $service")
+            port: String? = null,
+        ): Flow<ToolResult> =
+            rawCommand(
+                "hydra",
+                buildString {
+                    append("${binary("hydra")} -V -l $user")
+                    port?.trim()?.takeIf { it.isNotEmpty() }?.let { append(" -s $it") }
+                    append(" -P $passList $target $service")
+                },
+                timeoutMs = LONG_RUNNING_TIMEOUT_MS,
+            )
 
         /** Tests a single credential pair (`-p`) instead of a whole wordlist. */
         fun hydraCredential(
@@ -138,7 +152,17 @@ class SmartToolBox
             service: String,
             user: String,
             password: String,
-        ): Flow<ToolResult> = rawCommand("hydra", "${binary("hydra")} -V -l $user -p $password $target $service")
+            port: String? = null,
+        ): Flow<ToolResult> =
+            rawCommand(
+                "hydra",
+                buildString {
+                    append("${binary("hydra")} -V -l $user")
+                    port?.trim()?.takeIf { it.isNotEmpty() }?.let { append(" -s $it") }
+                    append(" -p $password $target $service")
+                },
+                timeoutMs = LONG_RUNNING_TIMEOUT_MS,
+            )
 
         /** nmap's traceroute: its hop table is the only traceroute available on-device. */
         fun traceroute(target: String): Flow<ToolResult> = rawCommand("traceroute", "${binary("nmap")} -sn --traceroute -v -n $target")

@@ -32,7 +32,7 @@ private val HOST_ACTIONS = setOf("HOST_ADD", "HOST_EDIT", "HOST_DEL")
  * Plain string handling is used instead of a regex: Android's ICU regex rejects
  * this line format (unescaped `}` after a group).
  */
-internal fun parseHostLine(line: String): Pair<String, Map<String, String>>? {
+fun parseHostLine(line: String): Pair<String, Map<String, String>>? {
     val action = line.substringBefore(' ').trim()
     if (action !in HOST_ACTIONS) return null
     val bodyStart = line.indexOf('{')

@@ -8,12 +8,12 @@ plugins {
 
 android {
     namespace 'org.indra.android'
-    compileSdk 34
+    compileSdk 35
 
     defaultConfig {
         applicationId "org.indra.android"
         minSdk 26
-        targetSdk 34
+        targetSdk 35
         versionCode 5
         versionName "2.0.0"
 

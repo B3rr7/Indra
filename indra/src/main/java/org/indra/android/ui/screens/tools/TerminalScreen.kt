@@ -111,6 +111,19 @@ fun TerminalScreen(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                // Quick-insert chips
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    listOf("ip addr", "iw dev", "ps", "ls").forEach { cmd ->
+                        AssistChip(
+                            onClick = { viewModel.updateInput(cmd) },
+                            label = { Text(cmd, fontSize = 11.sp) },
+                            enabled = !uiState.isRunning
+                        )
+                    }
+                }
                 OutlinedTextField(
                     value = uiState.input,
                     onValueChange = viewModel::updateInput,

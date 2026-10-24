@@ -1,6 +1,8 @@
 package org.indra.android.ui.screens.plugins
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
@@ -34,7 +36,10 @@ fun LoginCrackerScreen(
                 Modifier
                     .fillMaxSize()
                     .padding(paddingValues)
-                    .padding(16.dp),
+                    .padding(16.dp)
+                    // hydra output is long — the whole form must be scrollable so
+                    // results after the initial banner are reachable
+                    .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             OutlinedTextField(
@@ -50,6 +55,15 @@ fun LoginCrackerScreen(
                 onValueChange = { viewModel.updateService(it) },
                 label = { Text("Service") },
                 supportingText = { Text("ssh, ftp, telnet, etc.") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+            )
+
+            OutlinedTextField(
+                value = uiState.port,
+                onValueChange = { viewModel.updatePort(it) },
+                label = { Text("Port (optional)") },
+                supportingText = { Text("Leave blank for the service's default port") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
             )
@@ -107,6 +121,7 @@ fun LoginCrackerScreen(
 data class LoginCrackerUiState(
     val target: String = "",
     val service: String = "",
+    val port: String = "",
     val username: String = "",
     val isLoading: Boolean = false,
     val result: String = "",

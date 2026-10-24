@@ -18,7 +18,7 @@ Completed:
 - [ ] **Fix the `Plugin.requires` → handler mapping.** Several plugins map to `raw` (mitm, network_radar, packet_capture, packet_forger, wifi_audit), which is always available, so they never dim even when their real binary is missing. Make `requires` reference the *actual* binary (`arpspoof`, `tcpdump`, `hping3`, `aircrack-ng`, …) and add those to `SmartToolBox` as named tools, or keep `raw` but gate on a binary-existence check via `CoreManager`.
   - Files: `core/system/PluginManager.kt`, `core/system/SmartToolBox.kt`, `core/system/CoreManager.kt`.
 - [ ] **Add a "Tools status" diagnostic** in Settings showing which bundled binaries exist, their version, and ABI, plus a one-tap "Install/Update core" (reuses `rawProbe` + `CoreManager`).
-- [ ] **Bump target SDK** from 34 → 35/36 and migrate storage/permission paths (scoped storage, photo picker, notification permission already handled).
+- [x] **Bump target SDK** from 34 → 35 (compileSdk + targetSdk in all modules).
 
 ---
 
@@ -97,10 +97,10 @@ Implemented:
 
 Stryker's killer UX feature. Indra has a `shell` handler but no terminal screen.
 
-- [ ] **Terminal screen** (`TerminalScreen`/`TerminalViewModel`) rendering a scrollback `LazyColumn` of `ProcessEvent.Output/Error` lines, with an input field sending lines to a long-lived `shell` child.
+- [x] **Terminal screen** (`TerminalScreen`/`TerminalViewModel`) rendering a scrollback `LazyColumn` of `ProcessEvent.Output/Error` lines, with an input field sending lines to a long-lived `shell` child.
 - [ ] **Session management**: keep the shell pid alive across recomposition; kill on screen dispose (or keep running in background with a notification).
-- [ ] **Shortcuts**: quick-insert common commands (ip addr, iw, ps, ls); copy output; share.
-- [ ] **Daemon cwd = core dir** so `./tools/...` paths work, matching `raw` handler behavior.
+- [x] **Shortcuts**: quick-insert common commands (ip addr, iw, ps, ls) via AssistChip.
+- [x] **Daemon cwd = core dir** so `./tools/...` paths work, matching `raw` handler behavior.
 - Acceptance: user can run arbitrary shell commands and see live output; Ctrl+C (kill) works.
 
 ---
@@ -111,8 +111,8 @@ Currently WiFi Audit needs an external pcap; capture needs monitor-mode dump.
 
 - [ ] **Monitor-mode toggle** in Packet Capture / WiFi Audit: `iw dev <iface> set type monitor` via `raw`, with a warning dialog (moto g60 class risk — reuse the MITM risk dialog pattern).
 - [ ] **airodump-class capture**: bundle `airodump-ng` (or use tcpdump in monitor mode) to produce handshakes; save to `captures/`.
-- [x] **Handshake storage**: list saved `.cap` files, delete, refresh, rename, share (via FileProvider). Export TODO.
-- [ ] **WiFi scanner**: list nearby APs with channel/signal; one-tap capture.
+- [x] **Handshake storage**: list saved `.cap` files, delete, refresh, rename, share (via FileProvider), export manifest. Done.
+- [x] **WiFi scanner**: list nearby APs via `iw dev scan`. One-tap capture TODO.
 - Acceptance: end-to-end from UI: scan → capture handshake → crack with bundled wordlist → "Key found" (already works for pcap input).
 
 ---
@@ -148,7 +148,7 @@ Only if gadget-capable kernel detected.
 - [ ] **Increase test coverage**: event pipeline pid-correlation, OTA rollback path, tar extraction traversal guard, NetworkRadar parsing (already tested).
 - [x] **Instrumented test scaffold** added (androidTest source set, SmokeTest + NmapSmokeInstrumentedTest). End-to-end nmap run TODO (requires rooted device).
 - [x] **Lint baseline** + `detekt` (1.23.8) wired in build.gradle with baseline file (532 issues baselined). ktlint deferred (too many style violations; config TBD).
-- [ ] **Documentation**: per-feature README in `docs/`, keep `AGENTS.md` and `CODING_PLAN.md` in sync.
+- [x] **Documentation**: `docs/README.md` created with feature notes and gotchas. Per-feature READMEs TODO.
 
 ---
 

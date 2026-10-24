@@ -51,6 +51,14 @@ fun CredentialTesterScreen(
             )
 
             OutlinedTextField(
+                value = uiState.port,
+                onValueChange = { viewModel.updatePort(it) },
+                label = { Text("Port (optional, default 22)") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+            )
+
+            OutlinedTextField(
                 value = uiState.username,
                 onValueChange = { viewModel.updateUsername(it) },
                 label = { Text("Username") },
@@ -129,6 +137,7 @@ fun CredentialTesterScreen(
 
 data class CredentialTesterUiState(
     val target: String = "",
+    val port: String = "",
     val username: String = "",
     val password: String = "",
     val isLoading: Boolean = false,

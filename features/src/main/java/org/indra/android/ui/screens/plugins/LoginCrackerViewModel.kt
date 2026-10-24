@@ -27,6 +27,10 @@ class LoginCrackerViewModel
             _uiState.value = _uiState.value.copy(service = service)
         }
 
+        fun updatePort(port: String) {
+            _uiState.value = _uiState.value.copy(port = port)
+        }
+
         fun updateUsername(username: String) {
             _uiState.value = _uiState.value.copy(username = username)
         }
@@ -50,7 +54,12 @@ class LoginCrackerViewModel
                 var failure: String? = null
 
                 toolBox
-                    .hydra(state.target.trim(), state.service.trim(), state.username.trim())
+                    .hydra(
+                        state.target.trim(),
+                        state.service.trim(),
+                        state.username.trim(),
+                        port = state.port.trim().takeIf { it.isNotBlank() },
+                    )
                     .collect { result ->
                         val line = result.rawOutput
                         if (result.status == "running" && line.isNotBlank() && !line.startsWith("Executing:")) {

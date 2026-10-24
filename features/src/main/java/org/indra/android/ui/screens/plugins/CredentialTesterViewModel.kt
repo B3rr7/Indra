@@ -30,6 +30,10 @@ class CredentialTesterViewModel
             _uiState.value = _uiState.value.copy(target = target)
         }
 
+        fun updatePort(port: String) {
+            _uiState.value = _uiState.value.copy(port = port)
+        }
+
         fun updateUsername(username: String) {
             _uiState.value = _uiState.value.copy(username = username)
         }
@@ -70,7 +74,7 @@ class CredentialTesterViewModel
                 var failure: String? = null
                 var found = false
 
-                toolBox.hydraCredential(target, "ssh", user, password).collect { result ->
+                toolBox.hydraCredential(target, "ssh", user, password, port = state.port.trim().takeIf { it.isNotBlank() }).collect { result ->
                     val line = result.rawOutput
                     if (result.status == "running" && line.isNotBlank() && !line.startsWith("Executing:")) {
                         output.appendLine(line)

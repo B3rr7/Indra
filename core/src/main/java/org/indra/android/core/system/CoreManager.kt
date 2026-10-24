@@ -28,7 +28,7 @@ class CoreManager
     ) {
         companion object {
             /** Version written to the core's VERSION file after a successful install. */
-            const val CORE_VERSION = "1.0.1"
+            const val CORE_VERSION = "1.0.2"
 
             /** Core archive bundled in assets (produced by `indra/jni/build.sh cores`). */
             private const val CORE_ASSET_PREFIX = "core-"
