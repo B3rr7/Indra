@@ -144,4 +144,5 @@ data class CredentialTesterUiState(
     val result: String = "",
     val success: Boolean = false,
     val error: String? = null,
+    val suggestions: List<String> = emptyList(),
 )

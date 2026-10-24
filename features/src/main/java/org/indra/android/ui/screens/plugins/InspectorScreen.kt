@@ -10,6 +10,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -48,6 +49,14 @@ fun InspectorScreen(
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
             )
+
+            if (uiState.suggestions.isNotEmpty()) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    uiState.suggestions.forEach { s ->
+                        AssistChip(onClick = { viewModel.updateTarget(s) }, label = { Text(s, fontSize = 12.sp) })
+                    }
+                }
+            }
 
             Button(
                 onClick = { viewModel.inspect() },

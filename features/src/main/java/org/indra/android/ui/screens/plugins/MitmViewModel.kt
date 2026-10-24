@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.indra.android.core.system.NetworkHelper
 import org.indra.android.core.system.SmartToolBox
+import org.indra.android.data.repository.NetworkRepository
 import javax.inject.Inject
 
 data class MitmUiState(
@@ -19,6 +20,7 @@ data class MitmUiState(
     val isActive: Boolean = false,
     val log: List<String> = emptyList(),
     val error: String? = null,
+    val suggestions: List<String> = emptyList(),
 )
 
 @HiltViewModel
@@ -27,12 +29,26 @@ class MitmViewModel
     constructor(
         private val networkHelper: NetworkHelper,
         private val toolBox: SmartToolBox,
+        private val networkRepository: NetworkRepository,
     ) : ViewModel() {
         private val _uiState =
             MutableStateFlow(
                 MitmUiState(gateway = networkHelper.getWifiGatewayAddress().orEmpty()),
             )
         val uiState: StateFlow<MitmUiState> = _uiState.asStateFlow()
+
+        init {
+            refreshSuggestions()
+            viewModelScope.launch { networkRepository.discoveredHosts.collect { refreshSuggestions() } }
+        }
+
+        private fun refreshSuggestions() {
+            val list = linkedSetOf<String>()
+            networkHelper.getLocalIpAddress()?.let { list += it }
+            networkHelper.getGatewayAddress()?.let { list += it }
+            list += networkRepository.discoveredHostsSnapshot()
+            _uiState.value = _uiState.value.copy(suggestions = list.toList())
+        }
 
         private var job: Job? = null
         private var pid = -1

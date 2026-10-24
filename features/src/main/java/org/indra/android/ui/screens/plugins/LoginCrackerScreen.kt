@@ -126,4 +126,5 @@ data class LoginCrackerUiState(
     val isLoading: Boolean = false,
     val result: String = "",
     val error: String? = null,
+    val suggestions: List<String> = emptyList(),
 )
