@@ -13,6 +13,7 @@ import org.indra.android.core.system.CrashReporter
 import org.indra.android.core.system.Logger
 import org.indra.android.core.system.IndraSystem
 import org.indra.android.core.system.OtaUpdateManager
+import org.indra.android.core.system.RootManager
 import org.indra.android.core.system.SettingsRepository
 import org.indra.android.core.system.SmartToolBox
 import javax.inject.Inject
@@ -49,6 +50,8 @@ data class SettingsUiState(
     val appUpdateAvailable: Boolean = false,
     val appUpdateVersion: String? = null,
     val appUpdateMessage: String? = null,
+    val isRooted: Boolean = false,
+    val rootType: String = "No root",
 )
 
 /** Port fields the daemon tools read from [SettingsRepository]. */
@@ -72,6 +75,7 @@ class SettingsViewModel
         private val toolBox: SmartToolBox,
         private val crashReporter: CrashReporter,
         private val appUpdateManager: AppUpdateManager,
+        private val rootManager: RootManager,
     ) : ViewModel() {
         private val _uiState = MutableStateFlow(SettingsUiState())
         val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
@@ -91,6 +95,8 @@ class SettingsViewModel
                         version = "2.0.0",
                         coreVersion = system.getCoreVersion() ?: "Not installed",
                         daemonRunning = coreManager.isDaemonRunning,
+                        isRooted = rootManager.detectRoot().isRooted,
+                        rootType = rootManager.getRootTypeDisplayName(),
                         otaManifestUrl = settings.otaManifestUrl,
                         otaAllowTestHosts = settings.otaAllowTestHosts,
                         rootlessMode = settings.rootlessMode,
@@ -155,6 +161,14 @@ class SettingsViewModel
                 _uiState.value = _uiState.value.copy(alpineBusy = false)
                 loadSettings()
             }
+        }
+
+        fun refresh() {
+            loadSettings()
+        }
+
+        fun requestRootAccess() {
+            rootManager.requestRootAccess()
         }
 
         fun setDebugErrorLogging(enabled: Boolean) {

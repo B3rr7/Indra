@@ -161,6 +161,17 @@ fun SettingsScreen(
             }
 
             // ── Native Core ──────────────────────────────────────────────
+            // ── Root Access ──────────────────────────────────────────────
+            item {
+                SettingsSection(
+                    title = "Root Access",
+                    icon = Icons.Default.AdminPanelSettings,
+                    accent = SettingsPalette.Core,
+                )
+            }
+            item { RootAccessCard(uiState, viewModel) }
+
+            // ── Native Core ──────────────────────────────────────────────
             item {
                 SettingsSection(
                     title = "Native Core",

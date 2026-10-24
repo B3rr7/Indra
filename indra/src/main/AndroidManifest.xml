@@ -37,7 +37,7 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Indra"
         android:resizeableActivity="true"
-        tools:targetApi="34">
+        tools:targetApi="35">
 
         <provider
             android:name="androidx.core.content.FileProvider"
@@ -54,7 +54,8 @@
             android:exported="true"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
             android:launchMode="singleTask"
-            android:theme="@style/Theme.Indra">
+            android:theme="@style/Theme.Indra"
+            android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
