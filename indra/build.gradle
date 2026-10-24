@@ -180,7 +180,8 @@ tasks.matching { it.name == 'preBuild' }.configureEach {
 }
 
 detekt {
-    config.setFrom(files("$projectDir/detekt.yml"))
+    config.setFrom(files("$rootDir/detekt.yml"))
     buildUponDefaultConfig = true
     allRules = false
+    baseline = file("$projectDir/detekt-baseline.xml")
 }

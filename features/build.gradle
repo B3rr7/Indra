@@ -3,6 +3,7 @@ plugins {
     id 'org.jetbrains.kotlin.android'
     id 'com.google.dagger.hilt.android'
     id 'kotlin-kapt'
+    id 'io.gitlab.arturbosch.detekt'
 }
 
 android {
@@ -46,4 +47,11 @@ dependencies {
     implementation 'org.osmdroid:osmdroid-android:6.1.18'
     implementation 'com.google.code.gson:gson:2.10.1'
     kapt 'com.google.dagger:hilt-android-compiler:2.51.1'
+}
+
+detekt {
+    config.setFrom(files("$rootDir/detekt.yml"))
+    buildUponDefaultConfig = true
+    allRules = false
+    baseline = file("$projectDir/detekt-baseline.xml")
 }

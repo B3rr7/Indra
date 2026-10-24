@@ -13,17 +13,17 @@
     <ID>FunctionNaming:HomeScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun NetworkStatusHeroCard( networkName: String, networkDetail: String, isConnected: Boolean, targetCount: Int, modifier: Modifier = Modifier, onClick: () -&gt; Unit = {}, )</ID>
     <ID>FunctionNaming:IndraNavHost.kt$@Composable fun IndraNavHost( navController: NavHostController = rememberNavController(), modifier: Modifier = Modifier, )</ID>
     <ID>FunctionNaming:MainActivity.kt$@Composable fun MainScaffold()</ID>
-    <ID>FunctionNaming:SettingsScreen.kt$@Composable private fun NativeCoreCard( uiState: SettingsUiState, viewModel: SettingsViewModel, )</ID>
-    <ID>FunctionNaming:SettingsScreen.kt$@Composable private fun OtaCard( uiState: SettingsUiState, viewModel: SettingsViewModel, )</ID>
-    <ID>FunctionNaming:SettingsScreen.kt$@Composable private fun OtaTestHostCard( uiState: SettingsUiState, viewModel: SettingsViewModel, )</ID>
+    <ID>FunctionNaming:SettingsCards.kt$@Composable internal fun NativeCoreCard( uiState: SettingsUiState, viewModel: SettingsViewModel, )</ID>
+    <ID>FunctionNaming:SettingsCards.kt$@Composable internal fun OtaCard( uiState: SettingsUiState, viewModel: SettingsViewModel, )</ID>
+    <ID>FunctionNaming:SettingsCards.kt$@Composable internal fun OtaTestHostCard( uiState: SettingsUiState, viewModel: SettingsViewModel, )</ID>
+    <ID>FunctionNaming:SettingsCards.kt$@Composable internal fun StatusPill( text: String, color: Color, )</ID>
+    <ID>FunctionNaming:SettingsCards.kt$@Composable internal fun ToolsStatusCard(uiState: SettingsUiState)</ID>
     <ID>FunctionNaming:SettingsScreen.kt$@Composable private fun PortEditDialog( field: PortField, currentValue: Int, onDismiss: () -&gt; Unit, onSave: (Int) -&gt; Unit, )</ID>
     <ID>FunctionNaming:SettingsScreen.kt$@Composable private fun SettingsCard(content: @Composable ColumnScope.() -&gt; Unit)</ID>
     <ID>FunctionNaming:SettingsScreen.kt$@Composable private fun SettingsItem( title: String, subtitle: String, value: String, icon: ImageVector, accent: Color, onClick: () -&gt; Unit = {}, last: Boolean = false, )</ID>
     <ID>FunctionNaming:SettingsScreen.kt$@Composable private fun SettingsSection( title: String, icon: ImageVector, accent: Color, modifier: Modifier = Modifier, )</ID>
     <ID>FunctionNaming:SettingsScreen.kt$@Composable private fun SettingsSwitchItem( title: String, subtitle: String, checked: Boolean, onCheckedChange: (Boolean) -&gt; Unit, icon: ImageVector, accent: Color, last: Boolean = false, )</ID>
     <ID>FunctionNaming:SettingsScreen.kt$@Composable private fun StatusHeroCard(uiState: SettingsUiState)</ID>
-    <ID>FunctionNaming:SettingsScreen.kt$@Composable private fun StatusPill( text: String, color: Color, )</ID>
-    <ID>FunctionNaming:SettingsScreen.kt$@Composable private fun ToolsStatusCard(uiState: SettingsUiState)</ID>
     <ID>FunctionNaming:SettingsScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun SettingsScreen( onNavigateBack: () -&gt; Unit, viewModel: SettingsViewModel = hiltViewModel(), )</ID>
     <ID>FunctionNaming:TerminalScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun TerminalScreen( onNavigateBack: () -&gt; Unit, viewModel: TerminalViewModel = hiltViewModel(), )</ID>
     <ID>FunctionNaming:ToolsScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun ToolsScreen( onNavigateToPlugin: (String) -&gt; Unit, viewModel: ToolsViewModel = hiltViewModel(), )</ID>
@@ -31,7 +31,7 @@
     <ID>LongMethod:HomeScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun HomeScreen( onNavigateToPlugin: (String) -&gt; Unit, onNavigateToNetworkRadar: () -&gt; Unit, onNavigateToSettings: () -&gt; Unit, viewModel: HomeViewModel = hiltViewModel(), )</ID>
     <ID>LongMethod:HomeScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun NetworkStatusHeroCard( networkName: String, networkDetail: String, isConnected: Boolean, targetCount: Int, modifier: Modifier = Modifier, onClick: () -&gt; Unit = {}, )</ID>
     <ID>LongMethod:IndraNavHost.kt$@Composable fun IndraNavHost( navController: NavHostController = rememberNavController(), modifier: Modifier = Modifier, )</ID>
-    <ID>LongMethod:SettingsScreen.kt$@Composable private fun NativeCoreCard( uiState: SettingsUiState, viewModel: SettingsViewModel, )</ID>
+    <ID>LongMethod:SettingsCards.kt$@Composable internal fun NativeCoreCard( uiState: SettingsUiState, viewModel: SettingsViewModel, )</ID>
     <ID>LongMethod:SettingsScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun SettingsScreen( onNavigateBack: () -&gt; Unit, viewModel: SettingsViewModel = hiltViewModel(), )</ID>
     <ID>LongMethod:TerminalScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun TerminalScreen( onNavigateBack: () -&gt; Unit, viewModel: TerminalViewModel = hiltViewModel(), )</ID>
     <ID>LongParameterList:HomeViewModel.kt$HomeViewModel$( private val system: IndraSystem, private val networkHelper: NetworkHelper, private val networkRepository: NetworkRepository, private val pluginManager: PluginManager, private val toolBox: SmartToolBox, private val coreManager: CoreManager, private val settings: SettingsRepository, )</ID>
@@ -50,27 +50,28 @@
     <ID>MagicNumber:HomeScreen.kt$0xFFFFC107</ID>
     <ID>MagicNumber:HomeScreen.kt$0xFFFFD600</ID>
     <ID>MagicNumber:HomeScreen.kt$600</ID>
+    <ID>MagicNumber:SettingsCards.kt$SettingsPalette$0xFF00B0FF</ID>
+    <ID>MagicNumber:SettingsCards.kt$SettingsPalette$0xFF00E5FF</ID>
+    <ID>MagicNumber:SettingsCards.kt$SettingsPalette$0xFF00E676</ID>
+    <ID>MagicNumber:SettingsCards.kt$SettingsPalette$0xFF1DE9B6</ID>
+    <ID>MagicNumber:SettingsCards.kt$SettingsPalette$0xFF448AFF</ID>
+    <ID>MagicNumber:SettingsCards.kt$SettingsPalette$0xFF536DFE</ID>
+    <ID>MagicNumber:SettingsCards.kt$SettingsPalette$0xFF7C4DFF</ID>
+    <ID>MagicNumber:SettingsCards.kt$SettingsPalette$0xFFC6FF00</ID>
+    <ID>MagicNumber:SettingsCards.kt$SettingsPalette$0xFFE040FB</ID>
+    <ID>MagicNumber:SettingsCards.kt$SettingsPalette$0xFFFF4081</ID>
+    <ID>MagicNumber:SettingsCards.kt$SettingsPalette$0xFFFF5252</ID>
+    <ID>MagicNumber:SettingsCards.kt$SettingsPalette$0xFFFF9800</ID>
+    <ID>MagicNumber:SettingsCards.kt$SettingsPalette$0xFFFFC107</ID>
+    <ID>MagicNumber:SettingsCards.kt$SettingsPalette$0xFFFFD600</ID>
     <ID>MagicNumber:SettingsScreen.kt$5</ID>
     <ID>MagicNumber:SettingsScreen.kt$65535</ID>
-    <ID>MagicNumber:SettingsScreen.kt$SettingsPalette$0xFF00B0FF</ID>
-    <ID>MagicNumber:SettingsScreen.kt$SettingsPalette$0xFF00E5FF</ID>
-    <ID>MagicNumber:SettingsScreen.kt$SettingsPalette$0xFF00E676</ID>
-    <ID>MagicNumber:SettingsScreen.kt$SettingsPalette$0xFF1DE9B6</ID>
-    <ID>MagicNumber:SettingsScreen.kt$SettingsPalette$0xFF448AFF</ID>
-    <ID>MagicNumber:SettingsScreen.kt$SettingsPalette$0xFF536DFE</ID>
-    <ID>MagicNumber:SettingsScreen.kt$SettingsPalette$0xFF7C4DFF</ID>
-    <ID>MagicNumber:SettingsScreen.kt$SettingsPalette$0xFFC6FF00</ID>
-    <ID>MagicNumber:SettingsScreen.kt$SettingsPalette$0xFFE040FB</ID>
-    <ID>MagicNumber:SettingsScreen.kt$SettingsPalette$0xFFFF4081</ID>
-    <ID>MagicNumber:SettingsScreen.kt$SettingsPalette$0xFFFF5252</ID>
-    <ID>MagicNumber:SettingsScreen.kt$SettingsPalette$0xFFFF9800</ID>
-    <ID>MagicNumber:SettingsScreen.kt$SettingsPalette$0xFFFFC107</ID>
-    <ID>MagicNumber:SettingsScreen.kt$SettingsPalette$0xFFFFD600</ID>
     <ID>MagicNumber:SettingsViewModel.kt$SettingsViewModel$65535</ID>
     <ID>MagicNumber:TerminalScreen.kt$0xFF0D1117</ID>
     <ID>MagicNumber:TerminalScreen.kt$0xFF8B949E</ID>
     <ID>MagicNumber:TerminalScreen.kt$0xFFE6EDF3</ID>
     <ID>MatchingDeclarationName:IndraNavHost.kt$Screen</ID>
+    <ID>MatchingDeclarationName:SettingsCards.kt$SettingsPalette</ID>
     <ID>ReturnCount:HomeViewModel.kt$HomeViewModel$private fun isPluginAvailable(plugin: org.indra.android.core.system.Plugin): Boolean</ID>
     <ID>ReturnCount:TerminalViewModel.kt$TerminalViewModel$fun run()</ID>
     <ID>SwallowedException:IndraApplication.kt$IndraApplication$e: Exception</ID>
@@ -85,6 +86,9 @@
     <ID>WildcardImport:HomeScreen.kt$import androidx.compose.material.icons.filled.*</ID>
     <ID>WildcardImport:HomeScreen.kt$import androidx.compose.material3.*</ID>
     <ID>WildcardImport:HomeScreen.kt$import androidx.compose.runtime.*</ID>
+    <ID>WildcardImport:SettingsCards.kt$import androidx.compose.foundation.layout.*</ID>
+    <ID>WildcardImport:SettingsCards.kt$import androidx.compose.material3.*</ID>
+    <ID>WildcardImport:SettingsCards.kt$import androidx.compose.runtime.*</ID>
     <ID>WildcardImport:SettingsScreen.kt$import androidx.compose.foundation.layout.*</ID>
     <ID>WildcardImport:SettingsScreen.kt$import androidx.compose.material.icons.filled.*</ID>
     <ID>WildcardImport:SettingsScreen.kt$import androidx.compose.material3.*</ID>

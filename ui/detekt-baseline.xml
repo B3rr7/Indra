@@ -1,0 +1,61 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>FunctionNaming:CommonComponents.kt$@Composable fun ConfirmDialog( title: String, message: String, onConfirm: () -&gt; Unit, onDismiss: () -&gt; Unit, confirmText: String = "Confirm", dismissText: String = "Cancel", )</ID>
+    <ID>FunctionNaming:CommonComponents.kt$@Composable fun ErrorMessage( message: String, onRetry: (() -&gt; Unit)? = null, modifier: Modifier = Modifier, )</ID>
+    <ID>FunctionNaming:CommonComponents.kt$@Composable fun InfoDialog( title: String, message: String, onDismiss: () -&gt; Unit, )</ID>
+    <ID>FunctionNaming:CommonComponents.kt$@Composable fun LoadingIndicator( modifier: Modifier = Modifier, message: String = "Loading...", )</ID>
+    <ID>FunctionNaming:CommonComponents.kt$@Composable fun SectionHeader( title: String, modifier: Modifier = Modifier, )</ID>
+    <ID>FunctionNaming:CommonComponents.kt$@Composable fun StatusBadge( text: String, isActive: Boolean, modifier: Modifier = Modifier, )</ID>
+    <ID>FunctionNaming:Theme.kt$@Composable fun IndraTheme( darkTheme: Boolean = true, dynamicColor: Boolean = false, content: @Composable () -&gt; Unit, )</ID>
+    <ID>MagicNumber:Color.kt$0xFF000000</ID>
+    <ID>MagicNumber:Color.kt$0xFF001D2E</ID>
+    <ID>MagicNumber:Color.kt$0xFF001F24</ID>
+    <ID>MagicNumber:Color.kt$0xFF00344D</ID>
+    <ID>MagicNumber:Color.kt$0xFF00363D</ID>
+    <ID>MagicNumber:Color.kt$0xFF004F58</ID>
+    <ID>MagicNumber:Color.kt$0xFF006874</ID>
+    <ID>MagicNumber:Color.kt$0xFF00E5FF</ID>
+    <ID>MagicNumber:Color.kt$0xFF00E676</ID>
+    <ID>MagicNumber:Color.kt$0xFF051F23</ID>
+    <ID>MagicNumber:Color.kt$0xFF0A0E14</ID>
+    <ID>MagicNumber:Color.kt$0xFF0E1A36</ID>
+    <ID>MagicNumber:Color.kt$0xFF0F1419</ID>
+    <ID>MagicNumber:Color.kt$0xFF191C1C</ID>
+    <ID>MagicNumber:Color.kt$0xFF1F2933</ID>
+    <ID>MagicNumber:Color.kt$0xFF2979FF</ID>
+    <ID>MagicNumber:Color.kt$0xFF2A3338</ID>
+    <ID>MagicNumber:Color.kt$0xFF3E003E</ID>
+    <ID>MagicNumber:Color.kt$0xFF3F484A</ID>
+    <ID>MagicNumber:Color.kt$0xFF410002</ID>
+    <ID>MagicNumber:Color.kt$0xFF4A6367</ID>
+    <ID>MagicNumber:Color.kt$0xFF4FC3F7</ID>
+    <ID>MagicNumber:Color.kt$0xFF525E7D</ID>
+    <ID>MagicNumber:Color.kt$0xFF690005</ID>
+    <ID>MagicNumber:Color.kt$0xFF6A0080</ID>
+    <ID>MagicNumber:Color.kt$0xFF6CFFFF</ID>
+    <ID>MagicNumber:Color.kt$0xFF6F797A</ID>
+    <ID>MagicNumber:Color.kt$0xFF93000A</ID>
+    <ID>MagicNumber:Color.kt$0xFF97F0FF</ID>
+    <ID>MagicNumber:Color.kt$0xFF9C27B0</ID>
+    <ID>MagicNumber:Color.kt$0xFFAA00FF</ID>
+    <ID>MagicNumber:Color.kt$0xFFB3E5FC</ID>
+    <ID>MagicNumber:Color.kt$0xFFBA1A1A</ID>
+    <ID>MagicNumber:Color.kt$0xFFBFC8CA</ID>
+    <ID>MagicNumber:Color.kt$0xFFCCE8EC</ID>
+    <ID>MagicNumber:Color.kt$0xFFD9E2FF</ID>
+    <ID>MagicNumber:Color.kt$0xFFDBE4E6</ID>
+    <ID>MagicNumber:Color.kt$0xFFE1E3E3</ID>
+    <ID>MagicNumber:Color.kt$0xFFF3E5F5</ID>
+    <ID>MagicNumber:Color.kt$0xFFFAFDFC</ID>
+    <ID>MagicNumber:Color.kt$0xFFFF1744</ID>
+    <ID>MagicNumber:Color.kt$0xFFFF5252</ID>
+    <ID>MagicNumber:Color.kt$0xFFFF9100</ID>
+    <ID>MagicNumber:Color.kt$0xFFFFDAD6</ID>
+    <ID>MagicNumber:Color.kt$0xFFFFFFFF</ID>
+    <ID>WildcardImport:CommonComponents.kt$import androidx.compose.foundation.layout.*</ID>
+    <ID>WildcardImport:CommonComponents.kt$import androidx.compose.material3.*</ID>
+    <ID>WildcardImport:CommonComponents.kt$import androidx.compose.runtime.*</ID>
+  </CurrentIssues>
+</SmellBaseline>

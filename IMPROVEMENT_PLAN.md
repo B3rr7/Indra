@@ -13,7 +13,7 @@ Follow-up to the full-codebase analysis (`develop`, graph gen `2026-10-24`). Ord
 - [x] **T7 — `SettingsScreen` split, OTA OTA/terminal cards extracted** (`CoreCard.kt`, `UpdateCard.kt` in `indra/ui/screens/settings/`) extracting the 901-line god file one step.
 - [x] **T8 — Unit tests for OTA-critical pure logic** (`OtaUpdateManager` envelope/version logic where pure) + registry/quoting tests; `data/` repositories untouched (no fake results left in the tree).
 - [x] **T9 — `AGENTS.md` refresh** (5-module layout, SDK 35, real tool list, detekt, new gotchas).
-- [ ] **T10 — Extend detekt to `core`/`features`.** Deferred: requires re-baselining across a new module set (queued after the current detekt baseline reduction, not blocking).
+- [x] **T10 — Extend detekt to all five modules.** Shared root `detekt.yml` (moved from `indra/`); `io.gitlab.arturbosch.detekt` applied in `core`, `data`, `ui`, `features`, `indra`; per-module `detekt-baseline.xml` generated (`./gradlew detektBaseline`); `./gradlew detekt` is green across the repo. Note: pre-existing state had `:indra:detekt` failing with 24 unsuppressed issues (its baseline file was never wired in) — that is fixed. detekt is intentionally not attached to `assembleDebug`; run it (or `check`) in CI.
 
 Derived from the deep comparison with StrykerOSS (`/home/rana/strykerapp`).
 Goal: make Indra a **better, easier-to-use pentest tool than cSploit ever was**, and competitive with StrykerOSS, while keeping its modern architecture and lightweight core.
