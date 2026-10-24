@@ -25,7 +25,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 @Composable
 fun TerminalScreen(
     onNavigateBack: () -> Unit,
-    viewModel: TerminalViewModel = hiltViewModel()
+    viewModel: TerminalViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val listState = rememberLazyListState()
@@ -54,30 +54,32 @@ fun TerminalScreen(
                             Text("Stop")
                         }
                     }
-                }
+                },
             )
-        }
+        },
     ) { padding ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(padding),
         ) {
             LazyColumn(
                 state = listState,
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .background(Color(0xFF0D1117))
-                    .padding(8.dp),
-                verticalArrangement = Arrangement.spacedBy(2.dp)
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .background(Color(0xFF0D1117))
+                        .padding(8.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
                 items(uiState.output) { line ->
                     Text(
                         text = line,
                         color = Color(0xFFE6EDF3),
                         fontFamily = FontFamily.Monospace,
-                        fontSize = 12.sp
+                        fontSize = 12.sp,
                     )
                 }
                 if (uiState.isRunning) {
@@ -86,7 +88,7 @@ fun TerminalScreen(
                             text = "...",
                             color = Color(0xFF8B949E),
                             fontFamily = FontFamily.Monospace,
-                            fontSize = 12.sp
+                            fontSize = 12.sp,
                         )
                     }
                 }
@@ -97,16 +99,17 @@ fun TerminalScreen(
                     text = err,
                     color = MaterialTheme.colorScheme.error,
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                    style = MaterialTheme.typography.bodySmall
+                    style = MaterialTheme.typography.bodySmall,
                 )
             }
 
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(8.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 OutlinedTextField(
                     value = uiState.input,
@@ -116,11 +119,11 @@ fun TerminalScreen(
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                     keyboardActions = KeyboardActions(onSend = { viewModel.run() }),
-                    textStyle = LocalTextStyle.current.copy(fontFamily = FontFamily.Monospace)
+                    textStyle = LocalTextStyle.current.copy(fontFamily = FontFamily.Monospace),
                 )
                 IconButton(
                     onClick = viewModel::run,
-                    enabled = !uiState.isRunning && uiState.input.isNotBlank()
+                    enabled = !uiState.isRunning && uiState.input.isNotBlank(),
                 ) {
                     Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Run")
                 }

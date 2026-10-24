@@ -1,0 +1,427 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>CyclomaticComplexMethod:CoreManager.kt$CoreManager$suspend fun installExploitdb( url: String, onProgress: (Float) -&gt; Unit = {}, ): Result&lt;Unit&gt;</ID>
+    <ID>CyclomaticComplexMethod:CoreManager.kt$CoreManager$suspend fun installMsf( url: String, onProgress: (Float) -&gt; Unit = {}, ): Result&lt;Unit&gt;</ID>
+    <ID>CyclomaticComplexMethod:CoreManager.kt$CoreManager$suspend fun installNuclei(onProgress: (Float) -&gt; Unit = {}): Result&lt;Unit&gt;</ID>
+    <ID>CyclomaticComplexMethod:CredentialTesterViewModel.kt$CredentialTesterViewModel$fun test()</ID>
+    <ID>CyclomaticComplexMethod:HomeScreen.kt$@Composable fun getToolColor(id: String): Color</ID>
+    <ID>CyclomaticComplexMethod:HomeScreen.kt$@Composable fun getToolIcon(id: String): ImageVector</ID>
+    <ID>CyclomaticComplexMethod:IndraNavHost.kt$@Composable fun IndraNavHost( navController: NavHostController = rememberNavController(), modifier: Modifier = Modifier, )</ID>
+    <ID>CyclomaticComplexMethod:MitmViewModel.kt$MitmViewModel$fun start()</ID>
+    <ID>CyclomaticComplexMethod:OtaUpdateManager.kt$OtaUpdateManager$private fun parseManifest(json: String): OtaManifest?</ID>
+    <ID>CyclomaticComplexMethod:SmartToolBox.kt$SmartToolBox$private fun execute( tool: String, args: String, label: String = tool, timeoutMs: Long = TOOL_TIMEOUT_MS, ): Flow&lt;ToolResult&gt;</ID>
+    <ID>CyclomaticComplexMethod:WifiAuditViewModel.kt$WifiAuditViewModel$fun crack()</ID>
+    <ID>ForbiddenComment:NetworkUseCases.kt$GetNetworkStatusUseCase$// TODO: Return actual status</ID>
+    <ID>ForbiddenComment:NetworkUseCases.kt$ScanNetworkUseCase$// TODO: Implement network scan</ID>
+    <ID>ForbiddenComment:NetworkUseCases.kt$ScanPortsUseCase$// TODO: Implement port scan</ID>
+    <ID>ForbiddenComment:NetworkUseCases.kt$TraceRouteUseCase$// TODO: Implement traceroute</ID>
+    <ID>ForbiddenComment:PluginUseCases.kt$ExecutePluginUseCase$// TODO: Execute plugin with given args</ID>
+    <ID>ForbiddenComment:PluginViewModel.kt$PluginViewModel$// TODO: Execute via System/ChildManager</ID>
+    <ID>FunctionNaming:ArsenalScreen.kt$@Composable private fun ArsenalEditDialog( template: ArsenalTemplate, onDismiss: () -&gt; Unit, onSave: (String, String, String) -&gt; Unit, )</ID>
+    <ID>FunctionNaming:ArsenalScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun ArsenalScreen( onNavigateBack: () -&gt; Unit, viewModel: ArsenalViewModel = hiltViewModel(), )</ID>
+    <ID>FunctionNaming:BottomNavBar.kt$@Composable fun BottomNavBar(navController: NavController)</ID>
+    <ID>FunctionNaming:CommonComponents.kt$@Composable fun ConfirmDialog( title: String, message: String, onConfirm: () -&gt; Unit, onDismiss: () -&gt; Unit, confirmText: String = "Confirm", dismissText: String = "Cancel", )</ID>
+    <ID>FunctionNaming:CommonComponents.kt$@Composable fun ErrorMessage( message: String, onRetry: (() -&gt; Unit)? = null, modifier: Modifier = Modifier, )</ID>
+    <ID>FunctionNaming:CommonComponents.kt$@Composable fun InfoDialog( title: String, message: String, onDismiss: () -&gt; Unit, )</ID>
+    <ID>FunctionNaming:CommonComponents.kt$@Composable fun LoadingIndicator( modifier: Modifier = Modifier, message: String = "Loading...", )</ID>
+    <ID>FunctionNaming:CommonComponents.kt$@Composable fun SectionHeader( title: String, modifier: Modifier = Modifier, )</ID>
+    <ID>FunctionNaming:CommonComponents.kt$@Composable fun StatusBadge( text: String, isActive: Boolean, modifier: Modifier = Modifier, )</ID>
+    <ID>FunctionNaming:CredentialTesterScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun CredentialTesterScreen( onNavigateBack: () -&gt; Unit, viewModel: CredentialTesterViewModel = hiltViewModel(), )</ID>
+    <ID>FunctionNaming:ExploitFinderScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun ExploitFinderScreen( onNavigateBack: () -&gt; Unit, viewModel: ExploitFinderViewModel = hiltViewModel(), )</ID>
+    <ID>FunctionNaming:GeoMacScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun GeoMacScreen( onNavigateBack: () -&gt; Unit, viewModel: GeoMacViewModel = hiltViewModel(), )</ID>
+    <ID>FunctionNaming:HandshakesScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun HandshakesScreen( onNavigateBack: () -&gt; Unit, viewModel: HandshakesViewModel = hiltViewModel(), )</ID>
+    <ID>FunctionNaming:HomeScreen.kt$@Composable fun ModernToolCard( plugin: PluginInfo, onClick: () -&gt; Unit, modifier: Modifier = Modifier, onUpdate: (() -&gt; Unit)? = null, updating: Boolean = false, updateEnabled: Boolean = true, )</ID>
+    <ID>FunctionNaming:HomeScreen.kt$@Composable fun QuickActionPill( icon: ImageVector, label: String, onClick: () -&gt; Unit, modifier: Modifier = Modifier, accentColor: Color = MaterialTheme.colorScheme.primary, )</ID>
+    <ID>FunctionNaming:HomeScreen.kt$@Composable fun SectionTitle( title: String, icon: ImageVector, subtitle: String? = null, modifier: Modifier = Modifier, )</ID>
+    <ID>FunctionNaming:HomeScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun HomeScreen( onNavigateToPlugin: (String) -&gt; Unit, onNavigateToNetworkRadar: () -&gt; Unit, onNavigateToSettings: () -&gt; Unit, viewModel: HomeViewModel = hiltViewModel(), )</ID>
+    <ID>FunctionNaming:HomeScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun NetworkStatusHeroCard( networkName: String, networkDetail: String, isConnected: Boolean, targetCount: Int, modifier: Modifier = Modifier, onClick: () -&gt; Unit = {}, )</ID>
+    <ID>FunctionNaming:IndraNavHost.kt$@Composable fun IndraNavHost( navController: NavHostController = rememberNavController(), modifier: Modifier = Modifier, )</ID>
+    <ID>FunctionNaming:InspectorScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun InspectorScreen( onNavigateBack: () -&gt; Unit, viewModel: InspectorViewModel = hiltViewModel(), )</ID>
+    <ID>FunctionNaming:IptablesScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun IptablesScreen( onNavigateBack: () -&gt; Unit, viewModel: IptablesViewModel = hiltViewModel(), )</ID>
+    <ID>FunctionNaming:LoginCrackerScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun LoginCrackerScreen( onNavigateBack: () -&gt; Unit, viewModel: LoginCrackerViewModel = hiltViewModel(), )</ID>
+    <ID>FunctionNaming:MacChangerScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun MacChangerScreen( onNavigateBack: () -&gt; Unit, viewModel: MacChangerViewModel = hiltViewModel(), )</ID>
+    <ID>FunctionNaming:MainActivity.kt$@Composable fun MainScaffold()</ID>
+    <ID>FunctionNaming:MasscanScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun MasscanScreen( onNavigateBack: () -&gt; Unit, viewModel: MasscanViewModel = hiltViewModel(), )</ID>
+    <ID>FunctionNaming:MitmScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun MitmScreen( onNavigateBack: () -&gt; Unit, viewModel: MitmViewModel = hiltViewModel(), )</ID>
+    <ID>FunctionNaming:NetworkRadarScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun NetworkRadarScreen( onNavigateBack: () -&gt; Unit, viewModel: NetworkRadarViewModel = hiltViewModel(), )</ID>
+    <ID>FunctionNaming:PacketCaptureScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun PacketCaptureScreen( onNavigateBack: () -&gt; Unit, viewModel: PacketCaptureViewModel = hiltViewModel(), )</ID>
+    <ID>FunctionNaming:PacketForgerScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun PacketForgerScreen( onNavigateBack: () -&gt; Unit, viewModel: PacketForgerViewModel = hiltViewModel(), )</ID>
+    <ID>FunctionNaming:PluginScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun PluginScreen( pluginName: String, onNavigateBack: () -&gt; Unit, viewModel: PluginViewModel = hiltViewModel(), )</ID>
+    <ID>FunctionNaming:PortScannerScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun PortScannerScreen( onNavigateBack: () -&gt; Unit, viewModel: PortScannerViewModel = hiltViewModel(), )</ID>
+    <ID>FunctionNaming:ReaverScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun ReaverScreen( onNavigateBack: () -&gt; Unit, viewModel: ReaverViewModel = hiltViewModel(), )</ID>
+    <ID>FunctionNaming:ResponderScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun ResponderScreen( onNavigateBack: () -&gt; Unit, viewModel: ResponderViewModel = hiltViewModel(), )</ID>
+    <ID>FunctionNaming:RouterPwnScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun RouterPwnScreen( onNavigateBack: () -&gt; Unit, viewModel: RouterPwnViewModel = hiltViewModel(), )</ID>
+    <ID>FunctionNaming:SearchSploitScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun SearchSploitScreen( onNavigateBack: () -&gt; Unit, viewModel: SearchSploitViewModel = hiltViewModel(), )</ID>
+    <ID>FunctionNaming:SettingsScreen.kt$@Composable private fun NativeCoreCard( uiState: SettingsUiState, viewModel: SettingsViewModel, )</ID>
+    <ID>FunctionNaming:SettingsScreen.kt$@Composable private fun OtaCard( uiState: SettingsUiState, viewModel: SettingsViewModel, )</ID>
+    <ID>FunctionNaming:SettingsScreen.kt$@Composable private fun OtaTestHostCard( uiState: SettingsUiState, viewModel: SettingsViewModel, )</ID>
+    <ID>FunctionNaming:SettingsScreen.kt$@Composable private fun PortEditDialog( field: PortField, currentValue: Int, onDismiss: () -&gt; Unit, onSave: (Int) -&gt; Unit, )</ID>
+    <ID>FunctionNaming:SettingsScreen.kt$@Composable private fun SettingsCard(content: @Composable ColumnScope.() -&gt; Unit)</ID>
+    <ID>FunctionNaming:SettingsScreen.kt$@Composable private fun SettingsItem( title: String, subtitle: String, value: String, icon: ImageVector, accent: Color, onClick: () -&gt; Unit = {}, last: Boolean = false, )</ID>
+    <ID>FunctionNaming:SettingsScreen.kt$@Composable private fun SettingsSection( title: String, icon: ImageVector, accent: Color, modifier: Modifier = Modifier, )</ID>
+    <ID>FunctionNaming:SettingsScreen.kt$@Composable private fun SettingsSwitchItem( title: String, subtitle: String, checked: Boolean, onCheckedChange: (Boolean) -&gt; Unit, icon: ImageVector, accent: Color, last: Boolean = false, )</ID>
+    <ID>FunctionNaming:SettingsScreen.kt$@Composable private fun StatusHeroCard(uiState: SettingsUiState)</ID>
+    <ID>FunctionNaming:SettingsScreen.kt$@Composable private fun StatusPill( text: String, color: Color, )</ID>
+    <ID>FunctionNaming:SettingsScreen.kt$@Composable private fun ToolsStatusCard(uiState: SettingsUiState)</ID>
+    <ID>FunctionNaming:SettingsScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun SettingsScreen( onNavigateBack: () -&gt; Unit, viewModel: SettingsViewModel = hiltViewModel(), )</ID>
+    <ID>FunctionNaming:TerminalScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun TerminalScreen( onNavigateBack: () -&gt; Unit, viewModel: TerminalViewModel = hiltViewModel(), )</ID>
+    <ID>FunctionNaming:Theme.kt$@Composable fun IndraTheme( darkTheme: Boolean = true, dynamicColor: Boolean = false, content: @Composable () -&gt; Unit, )</ID>
+    <ID>FunctionNaming:ToolsScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun ToolsScreen( onNavigateToPlugin: (String) -&gt; Unit, viewModel: ToolsViewModel = hiltViewModel(), )</ID>
+    <ID>FunctionNaming:TracerouteScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun TracerouteScreen( onNavigateBack: () -&gt; Unit, viewModel: TracerouteViewModel = hiltViewModel(), )</ID>
+    <ID>FunctionNaming:VulnScannerScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun VulnScannerScreen( onNavigateBack: () -&gt; Unit, viewModel: VulnScannerViewModel = hiltViewModel(), )</ID>
+    <ID>FunctionNaming:WebTesterScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun WebTesterScreen( onNavigateBack: () -&gt; Unit, viewModel: WebTesterViewModel = hiltViewModel(), )</ID>
+    <ID>FunctionNaming:WhisperPairScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun WhisperPairScreen( onNavigateBack: () -&gt; Unit, viewModel: WhisperPairViewModel = hiltViewModel(), )</ID>
+    <ID>FunctionNaming:WifiAuditScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun WifiAuditScreen( onNavigateBack: () -&gt; Unit, viewModel: WifiAuditViewModel = hiltViewModel(), )</ID>
+    <ID>FunctionNaming:WifiScannerScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun WifiScannerScreen( onNavigateBack: () -&gt; Unit, viewModel: WifiScannerViewModel = hiltViewModel(), )</ID>
+    <ID>FunctionNaming:WifiteScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun WifiteScreen( onNavigateBack: () -&gt; Unit, viewModel: WifiteViewModel = hiltViewModel(), )</ID>
+    <ID>LongMethod:ArsenalScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun ArsenalScreen( onNavigateBack: () -&gt; Unit, viewModel: ArsenalViewModel = hiltViewModel(), )</ID>
+    <ID>LongMethod:CredentialTesterScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun CredentialTesterScreen( onNavigateBack: () -&gt; Unit, viewModel: CredentialTesterViewModel = hiltViewModel(), )</ID>
+    <ID>LongMethod:ExploitFinderScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun ExploitFinderScreen( onNavigateBack: () -&gt; Unit, viewModel: ExploitFinderViewModel = hiltViewModel(), )</ID>
+    <ID>LongMethod:GeoMacScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun GeoMacScreen( onNavigateBack: () -&gt; Unit, viewModel: GeoMacViewModel = hiltViewModel(), )</ID>
+    <ID>LongMethod:HandshakesScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun HandshakesScreen( onNavigateBack: () -&gt; Unit, viewModel: HandshakesViewModel = hiltViewModel(), )</ID>
+    <ID>LongMethod:HomeScreen.kt$@Composable fun ModernToolCard( plugin: PluginInfo, onClick: () -&gt; Unit, modifier: Modifier = Modifier, onUpdate: (() -&gt; Unit)? = null, updating: Boolean = false, updateEnabled: Boolean = true, )</ID>
+    <ID>LongMethod:HomeScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun HomeScreen( onNavigateToPlugin: (String) -&gt; Unit, onNavigateToNetworkRadar: () -&gt; Unit, onNavigateToSettings: () -&gt; Unit, viewModel: HomeViewModel = hiltViewModel(), )</ID>
+    <ID>LongMethod:HomeScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun NetworkStatusHeroCard( networkName: String, networkDetail: String, isConnected: Boolean, targetCount: Int, modifier: Modifier = Modifier, onClick: () -&gt; Unit = {}, )</ID>
+    <ID>LongMethod:IndraNavHost.kt$@Composable fun IndraNavHost( navController: NavHostController = rememberNavController(), modifier: Modifier = Modifier, )</ID>
+    <ID>LongMethod:InspectorScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun InspectorScreen( onNavigateBack: () -&gt; Unit, viewModel: InspectorViewModel = hiltViewModel(), )</ID>
+    <ID>LongMethod:LoginCrackerScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun LoginCrackerScreen( onNavigateBack: () -&gt; Unit, viewModel: LoginCrackerViewModel = hiltViewModel(), )</ID>
+    <ID>LongMethod:MacChangerScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun MacChangerScreen( onNavigateBack: () -&gt; Unit, viewModel: MacChangerViewModel = hiltViewModel(), )</ID>
+    <ID>LongMethod:MasscanScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun MasscanScreen( onNavigateBack: () -&gt; Unit, viewModel: MasscanViewModel = hiltViewModel(), )</ID>
+    <ID>LongMethod:MitmScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun MitmScreen( onNavigateBack: () -&gt; Unit, viewModel: MitmViewModel = hiltViewModel(), )</ID>
+    <ID>LongMethod:NetworkRadarScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun NetworkRadarScreen( onNavigateBack: () -&gt; Unit, viewModel: NetworkRadarViewModel = hiltViewModel(), )</ID>
+    <ID>LongMethod:PacketCaptureScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun PacketCaptureScreen( onNavigateBack: () -&gt; Unit, viewModel: PacketCaptureViewModel = hiltViewModel(), )</ID>
+    <ID>LongMethod:PacketForgerScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun PacketForgerScreen( onNavigateBack: () -&gt; Unit, viewModel: PacketForgerViewModel = hiltViewModel(), )</ID>
+    <ID>LongMethod:PortScannerScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun PortScannerScreen( onNavigateBack: () -&gt; Unit, viewModel: PortScannerViewModel = hiltViewModel(), )</ID>
+    <ID>LongMethod:RouterPwnScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun RouterPwnScreen( onNavigateBack: () -&gt; Unit, viewModel: RouterPwnViewModel = hiltViewModel(), )</ID>
+    <ID>LongMethod:SettingsScreen.kt$@Composable private fun NativeCoreCard( uiState: SettingsUiState, viewModel: SettingsViewModel, )</ID>
+    <ID>LongMethod:SettingsScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun SettingsScreen( onNavigateBack: () -&gt; Unit, viewModel: SettingsViewModel = hiltViewModel(), )</ID>
+    <ID>LongMethod:SmartToolBox.kt$SmartToolBox$private fun execute( tool: String, args: String, label: String = tool, timeoutMs: Long = TOOL_TIMEOUT_MS, ): Flow&lt;ToolResult&gt;</ID>
+    <ID>LongMethod:TerminalScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun TerminalScreen( onNavigateBack: () -&gt; Unit, viewModel: TerminalViewModel = hiltViewModel(), )</ID>
+    <ID>LongMethod:TracerouteScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun TracerouteScreen( onNavigateBack: () -&gt; Unit, viewModel: TracerouteViewModel = hiltViewModel(), )</ID>
+    <ID>LongMethod:VulnScannerScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun VulnScannerScreen( onNavigateBack: () -&gt; Unit, viewModel: VulnScannerViewModel = hiltViewModel(), )</ID>
+    <ID>LongMethod:WebTesterScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun WebTesterScreen( onNavigateBack: () -&gt; Unit, viewModel: WebTesterViewModel = hiltViewModel(), )</ID>
+    <ID>LongMethod:WhisperPairScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun WhisperPairScreen( onNavigateBack: () -&gt; Unit, viewModel: WhisperPairViewModel = hiltViewModel(), )</ID>
+    <ID>LongMethod:WifiAuditScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun WifiAuditScreen( onNavigateBack: () -&gt; Unit, viewModel: WifiAuditViewModel = hiltViewModel(), )</ID>
+    <ID>LoopWithTooManyJumpStatements:ResponderViewModel.kt$ResponderViewModel$while</ID>
+    <ID>MagicNumber:ChildProcessManager.kt$ChildProcessManager$9</ID>
+    <ID>MagicNumber:Color.kt$0xFF000000</ID>
+    <ID>MagicNumber:Color.kt$0xFF001D2E</ID>
+    <ID>MagicNumber:Color.kt$0xFF001F24</ID>
+    <ID>MagicNumber:Color.kt$0xFF00344D</ID>
+    <ID>MagicNumber:Color.kt$0xFF00363D</ID>
+    <ID>MagicNumber:Color.kt$0xFF004F58</ID>
+    <ID>MagicNumber:Color.kt$0xFF006874</ID>
+    <ID>MagicNumber:Color.kt$0xFF00E5FF</ID>
+    <ID>MagicNumber:Color.kt$0xFF00E676</ID>
+    <ID>MagicNumber:Color.kt$0xFF051F23</ID>
+    <ID>MagicNumber:Color.kt$0xFF0A0E14</ID>
+    <ID>MagicNumber:Color.kt$0xFF0E1A36</ID>
+    <ID>MagicNumber:Color.kt$0xFF0F1419</ID>
+    <ID>MagicNumber:Color.kt$0xFF191C1C</ID>
+    <ID>MagicNumber:Color.kt$0xFF1F2933</ID>
+    <ID>MagicNumber:Color.kt$0xFF2979FF</ID>
+    <ID>MagicNumber:Color.kt$0xFF2A3338</ID>
+    <ID>MagicNumber:Color.kt$0xFF3E003E</ID>
+    <ID>MagicNumber:Color.kt$0xFF3F484A</ID>
+    <ID>MagicNumber:Color.kt$0xFF410002</ID>
+    <ID>MagicNumber:Color.kt$0xFF4A6367</ID>
+    <ID>MagicNumber:Color.kt$0xFF4FC3F7</ID>
+    <ID>MagicNumber:Color.kt$0xFF525E7D</ID>
+    <ID>MagicNumber:Color.kt$0xFF690005</ID>
+    <ID>MagicNumber:Color.kt$0xFF6A0080</ID>
+    <ID>MagicNumber:Color.kt$0xFF6CFFFF</ID>
+    <ID>MagicNumber:Color.kt$0xFF6F797A</ID>
+    <ID>MagicNumber:Color.kt$0xFF93000A</ID>
+    <ID>MagicNumber:Color.kt$0xFF97F0FF</ID>
+    <ID>MagicNumber:Color.kt$0xFF9C27B0</ID>
+    <ID>MagicNumber:Color.kt$0xFFAA00FF</ID>
+    <ID>MagicNumber:Color.kt$0xFFB3E5FC</ID>
+    <ID>MagicNumber:Color.kt$0xFFBA1A1A</ID>
+    <ID>MagicNumber:Color.kt$0xFFBFC8CA</ID>
+    <ID>MagicNumber:Color.kt$0xFFCCE8EC</ID>
+    <ID>MagicNumber:Color.kt$0xFFD9E2FF</ID>
+    <ID>MagicNumber:Color.kt$0xFFDBE4E6</ID>
+    <ID>MagicNumber:Color.kt$0xFFE1E3E3</ID>
+    <ID>MagicNumber:Color.kt$0xFFF3E5F5</ID>
+    <ID>MagicNumber:Color.kt$0xFFFAFDFC</ID>
+    <ID>MagicNumber:Color.kt$0xFFFF1744</ID>
+    <ID>MagicNumber:Color.kt$0xFFFF5252</ID>
+    <ID>MagicNumber:Color.kt$0xFFFF9100</ID>
+    <ID>MagicNumber:Color.kt$0xFFFFDAD6</ID>
+    <ID>MagicNumber:Color.kt$0xFFFFFFFF</ID>
+    <ID>MagicNumber:CoreManager.kt$CoreManager$100</ID>
+    <ID>MagicNumber:CoreManager.kt$CoreManager$20</ID>
+    <ID>MagicNumber:CoreManager.kt$CoreManager$8192</ID>
+    <ID>MagicNumber:ExploitFinderScreen.kt$100</ID>
+    <ID>MagicNumber:ExploitFinderViewModel.kt$ExploitFinderViewModel$500</ID>
+    <ID>MagicNumber:GeoMacScreen.kt$4.0</ID>
+    <ID>MagicNumber:HomeScreen.kt$0xFF00BFA5</ID>
+    <ID>MagicNumber:HomeScreen.kt$0xFF00E5FF</ID>
+    <ID>MagicNumber:HomeScreen.kt$0xFF00E676</ID>
+    <ID>MagicNumber:HomeScreen.kt$0xFF1DE9B6</ID>
+    <ID>MagicNumber:HomeScreen.kt$0xFF448AFF</ID>
+    <ID>MagicNumber:HomeScreen.kt$0xFF536DFE</ID>
+    <ID>MagicNumber:HomeScreen.kt$0xFF7C4DFF</ID>
+    <ID>MagicNumber:HomeScreen.kt$0xFFC6FF00</ID>
+    <ID>MagicNumber:HomeScreen.kt$0xFFE040FB</ID>
+    <ID>MagicNumber:HomeScreen.kt$0xFFFF4081</ID>
+    <ID>MagicNumber:HomeScreen.kt$0xFFFF5252</ID>
+    <ID>MagicNumber:HomeScreen.kt$0xFFFF9800</ID>
+    <ID>MagicNumber:HomeScreen.kt$0xFFFFC107</ID>
+    <ID>MagicNumber:HomeScreen.kt$0xFFFFD600</ID>
+    <ID>MagicNumber:HomeScreen.kt$600</ID>
+    <ID>MagicNumber:MacChangerViewModel.kt$MacChangerViewModel$256</ID>
+    <ID>MagicNumber:MacChangerViewModel.kt$MacChangerViewModel$5</ID>
+    <ID>MagicNumber:NetworkHelper.kt$NetworkHelper$0xff</ID>
+    <ID>MagicNumber:NetworkHelper.kt$NetworkHelper$16</ID>
+    <ID>MagicNumber:NetworkHelper.kt$NetworkHelper$24</ID>
+    <ID>MagicNumber:NetworkHelper.kt$NetworkHelper$8</ID>
+    <ID>MagicNumber:NetworkUseCases.kt$ScanPortsUseCase$22</ID>
+    <ID>MagicNumber:NetworkUseCases.kt$ScanPortsUseCase$443</ID>
+    <ID>MagicNumber:NetworkUseCases.kt$ScanPortsUseCase$80</ID>
+    <ID>MagicNumber:PacketForgerScreen.kt$5</ID>
+    <ID>MagicNumber:PacketForgerViewModel.kt$PacketForgerViewModel$16</ID>
+    <ID>MagicNumber:PacketForgerViewModel.kt$PacketForgerViewModel$4</ID>
+    <ID>MagicNumber:ResponderViewModel.kt$ResponderViewModel$0x04</ID>
+    <ID>MagicNumber:ResponderViewModel.kt$ResponderViewModel$0x1E</ID>
+    <ID>MagicNumber:ResponderViewModel.kt$ResponderViewModel$0xff</ID>
+    <ID>MagicNumber:ResponderViewModel.kt$ResponderViewModel$10</ID>
+    <ID>MagicNumber:ResponderViewModel.kt$ResponderViewModel$11</ID>
+    <ID>MagicNumber:ResponderViewModel.kt$ResponderViewModel$12</ID>
+    <ID>MagicNumber:ResponderViewModel.kt$ResponderViewModel$13</ID>
+    <ID>MagicNumber:ResponderViewModel.kt$ResponderViewModel$14</ID>
+    <ID>MagicNumber:ResponderViewModel.kt$ResponderViewModel$15</ID>
+    <ID>MagicNumber:ResponderViewModel.kt$ResponderViewModel$16</ID>
+    <ID>MagicNumber:ResponderViewModel.kt$ResponderViewModel$24</ID>
+    <ID>MagicNumber:ResponderViewModel.kt$ResponderViewModel$3</ID>
+    <ID>MagicNumber:ResponderViewModel.kt$ResponderViewModel$4</ID>
+    <ID>MagicNumber:ResponderViewModel.kt$ResponderViewModel$5</ID>
+    <ID>MagicNumber:ResponderViewModel.kt$ResponderViewModel$512</ID>
+    <ID>MagicNumber:ResponderViewModel.kt$ResponderViewModel$5355</ID>
+    <ID>MagicNumber:ResponderViewModel.kt$ResponderViewModel$6</ID>
+    <ID>MagicNumber:ResponderViewModel.kt$ResponderViewModel$63</ID>
+    <ID>MagicNumber:ResponderViewModel.kt$ResponderViewModel$7</ID>
+    <ID>MagicNumber:ResponderViewModel.kt$ResponderViewModel$8</ID>
+    <ID>MagicNumber:ResponderViewModel.kt$ResponderViewModel$9</ID>
+    <ID>MagicNumber:SearchSploitScreen.kt$100</ID>
+    <ID>MagicNumber:SettingsRepository.kt$SettingsRepository$55553</ID>
+    <ID>MagicNumber:SettingsRepository.kt$SettingsRepository$8080</ID>
+    <ID>MagicNumber:SettingsRepository.kt$SettingsRepository$8081</ID>
+    <ID>MagicNumber:SettingsRepository.kt$SettingsRepository$8082</ID>
+    <ID>MagicNumber:SettingsScreen.kt$5</ID>
+    <ID>MagicNumber:SettingsScreen.kt$65535</ID>
+    <ID>MagicNumber:SettingsScreen.kt$SettingsPalette$0xFF00B0FF</ID>
+    <ID>MagicNumber:SettingsScreen.kt$SettingsPalette$0xFF00E5FF</ID>
+    <ID>MagicNumber:SettingsScreen.kt$SettingsPalette$0xFF00E676</ID>
+    <ID>MagicNumber:SettingsScreen.kt$SettingsPalette$0xFF1DE9B6</ID>
+    <ID>MagicNumber:SettingsScreen.kt$SettingsPalette$0xFF448AFF</ID>
+    <ID>MagicNumber:SettingsScreen.kt$SettingsPalette$0xFF536DFE</ID>
+    <ID>MagicNumber:SettingsScreen.kt$SettingsPalette$0xFF7C4DFF</ID>
+    <ID>MagicNumber:SettingsScreen.kt$SettingsPalette$0xFFC6FF00</ID>
+    <ID>MagicNumber:SettingsScreen.kt$SettingsPalette$0xFFE040FB</ID>
+    <ID>MagicNumber:SettingsScreen.kt$SettingsPalette$0xFFFF4081</ID>
+    <ID>MagicNumber:SettingsScreen.kt$SettingsPalette$0xFFFF5252</ID>
+    <ID>MagicNumber:SettingsScreen.kt$SettingsPalette$0xFFFF9800</ID>
+    <ID>MagicNumber:SettingsScreen.kt$SettingsPalette$0xFFFFC107</ID>
+    <ID>MagicNumber:SettingsScreen.kt$SettingsPalette$0xFFFFD600</ID>
+    <ID>MagicNumber:SettingsViewModel.kt$SettingsViewModel$65535</ID>
+    <ID>MagicNumber:SmartToolBox.kt$SmartToolBox$9</ID>
+    <ID>MagicNumber:TerminalScreen.kt$0xFF0D1117</ID>
+    <ID>MagicNumber:TerminalScreen.kt$0xFF8B949E</ID>
+    <ID>MagicNumber:TerminalScreen.kt$0xFFE6EDF3</ID>
+    <ID>MagicNumber:UpdateChecker.kt$UpdateChecker$10000</ID>
+    <ID>MagicNumber:VulnScannerViewModel.kt$VulnScannerViewModel$500</ID>
+    <ID>MagicNumber:WifiteViewModel.kt$WifiteViewModel$50</ID>
+    <ID>MatchingDeclarationName:IndraNavHost.kt$Screen</ID>
+    <ID>MaxLineLength:CoreManager.kt$CoreManager$val url = "https://github.com/projectdiscovery/nuclei/releases/download/v$NUCLEI_VERSION/nuclei_${NUCLEI_VERSION}_linux_${if (isArm64) "arm64" else "arm"}.zip"</ID>
+    <ID>MaxLineLength:PacketCaptureScreen.kt$"Enabling monitor mode on this interface may crash or reboot the device on some vendor drivers (similar risk to MITM/arpspoof). Continue?"</ID>
+    <ID>MaxLineLength:WhisperPairScreen.kt$"Scans for Fast Pair (0xFE2C) devices. CVE-2025-36911 exploit chain (RAW/RETROACTIVE/EXTENDED_RESPONSE) requires additional research; discovery only for now."</ID>
+    <ID>MaxLineLength:WifiAuditScreen.kt$text = "Needs a capture file that contains the WPA handshake or WEP traffic — capture one first, then run the cracker against it"</ID>
+    <ID>NestedBlockDepth:CoreManager.kt$CoreManager$private fun extractTar( input: InputStream, destination: File, ): Boolean</ID>
+    <ID>NestedBlockDepth:NetworkHelper.kt$NetworkHelper$fun getLocalIpv4Addresses(): Set&lt;String&gt;</ID>
+    <ID>ReturnCount:ArsenalViewModel.kt$ArsenalViewModel$fun run(id: String)</ID>
+    <ID>ReturnCount:HomeViewModel.kt$HomeViewModel$private fun isPluginAvailable(plugin: org.indra.android.core.system.Plugin): Boolean</ID>
+    <ID>ReturnCount:MacChangerViewModel.kt$MacChangerViewModel$fun apply()</ID>
+    <ID>ReturnCount:MasscanViewModel.kt$MasscanViewModel$fun run()</ID>
+    <ID>ReturnCount:MitmViewModel.kt$MitmViewModel$fun start()</ID>
+    <ID>ReturnCount:NetworkHelper.kt$NetworkHelper$@Suppress("DEPRECATION") fun getWifiGatewayAddress(): String?</ID>
+    <ID>ReturnCount:NetworkHelper.kt$NetworkHelper$@Suppress("DEPRECATION") private fun legacyDhcpGateway(): String?</ID>
+    <ID>ReturnCount:NetworkHelper.kt$NetworkHelper$fun getGatewayAddress(): String?</ID>
+    <ID>ReturnCount:NetworkRadarViewModel.kt$NetworkRadarViewModel$fun start()</ID>
+    <ID>ReturnCount:NetworkRadarViewModel.kt$internal fun parseHostLine(line: String): Pair&lt;String, Map&lt;String, String&gt;&gt;?</ID>
+    <ID>ReturnCount:OtaUpdateManager.kt$OtaUpdateManager$private fun parseManifest(json: String): OtaManifest?</ID>
+    <ID>ReturnCount:OtaUpdateManager.kt$OtaUpdateManager$private fun verifyManifestEnvelope(json: String): OtaManifest?</ID>
+    <ID>ReturnCount:PacketCaptureViewModel.kt$PacketCaptureViewModel$fun start()</ID>
+    <ID>ReturnCount:ReaverViewModel.kt$ReaverViewModel$fun run()</ID>
+    <ID>ReturnCount:ResponderViewModel.kt$ResponderViewModel$private fun buildLlmnrResponse( query: ByteArray, ip: ByteArray, ): ByteArray?</ID>
+    <ID>ReturnCount:ResponderViewModel.kt$ResponderViewModel$private fun parseLlmnrQuestion(data: ByteArray): String?</ID>
+    <ID>ReturnCount:TerminalViewModel.kt$TerminalViewModel$fun run()</ID>
+    <ID>ReturnCount:WhisperPairViewModel.kt$WhisperPairViewModel$@SuppressLint("MissingPermission") fun startScan()</ID>
+    <ID>ReturnCount:WifiAuditViewModel.kt$WifiAuditViewModel$fun crack()</ID>
+    <ID>SwallowedException:ArsenalRepository.kt$ArsenalRepository$e: Exception</ID>
+    <ID>SwallowedException:CrashReporter.kt$CrashReporter$e: Exception</ID>
+    <ID>SwallowedException:IndraApplication.kt$IndraApplication$e: Exception</ID>
+    <ID>SwallowedException:IndraSystem.kt$IndraSystem$e: Exception</ID>
+    <ID>SwallowedException:MacChangerViewModel.kt$MacChangerViewModel$e: Exception</ID>
+    <ID>SwallowedException:OtaUpdateManager.kt$OtaUpdateManager$e: AtomicMoveNotSupportedException</ID>
+    <ID>SwallowedException:OtaUpdateManager.kt$OtaUpdateManager$e: Exception</ID>
+    <ID>SwallowedException:ResponderViewModel.kt$ResponderViewModel$e: Exception</ID>
+    <ID>SwallowedException:RootManager.kt$RootManager$e2: PackageManager.NameNotFoundException</ID>
+    <ID>SwallowedException:RootManager.kt$RootManager$e: Exception</ID>
+    <ID>SwallowedException:RootManager.kt$RootManager$e: PackageManager.NameNotFoundException</ID>
+    <ID>SwallowedException:SmartToolBox.kt$ToolResult.Companion$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:ArsenalRepository.kt$ArsenalRepository$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:CoreManager.kt$CoreManager$e: Throwable</ID>
+    <ID>TooGenericExceptionCaught:CrashReporter.kt$CrashReporter$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:ExploitFinderViewModel.kt$ExploitFinderViewModel$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:IndraApplication.kt$IndraApplication$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:IndraSystem.kt$IndraSystem$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:MacChangerViewModel.kt$MacChangerViewModel$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:NetworkHelper.kt$NetworkHelper$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:OtaUpdateManager.kt$OtaUpdateManager$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:PacketForgerViewModel.kt$PacketForgerViewModel$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:PortScannerViewModel.kt$PortScannerViewModel$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:ResponderViewModel.kt$ResponderViewModel$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:RootManager.kt$RootManager$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:RouterPwnViewModel.kt$RouterPwnViewModel$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:SmartToolBox.kt$SmartTool$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:SmartToolBox.kt$SmartTool$e: Throwable</ID>
+    <ID>TooGenericExceptionCaught:SmartToolBox.kt$ToolResult.Companion$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:UpdateChecker.kt$UpdateChecker$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:VulnScannerViewModel.kt$VulnScannerViewModel$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:WebTesterViewModel.kt$WebTesterViewModel$e: Exception</ID>
+    <ID>TooManyFunctions:ArsenalViewModel.kt$ArsenalViewModel : ViewModel</ID>
+    <ID>TooManyFunctions:CoreManager.kt$CoreManager</ID>
+    <ID>TooManyFunctions:IndraClient.kt$IndraClient</ID>
+    <ID>TooManyFunctions:MacChangerViewModel.kt$MacChangerViewModel : ViewModel</ID>
+    <ID>TooManyFunctions:NetworkHelper.kt$NetworkHelper</ID>
+    <ID>TooManyFunctions:OtaUpdateManager.kt$OtaUpdateManager</ID>
+    <ID>TooManyFunctions:RootManager.kt$RootManager</ID>
+    <ID>TooManyFunctions:SmartToolBox.kt$SmartToolBox</ID>
+    <ID>UnusedPrivateProperty:ExploitFinderViewModel.kt$ExploitFinderViewModel$private val system: IndraSystem</ID>
+    <ID>UnusedPrivateProperty:InspectorViewModel.kt$InspectorViewModel$private val system: IndraSystem</ID>
+    <ID>UnusedPrivateProperty:NetworkUseCases.kt$ScanNetworkUseCase$private val system: IndraSystem</ID>
+    <ID>UnusedPrivateProperty:NetworkUseCases.kt$ScanPortsUseCase$private val system: IndraSystem</ID>
+    <ID>UnusedPrivateProperty:NetworkUseCases.kt$TraceRouteUseCase$private val system: IndraSystem</ID>
+    <ID>UnusedPrivateProperty:PortScannerViewModel.kt$PortScannerViewModel$private val system: IndraSystem</ID>
+    <ID>UnusedPrivateProperty:RouterPwnViewModel.kt$RouterPwnViewModel$private val system: IndraSystem</ID>
+    <ID>UnusedPrivateProperty:SearchSploitViewModel.kt$SearchSploitViewModel$private val system: IndraSystem</ID>
+    <ID>UnusedPrivateProperty:SessionManager.kt$SessionManager.Companion$private const val SESSION_MAGIC = "IndraSession"</ID>
+    <ID>UnusedPrivateProperty:TracerouteViewModel.kt$TracerouteViewModel$private val system: IndraSystem</ID>
+    <ID>UnusedPrivateProperty:UpdateChecker.kt$UpdateChecker$@ApplicationContext private val context: Context</ID>
+    <ID>UnusedPrivateProperty:VulnScannerViewModel.kt$VulnScannerViewModel$private val system: IndraSystem</ID>
+    <ID>UnusedPrivateProperty:WebTesterViewModel.kt$WebTesterViewModel$private val system: IndraSystem</ID>
+    <ID>UseCheckOrError:OtaModels.kt$OtaBinary$throw IllegalStateException("Manifest binary '$name' has no arm64-v8a artifact")</ID>
+    <ID>UseCheckOrError:OtaModels.kt$OtaBinary$throw IllegalStateException("Manifest binary '$name' has no armeabi-v7a artifact")</ID>
+    <ID>UseCheckOrError:OtaUpdateManager.kt$OtaUpdateManager$throw IllegalStateException( "Health check failed for ${bin.name}: probe returned '$version', expected ${bin.version}", )</ID>
+    <ID>WildcardImport:ArsenalScreen.kt$import androidx.compose.foundation.layout.*</ID>
+    <ID>WildcardImport:ArsenalScreen.kt$import androidx.compose.material3.*</ID>
+    <ID>WildcardImport:ArsenalScreen.kt$import androidx.compose.runtime.*</ID>
+    <ID>WildcardImport:BottomNavBar.kt$import androidx.compose.material.icons.automirrored.filled.*</ID>
+    <ID>WildcardImport:BottomNavBar.kt$import androidx.compose.material.icons.filled.*</ID>
+    <ID>WildcardImport:BottomNavBar.kt$import androidx.compose.material.icons.outlined.*</ID>
+    <ID>WildcardImport:BottomNavBar.kt$import androidx.compose.material3.*</ID>
+    <ID>WildcardImport:CommonComponents.kt$import androidx.compose.foundation.layout.*</ID>
+    <ID>WildcardImport:CommonComponents.kt$import androidx.compose.material3.*</ID>
+    <ID>WildcardImport:CommonComponents.kt$import androidx.compose.runtime.*</ID>
+    <ID>WildcardImport:CredentialTesterScreen.kt$import androidx.compose.foundation.layout.*</ID>
+    <ID>WildcardImport:CredentialTesterScreen.kt$import androidx.compose.material3.*</ID>
+    <ID>WildcardImport:CredentialTesterScreen.kt$import androidx.compose.runtime.*</ID>
+    <ID>WildcardImport:ExploitFinderScreen.kt$import androidx.compose.foundation.layout.*</ID>
+    <ID>WildcardImport:ExploitFinderScreen.kt$import androidx.compose.material3.*</ID>
+    <ID>WildcardImport:ExploitFinderScreen.kt$import androidx.compose.runtime.*</ID>
+    <ID>WildcardImport:GeoMacScreen.kt$import androidx.compose.foundation.layout.*</ID>
+    <ID>WildcardImport:GeoMacScreen.kt$import androidx.compose.material3.*</ID>
+    <ID>WildcardImport:GeoMacScreen.kt$import androidx.compose.runtime.*</ID>
+    <ID>WildcardImport:HandshakesScreen.kt$import androidx.compose.foundation.layout.*</ID>
+    <ID>WildcardImport:HandshakesScreen.kt$import androidx.compose.material3.*</ID>
+    <ID>WildcardImport:HandshakesScreen.kt$import androidx.compose.runtime.*</ID>
+    <ID>WildcardImport:HomeScreen.kt$import androidx.compose.foundation.layout.*</ID>
+    <ID>WildcardImport:HomeScreen.kt$import androidx.compose.material.icons.automirrored.filled.*</ID>
+    <ID>WildcardImport:HomeScreen.kt$import androidx.compose.material.icons.filled.*</ID>
+    <ID>WildcardImport:HomeScreen.kt$import androidx.compose.material3.*</ID>
+    <ID>WildcardImport:HomeScreen.kt$import androidx.compose.runtime.*</ID>
+    <ID>WildcardImport:InspectorScreen.kt$import androidx.compose.foundation.layout.*</ID>
+    <ID>WildcardImport:InspectorScreen.kt$import androidx.compose.material3.*</ID>
+    <ID>WildcardImport:InspectorScreen.kt$import androidx.compose.runtime.*</ID>
+    <ID>WildcardImport:IptablesScreen.kt$import androidx.compose.foundation.layout.*</ID>
+    <ID>WildcardImport:IptablesScreen.kt$import androidx.compose.material3.*</ID>
+    <ID>WildcardImport:IptablesScreen.kt$import androidx.compose.runtime.*</ID>
+    <ID>WildcardImport:LoginCrackerScreen.kt$import androidx.compose.foundation.layout.*</ID>
+    <ID>WildcardImport:LoginCrackerScreen.kt$import androidx.compose.material3.*</ID>
+    <ID>WildcardImport:LoginCrackerScreen.kt$import androidx.compose.runtime.*</ID>
+    <ID>WildcardImport:MacChangerScreen.kt$import androidx.compose.foundation.layout.*</ID>
+    <ID>WildcardImport:MacChangerScreen.kt$import androidx.compose.material3.*</ID>
+    <ID>WildcardImport:MacChangerScreen.kt$import androidx.compose.runtime.*</ID>
+    <ID>WildcardImport:MasscanScreen.kt$import androidx.compose.foundation.layout.*</ID>
+    <ID>WildcardImport:MasscanScreen.kt$import androidx.compose.material3.*</ID>
+    <ID>WildcardImport:MasscanScreen.kt$import androidx.compose.runtime.*</ID>
+    <ID>WildcardImport:MitmScreen.kt$import androidx.compose.foundation.layout.*</ID>
+    <ID>WildcardImport:MitmScreen.kt$import androidx.compose.material3.*</ID>
+    <ID>WildcardImport:MitmScreen.kt$import androidx.compose.runtime.*</ID>
+    <ID>WildcardImport:NetworkHelperTest.kt$import org.junit.Assert.*</ID>
+    <ID>WildcardImport:NetworkRadarScreen.kt$import androidx.compose.foundation.layout.*</ID>
+    <ID>WildcardImport:NetworkRadarScreen.kt$import androidx.compose.material3.*</ID>
+    <ID>WildcardImport:NetworkRadarScreen.kt$import androidx.compose.runtime.*</ID>
+    <ID>WildcardImport:PacketCaptureScreen.kt$import androidx.compose.foundation.layout.*</ID>
+    <ID>WildcardImport:PacketCaptureScreen.kt$import androidx.compose.material3.*</ID>
+    <ID>WildcardImport:PacketCaptureScreen.kt$import androidx.compose.runtime.*</ID>
+    <ID>WildcardImport:PacketForgerScreen.kt$import androidx.compose.foundation.layout.*</ID>
+    <ID>WildcardImport:PacketForgerScreen.kt$import androidx.compose.material3.*</ID>
+    <ID>WildcardImport:PacketForgerScreen.kt$import androidx.compose.runtime.*</ID>
+    <ID>WildcardImport:PluginManagerTest.kt$import org.junit.Assert.*</ID>
+    <ID>WildcardImport:PluginScreen.kt$import androidx.compose.foundation.layout.*</ID>
+    <ID>WildcardImport:PluginScreen.kt$import androidx.compose.material3.*</ID>
+    <ID>WildcardImport:PluginScreen.kt$import androidx.compose.runtime.*</ID>
+    <ID>WildcardImport:PortScannerScreen.kt$import androidx.compose.foundation.layout.*</ID>
+    <ID>WildcardImport:PortScannerScreen.kt$import androidx.compose.material3.*</ID>
+    <ID>WildcardImport:PortScannerScreen.kt$import androidx.compose.runtime.*</ID>
+    <ID>WildcardImport:ReaverScreen.kt$import androidx.compose.foundation.layout.*</ID>
+    <ID>WildcardImport:ReaverScreen.kt$import androidx.compose.material3.*</ID>
+    <ID>WildcardImport:ReaverScreen.kt$import androidx.compose.runtime.*</ID>
+    <ID>WildcardImport:ResponderScreen.kt$import androidx.compose.foundation.layout.*</ID>
+    <ID>WildcardImport:ResponderScreen.kt$import androidx.compose.material3.*</ID>
+    <ID>WildcardImport:ResponderScreen.kt$import androidx.compose.runtime.*</ID>
+    <ID>WildcardImport:RootManagerTest.kt$import org.junit.Assert.*</ID>
+    <ID>WildcardImport:RouterPwnScreen.kt$import androidx.compose.foundation.layout.*</ID>
+    <ID>WildcardImport:RouterPwnScreen.kt$import androidx.compose.material3.*</ID>
+    <ID>WildcardImport:RouterPwnScreen.kt$import androidx.compose.runtime.*</ID>
+    <ID>WildcardImport:SearchSploitScreen.kt$import androidx.compose.foundation.layout.*</ID>
+    <ID>WildcardImport:SearchSploitScreen.kt$import androidx.compose.material3.*</ID>
+    <ID>WildcardImport:SearchSploitScreen.kt$import androidx.compose.runtime.*</ID>
+    <ID>WildcardImport:SettingsScreen.kt$import androidx.compose.foundation.layout.*</ID>
+    <ID>WildcardImport:SettingsScreen.kt$import androidx.compose.material.icons.filled.*</ID>
+    <ID>WildcardImport:SettingsScreen.kt$import androidx.compose.material3.*</ID>
+    <ID>WildcardImport:SettingsScreen.kt$import androidx.compose.runtime.*</ID>
+    <ID>WildcardImport:TerminalScreen.kt$import androidx.compose.foundation.layout.*</ID>
+    <ID>WildcardImport:TerminalScreen.kt$import androidx.compose.material3.*</ID>
+    <ID>WildcardImport:TerminalScreen.kt$import androidx.compose.runtime.*</ID>
+    <ID>WildcardImport:ToolResultTest.kt$import org.junit.Assert.*</ID>
+    <ID>WildcardImport:ToolsScreen.kt$import androidx.compose.foundation.layout.*</ID>
+    <ID>WildcardImport:ToolsScreen.kt$import androidx.compose.material3.*</ID>
+    <ID>WildcardImport:ToolsScreen.kt$import androidx.compose.runtime.*</ID>
+    <ID>WildcardImport:TracerouteScreen.kt$import androidx.compose.foundation.layout.*</ID>
+    <ID>WildcardImport:TracerouteScreen.kt$import androidx.compose.material3.*</ID>
+    <ID>WildcardImport:TracerouteScreen.kt$import androidx.compose.runtime.*</ID>
+    <ID>WildcardImport:VulnScannerScreen.kt$import androidx.compose.foundation.layout.*</ID>
+    <ID>WildcardImport:VulnScannerScreen.kt$import androidx.compose.material3.*</ID>
+    <ID>WildcardImport:VulnScannerScreen.kt$import androidx.compose.runtime.*</ID>
+    <ID>WildcardImport:WebTesterScreen.kt$import androidx.compose.foundation.layout.*</ID>
+    <ID>WildcardImport:WebTesterScreen.kt$import androidx.compose.material3.*</ID>
+    <ID>WildcardImport:WebTesterScreen.kt$import androidx.compose.runtime.*</ID>
+    <ID>WildcardImport:WhisperPairScreen.kt$import androidx.compose.foundation.layout.*</ID>
+    <ID>WildcardImport:WhisperPairScreen.kt$import androidx.compose.material3.*</ID>
+    <ID>WildcardImport:WhisperPairScreen.kt$import androidx.compose.runtime.*</ID>
+    <ID>WildcardImport:WifiAuditScreen.kt$import androidx.compose.foundation.layout.*</ID>
+    <ID>WildcardImport:WifiAuditScreen.kt$import androidx.compose.material3.*</ID>
+    <ID>WildcardImport:WifiAuditScreen.kt$import androidx.compose.runtime.*</ID>
+    <ID>WildcardImport:WifiScannerScreen.kt$import androidx.compose.foundation.layout.*</ID>
+    <ID>WildcardImport:WifiScannerScreen.kt$import androidx.compose.material3.*</ID>
+    <ID>WildcardImport:WifiScannerScreen.kt$import androidx.compose.runtime.*</ID>
+    <ID>WildcardImport:WifiteScreen.kt$import androidx.compose.foundation.layout.*</ID>
+    <ID>WildcardImport:WifiteScreen.kt$import androidx.compose.material3.*</ID>
+    <ID>WildcardImport:WifiteScreen.kt$import androidx.compose.runtime.*</ID>
+  </CurrentIssues>
+</SmellBaseline>

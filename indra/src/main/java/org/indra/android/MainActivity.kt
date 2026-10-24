@@ -1,7 +1,5 @@
 package org.indra.android
 
-import android.Manifest
-import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -15,10 +13,8 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.lifecycleScope
 import dagger.hilt.android.AndroidEntryPoint
@@ -34,7 +30,6 @@ import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
-
     @Inject
     lateinit var permissionManager: PermissionManager
 
@@ -44,14 +39,15 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var coreManager: CoreManager
 
-    private val permissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { permissions ->
-        val denied = permissions.filterValues { !it }.keys
-        if (denied.isNotEmpty()) {
-            // Show rationale or handle denial
+    private val permissionLauncher =
+        registerForActivityResult(
+            ActivityResultContracts.RequestMultiplePermissions(),
+        ) { permissions ->
+            val denied = permissions.filterValues { !it }.keys
+            if (denied.isNotEmpty()) {
+                // Show rationale or handle denial
+            }
         }
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
@@ -73,7 +69,7 @@ class MainActivity : ComponentActivity() {
             IndraTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
+                    color = MaterialTheme.colorScheme.background,
                 ) {
                     MainScaffold()
                 }
@@ -103,11 +99,11 @@ fun MainScaffold() {
 
     Scaffold(
         bottomBar = { BottomNavBar(navController) },
-        snackbarHost = { SnackbarHost(snackbarHostState) }
+        snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { paddingValues ->
         IndraNavHost(
             navController = navController,
-            modifier = Modifier.padding(paddingValues)
+            modifier = Modifier.padding(paddingValues),
         )
     }
 }

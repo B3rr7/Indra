@@ -3,6 +3,7 @@ plugins {
     id 'org.jetbrains.kotlin.android'
     id 'com.google.dagger.hilt.android'
     id 'kotlin-kapt'
+    id 'io.gitlab.arturbosch.detekt'
 }
 
 android {
@@ -80,6 +81,11 @@ android {
 }
 
 dependencies {
+    implementation project(':core')
+    implementation project(':data')
+    implementation project(':ui')
+    implementation project(':features')
+
     // Core
     implementation 'androidx.core:core-ktx:1.12.0'
     implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.7.0'
@@ -112,6 +118,9 @@ dependencies {
     // Networking
     implementation 'com.squareup.okhttp3:okhttp:4.12.0'
     implementation 'com.google.code.gson:gson:2.10.1'
+
+    // OSM maps (GeoMac)
+    implementation 'org.osmdroid:osmdroid-android:6.1.18'
 
     // Compression
     implementation 'org.apache.commons:commons-compress:1.26.1'
@@ -168,4 +177,10 @@ tasks.register("bundleCore", Copy) {
 
 tasks.matching { it.name == 'preBuild' }.configureEach {
     dependsOn tasks.named('bundleCore')
+}
+
+detekt {
+    config.setFrom(files("$projectDir/detekt.yml"))
+    buildUponDefaultConfig = true
+    allRules = false
 }

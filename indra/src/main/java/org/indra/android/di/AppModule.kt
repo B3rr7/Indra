@@ -3,7 +3,6 @@ package org.indra.android.di
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
-
 import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -18,13 +17,10 @@ annotation class ApplicationScope
 @Module
 @InstallIn(SingletonComponent::class)
 object AppModule {
-
     @Provides
     @Singleton
     @ApplicationScope
-    fun provideApplicationScope(): CoroutineScope {
-        return CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    }
+    fun provideApplicationScope(): CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     // @ApplicationContext Context is already provided by Hilt, no need to re-provide
 }

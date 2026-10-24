@@ -30,7 +30,6 @@ import org.indra.android.ui.theme.StatusCyan
 import org.indra.android.ui.theme.StatusGreen
 import org.indra.android.ui.theme.StatusOrange
 import org.indra.android.ui.theme.StatusRed
-import org.indra.android.ui.theme.StatusBlue
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -38,7 +37,7 @@ fun HomeScreen(
     onNavigateToPlugin: (String) -> Unit,
     onNavigateToNetworkRadar: () -> Unit,
     onNavigateToSettings: () -> Unit,
-    viewModel: HomeViewModel = hiltViewModel()
+    viewModel: HomeViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
@@ -48,19 +47,19 @@ fun HomeScreen(
                 title = {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         Icon(
                             imageVector = Icons.Default.Security,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(28.dp)
+                            modifier = Modifier.size(28.dp),
                         )
                         Text(
                             text = "INDRA",
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.ExtraBold,
-                            letterSpacing = MaterialTheme.typography.titleLarge.letterSpacing
+                            letterSpacing = MaterialTheme.typography.titleLarge.letterSpacing,
                         )
                     }
                 },
@@ -69,38 +68,42 @@ fun HomeScreen(
                         Icon(
                             Icons.Default.Settings,
                             contentDescription = "Settings",
-                            tint = MaterialTheme.colorScheme.onSurface
+                            tint = MaterialTheme.colorScheme.onSurface,
                         )
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent
-                )
+                colors =
+                    TopAppBarDefaults.topAppBarColors(
+                        containerColor = Color.Transparent,
+                    ),
             )
-        }
+        },
     ) { paddingValues ->
         LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues),
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues),
             contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp)
+            verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
             // Hero Network Status Card
             item {
                 AnimatedVisibility(
                     visible = true,
-                    enter = fadeIn(animationSpec = tween(600)) + slideInVertically(
-                        animationSpec = tween(600),
-                        initialOffsetY = { -40 }
-                    )
+                    enter =
+                        fadeIn(animationSpec = tween(600)) +
+                            slideInVertically(
+                                animationSpec = tween(600),
+                                initialOffsetY = { -40 },
+                            ),
                 ) {
                     NetworkStatusHeroCard(
                         networkName = uiState.networkName,
                         networkDetail = uiState.networkDetail,
                         isConnected = uiState.isConnected,
                         targetCount = uiState.targets.size,
-                        onClick = onNavigateToNetworkRadar
+                        onClick = onNavigateToNetworkRadar,
                     )
                 }
             }
@@ -109,33 +112,33 @@ fun HomeScreen(
             item {
                 SectionTitle(
                     title = "Quick Actions",
-                    icon = Icons.Default.Bolt
+                    icon = Icons.Default.Bolt,
                 )
             }
 
             item {
                 LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     item {
                         QuickActionPill(
                             icon = Icons.Default.Radar,
                             label = "Network Scan",
-                            onClick = { onNavigateToPlugin("port_scanner") }
+                            onClick = { onNavigateToPlugin("port_scanner") },
                         )
                     }
                     item {
                         QuickActionPill(
                             icon = Icons.Default.DeviceHub,
                             label = "Inspect",
-                            onClick = { onNavigateToPlugin("inspector") }
+                            onClick = { onNavigateToPlugin("inspector") },
                         )
                     }
                     item {
                         QuickActionPill(
                             icon = Icons.Default.Timeline,
                             label = "Trace Route",
-                            onClick = { onNavigateToPlugin("traceroute") }
+                            onClick = { onNavigateToPlugin("traceroute") },
                         )
                     }
                     item {
@@ -143,7 +146,7 @@ fun HomeScreen(
                             icon = Icons.Default.SyncAlt,
                             label = "MITM Attack",
                             onClick = { onNavigateToPlugin("mitm") },
-                            accentColor = StatusRed
+                            accentColor = StatusRed,
                         )
                     }
                     item {
@@ -151,7 +154,7 @@ fun HomeScreen(
                             icon = Icons.Default.BugReport,
                             label = "Vuln Scan",
                             onClick = { onNavigateToPlugin("vuln_scanner") },
-                            accentColor = StatusOrange
+                            accentColor = StatusOrange,
                         )
                     }
                 }
@@ -162,7 +165,7 @@ fun HomeScreen(
                 SectionTitle(
                     title = "Security Tools",
                     icon = Icons.Default.Build,
-                    subtitle = "${uiState.plugins.size} modules available"
+                    subtitle = "${uiState.plugins.size} modules available",
                 )
             }
 
@@ -175,7 +178,7 @@ fun HomeScreen(
                                 ModernToolCard(
                                     plugin = plugin,
                                     onClick = { onNavigateToPlugin(plugin.id) },
-                                    modifier = Modifier.weight(1f)
+                                    modifier = Modifier.weight(1f),
                                 )
                             }
                             if (rowPlugins.size == 1) {
@@ -190,10 +193,10 @@ fun HomeScreen(
                 item {
                     Box(
                         modifier = Modifier.fillMaxWidth(),
-                        contentAlignment = Alignment.Center
+                        contentAlignment = Alignment.Center,
                     ) {
                         CircularProgressIndicator(
-                            color = MaterialTheme.colorScheme.primary
+                            color = MaterialTheme.colorScheme.primary,
                         )
                     }
                 }
@@ -210,107 +213,114 @@ fun NetworkStatusHeroCard(
     isConnected: Boolean,
     targetCount: Int,
     modifier: Modifier = Modifier,
-    onClick: () -> Unit = {}
+    onClick: () -> Unit = {},
 ) {
     Card(
         onClick = onClick,
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = Color.Transparent
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+        colors =
+            CardDefaults.cardColors(
+                containerColor = Color.Transparent,
+            ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
         Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    brush = Brush.horizontalGradient(
-                        colors = if (isConnected) {
-                            listOf(
-                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.8f),
-                                MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f)
-                            )
-                        } else {
-                            listOf(
-                                MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.8f),
-                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
-                            )
-                        }
-                    )
-                )
-                .padding(24.dp)
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .background(
+                        brush =
+                            Brush.horizontalGradient(
+                                colors =
+                                    if (isConnected) {
+                                        listOf(
+                                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.8f),
+                                            MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f),
+                                        )
+                                    } else {
+                                        listOf(
+                                            MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.8f),
+                                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                                        )
+                                    },
+                            ),
+                    ).padding(24.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 Box(
-                    modifier = Modifier
-                        .size(64.dp)
-                        .clip(CircleShape)
-                        .background(
-                            if (isConnected) StatusGreen.copy(alpha = 0.2f)
-                            else StatusRed.copy(alpha = 0.2f)
-                        ),
-                    contentAlignment = Alignment.Center
+                    modifier =
+                        Modifier
+                            .size(64.dp)
+                            .clip(CircleShape)
+                            .background(
+                                if (isConnected) {
+                                    StatusGreen.copy(alpha = 0.2f)
+                                } else {
+                                    StatusRed.copy(alpha = 0.2f)
+                                },
+                            ),
+                    contentAlignment = Alignment.Center,
                 ) {
                     Icon(
                         imageVector = if (isConnected) Icons.Default.Wifi else Icons.Default.WifiOff,
                         contentDescription = null,
                         modifier = Modifier.size(32.dp),
-                        tint = if (isConnected) StatusGreen else StatusRed
+                        tint = if (isConnected) StatusGreen else StatusRed,
                     )
                 }
-                
+
                 Column(
                     modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     Text(
                         text = if (isConnected) "Network Connected" else "Disconnected",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = MaterialTheme.colorScheme.onSurface,
                     )
                     Text(
                         text = if (isConnected) networkName else "No active network",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     if (isConnected && networkDetail.isNotBlank()) {
                         Text(
                             text = networkDetail,
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                     if (isConnected) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Devices,
                                 contentDescription = null,
                                 modifier = Modifier.size(16.dp),
-                                tint = StatusCyan
+                                tint = StatusCyan,
                             )
                             Text(
                                 text = "$targetCount targets discovered",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = StatusCyan,
-                                fontWeight = FontWeight.Medium
+                                fontWeight = FontWeight.Medium,
                             )
                         }
                     }
                 }
-                
+
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
@@ -322,30 +332,30 @@ fun SectionTitle(
     title: String,
     icon: ImageVector,
     subtitle: String? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Row(
         modifier = modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Icon(
             imageVector = icon,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(24.dp)
+            modifier = Modifier.size(24.dp),
         )
         Column {
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
             )
             if (subtitle != null) {
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
@@ -358,27 +368,28 @@ fun QuickActionPill(
     label: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    accentColor: Color = MaterialTheme.colorScheme.primary
+    accentColor: Color = MaterialTheme.colorScheme.primary,
 ) {
     FilledTonalButton(
         onClick = onClick,
         modifier = modifier.height(48.dp),
         shape = RoundedCornerShape(24.dp),
-        colors = ButtonDefaults.filledTonalButtonColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
-        )
+        colors =
+            ButtonDefaults.filledTonalButtonColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+            ),
     ) {
         Icon(
             imageVector = icon,
             contentDescription = null,
             modifier = Modifier.size(20.dp),
-            tint = accentColor
+            tint = accentColor,
         )
         Spacer(modifier = Modifier.width(8.dp))
         Text(
             text = label,
             style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.Medium
+            fontWeight = FontWeight.Medium,
         )
     }
 }
@@ -390,72 +401,78 @@ fun ModernToolCard(
     modifier: Modifier = Modifier,
     onUpdate: (() -> Unit)? = null,
     updating: Boolean = false,
-    updateEnabled: Boolean = true
+    updateEnabled: Boolean = true,
 ) {
     val toolColor = getToolColor(plugin.id)
-    
+
     Card(
         onClick = onClick,
         enabled = plugin.available,
-        modifier = modifier
-            .fillMaxWidth()
-            .heightIn(min = 132.dp),
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .heightIn(min = 132.dp),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-            disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f)
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        colors =
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f),
+            ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
+                verticalAlignment = Alignment.Top,
             ) {
                 Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(toolColor.copy(alpha = 0.2f)),
-                    contentAlignment = Alignment.Center
+                    modifier =
+                        Modifier
+                            .size(40.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(toolColor.copy(alpha = 0.2f)),
+                    contentAlignment = Alignment.Center,
                 ) {
                     Icon(
                         imageVector = getToolIcon(plugin.id),
                         contentDescription = null,
                         modifier = Modifier.size(22.dp),
-                        tint = if (plugin.available) toolColor else toolColor.copy(alpha = 0.4f)
+                        tint = if (plugin.available) toolColor else toolColor.copy(alpha = 0.4f),
                     )
                 }
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     if (onUpdate != null && plugin.available) {
                         Text(
                             text = if (updating) "Updating…" else "Update",
                             style = MaterialTheme.typography.labelMedium,
-                            color = if (updating) {
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            } else {
-                                MaterialTheme.colorScheme.primary
-                            },
-                            modifier = Modifier.clickable(
-                                enabled = updateEnabled && !updating,
-                                onClick = onUpdate
-                            )
+                            color =
+                                if (updating) {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                } else {
+                                    MaterialTheme.colorScheme.primary
+                                },
+                            modifier =
+                                Modifier.clickable(
+                                    enabled = updateEnabled && !updating,
+                                    onClick = onUpdate,
+                                ),
                         )
                     }
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                         contentDescription = null,
                         modifier = Modifier.size(18.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
@@ -465,19 +482,20 @@ fun ModernToolCard(
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    text = if (plugin.available) {
-                        plugin.description
-                    } else {
-                        "${plugin.description} · not in native core"
-                    },
+                    text =
+                        if (plugin.available) {
+                            plugin.description
+                        } else {
+                            "${plugin.description} · not in native core"
+                        },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
-                    lineHeight = MaterialTheme.typography.bodySmall.lineHeight
+                    lineHeight = MaterialTheme.typography.bodySmall.lineHeight,
                 )
             }
         }
@@ -485,8 +503,8 @@ fun ModernToolCard(
 }
 
 @Composable
-fun getToolIcon(id: String): ImageVector {
-    return when (id) {
+fun getToolIcon(id: String): ImageVector =
+    when (id) {
         "port_scanner" -> Icons.Default.Radar
         "inspector" -> Icons.Default.Search
         "traceroute" -> Icons.Default.Timeline
@@ -503,23 +521,22 @@ fun getToolIcon(id: String): ImageVector {
         "packet_capture" -> Icons.Default.Cable
         else -> Icons.Default.Extension
     }
-}
 
 @Composable
 fun getToolColor(id: String): Color {
     // One distinct hue per tool — no repeats
     return when (id) {
-        "port_scanner" -> Color(0xFF00E5FF)  // cyan
-        "inspector" -> Color(0xFF448AFF)     // blue
-        "traceroute" -> Color(0xFF7C4DFF)    // violet
-        "mitm" -> Color(0xFFFF5252)          // red
+        "port_scanner" -> Color(0xFF00E5FF) // cyan
+        "inspector" -> Color(0xFF448AFF) // blue
+        "traceroute" -> Color(0xFF7C4DFF) // violet
+        "mitm" -> Color(0xFFFF5252) // red
         "exploit_finder" -> Color(0xFFFF9800) // orange
         "login_cracker" -> Color(0xFFFFC107) // amber
         "packet_forger" -> Color(0xFFE040FB) // magenta
-        "router_pwn" -> Color(0xFFFF4081)    // pink
-        "wifi_audit" -> Color(0xFF00E676)    // green
-        "vuln_scanner" -> Color(0xFFC6FF00)  // lime
-        "web_tester" -> Color(0xFF1DE9B6)    // teal
+        "router_pwn" -> Color(0xFFFF4081) // pink
+        "wifi_audit" -> Color(0xFF00E676) // green
+        "vuln_scanner" -> Color(0xFFC6FF00) // lime
+        "web_tester" -> Color(0xFF1DE9B6) // teal
         "credential_tester" -> Color(0xFFFFD600) // yellow
         "network_radar" -> Color(0xFF00BFA5) // sea green
         "packet_capture" -> Color(0xFF536DFE) // medium indigo blue

@@ -1,0 +1,19 @@
+# Detekt configuration for Indra
+# Run: ./gradlew detekt (after adding plugin to build.gradle)
+build:
+  maxIssues: 0
+  excludeCorrectable: false
+
+complexity:
+  LongMethod:
+    threshold: 80
+  LongParameterList:
+    functionThreshold: 8
+  TooManyFunctions:
+    thresholdInFiles: 15
+
+style:
+  MagicNumber:
+    ignoreNumbers: ['-1', '0', '1', '2']
+  MaxLineLength:
+    maxLineLength: 140

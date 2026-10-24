@@ -15,33 +15,34 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 
 @Composable
 fun BottomNavBar(navController: NavController) {
-    val items = listOf(
-        BottomNavItem("Home", Screen.Home.route, Icons.Default.Home, Icons.Outlined.Home),
-        BottomNavItem("Tools", Screen.Tools.route, Icons.Default.Build, Icons.Outlined.Build),
-        BottomNavItem("Settings", Screen.Settings.route, Icons.Default.Settings, Icons.Outlined.Settings)
-    )
+    val items =
+        listOf(
+            BottomNavItem("Home", Screen.Home.route, Icons.Default.Home, Icons.Outlined.Home),
+            BottomNavItem("Tools", Screen.Tools.route, Icons.Default.Build, Icons.Outlined.Build),
+            BottomNavItem("Settings", Screen.Settings.route, Icons.Default.Settings, Icons.Outlined.Settings),
+        )
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
     NavigationBar(
         containerColor = MaterialTheme.colorScheme.surface,
-        contentColor = MaterialTheme.colorScheme.onSurface
+        contentColor = MaterialTheme.colorScheme.onSurface,
     ) {
         items.forEach { item ->
             val selected = currentRoute == item.route
             NavigationBarItem(
-                icon = { 
+                icon = {
                     Icon(
-                        imageVector = if (selected) item.selectedIcon else item.unselectedIcon, 
-                        contentDescription = item.label 
-                    ) 
+                        imageVector = if (selected) item.selectedIcon else item.unselectedIcon,
+                        contentDescription = item.label,
+                    )
                 },
-                label = { 
+                label = {
                     Text(
                         text = item.label,
-                        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
-                    ) 
+                        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                    )
                 },
                 selected = selected,
                 onClick = {
@@ -55,13 +56,14 @@ fun BottomNavBar(navController: NavController) {
                         restoreState = true
                     }
                 },
-                colors = NavigationBarItemDefaults.colors(
-                    selectedIconColor = MaterialTheme.colorScheme.primary,
-                    selectedTextColor = MaterialTheme.colorScheme.primary,
-                    indicatorColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
-                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                colors =
+                    NavigationBarItemDefaults.colors(
+                        selectedIconColor = MaterialTheme.colorScheme.primary,
+                        selectedTextColor = MaterialTheme.colorScheme.primary,
+                        indicatorColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                        unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    ),
             )
         }
     }
@@ -71,5 +73,5 @@ data class BottomNavItem(
     val label: String,
     val route: String,
     val selectedIcon: ImageVector,
-    val unselectedIcon: ImageVector
+    val unselectedIcon: ImageVector,
 )

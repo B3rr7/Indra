@@ -13,20 +13,41 @@ and requires a **rooted** device.
 
 ## Features
 
-**Working today (native core v1.0.1):**
+**Working today (native core v1.0.1, both arm64-v8a and armeabi-v7a):**
 
 - Network host discovery (Network Radar — auto-discovers hosts on the LAN)
-- Port scanning (nmap, with live progress and per-port results)
+- Port scanning (nmap, with live progress and per-port results; masscan for high-speed scans)
 - OS / service fingerprinting (Inspector)
 - Traceroute (`nmap --traceroute`)
-- Packet capture (tcpdump, with live output + Stop)
+- Packet capture (tcpdump, with live output + Stop + save to .cap)
 - Man-in-the-middle (arpspoof) — ⚠️ see warning below
 - Login / credential cracking (hydra with a bundled wordlist)
 - Credential Tester (hydra against multiple services)
-- Plugin marketplace UI (Tools screen), with availability badges for tools not in the native core
+- Packet Forger (hping3)
+- WiFi Audit (aircrack-ng, Wifite orchestration, Reaver WPS)
+- Vulnerability Scanner (Nuclei — optional download)
+- Web Tester (Nuclei sqli/xss)
+- Exploit Finder (Metasploit — optional chroot download)
+- RouterPwn
+- One-Tap MITM, Session Hijacking (cookie theft), DNS Spoofing
+- Password Auditor, WiFi Scanner, MAC Changer (with profiles), IPTables
+- Terminal (built-in shell)
+- HID Attacks (DuckyScript parser + key injection), USB Arsenal (gadget profiles)
+- WhisperPair (BLE Fast Pair discovery)
+- GeoMac (OSM map + KML/CSV export)
+- Handshakes (capture file browser)
+- Arsenal (custom template exploits)
+- SearchSploit (ExploitDB browser)
+- Network Topology (visual host map)
+- Bettercap (optional download)
+- Responder (LLMNR)
+- Plugin marketplace UI (Tools screen), with availability badges
 
-**Planned / needs extra native tooling (cards present, report "not in native core"):**
-Exploit Finder (Metasploit), Vuln Scanner (Nuclei), WiFi Audit (aircrack), Web Tester (sqlmap), Packet Forger (hping3), RouterPwn, and others — the native core currently ships nmap, hydra, ettercap, tcpdump, arpspoof, fusemounts, network-radar and the daemon handlers.
+**Native core ships:** nmap, hydra, ettercap, tcpdump, arpspoof, fusemounts,
+network-radar, hping3, aircrack-ng, masscan, reaver, plus the daemon handlers
+(nmap, hydra, ettercap, tcpdump, arpspoof, fusemounts, network-radar, msfrpcd,
+raw, blind). Optional downloads: Nuclei, Metasploit (chroot), Bettercap,
+ExploitDB.
 
 **App-level capabilities:**
 - Secure OTA binary updater (HTTPS + TLS pinning, SHA-256 verify, atomic swap, rollback, per-tool updates)
@@ -94,24 +115,31 @@ via Magisk `su`.
 | Native | JNI bridge `IndraClient` ↔ `indrad` daemon over Unix sockets |
 | OTA | HTTPS + TLS pinning, SHA-256, atomic swap, rollback |
 
-### Key packages (`indra/src/main/java/org/indra/android/`)
+### Modules
 
 ```
-core/
-├── system/          # IndraSystem, SmartToolBox, PluginManager, CoreManager,
-│                    # RootManager, SettingsRepository, OtaUpdateManager, Logger, ...
-├── client/          # IndraClient — JNI bridge to the native daemon
-└── child/           # ChildProcessManager (process lifecycle + event pump)
-data/
-├── model/           # Target, Network, Service, Exploit, Session
-└── repository/      # NetworkRepository, PluginRepository
-domain/usecase/      # NetworkUseCases, PluginUseCases
-events/              # JNI event classes (Port, Hop, Newline, Message, ...)
-ui/
-├── theme/           # Material 3 theme (dynamic colors)
-├── navigation/      # NavHost, BottomNavBar
-├── screens/         # Home, Tools, Plugin*, Settings
-└── components/      # Reusable composables
+:core          # core/system, core/client, core/child, events
+:data          # data/model, data/repository, domain/usecase
+:ui            # ui/theme, ui/components
+:features      # ui/screens/plugins (all plugin screens)
+:indra (app)   # ui/screens (Home/Tools/Settings), navigation, AndroidManifest, resources, assets
+```
+
+### Key packages (`org/indra/android/`)
+
+```
+core/system/     # IndraSystem, SmartToolBox, PluginManager, CoreManager,
+                 # RootManager, SettingsRepository, OtaUpdateManager, Logger, ...
+core/client/     # IndraClient — JNI bridge to the native daemon
+core/child/      # ChildProcessManager (process lifecycle + event pump)
+data/model/      # Target, Network, Service, Exploit, Session
+data/repository/ # NetworkRepository, PluginRepository
+domain/usecase/  # NetworkUseCases, PluginUseCases
+events/          # JNI event classes (Port, Hop, Newline, Message, ...)
+ui/theme/        # Material 3 theme (dynamic colors)
+ui/components/   # Reusable composables
+ui/navigation/   # NavHost, BottomNavBar
+ui/screens/      # Home, Tools, Settings
 ```
 
 ### Tools

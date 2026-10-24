@@ -22,3 +22,7 @@ dependencyResolutionManagement {
 
 rootProject.name = "Indra"
 include ':indra'
+include ':core'
+include ':data'
+include ':ui'
+include ':features'

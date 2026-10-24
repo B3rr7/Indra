@@ -5,7 +5,6 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 class NetworkRadarParsingTest {
-
     @Test
     fun parsesHostAddWithMacAndName() {
         val parsed = parseHostLine("HOST_ADD  { mac: 98:48:27:E8:28:60, ip: 10.86.31.119, name:  }")

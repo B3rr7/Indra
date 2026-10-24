@@ -16,7 +16,7 @@ import org.indra.android.ui.screens.home.ModernToolCard
 @Composable
 fun ToolsScreen(
     onNavigateToPlugin: (String) -> Unit,
-    viewModel: ToolsViewModel = hiltViewModel()
+    viewModel: ToolsViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
@@ -27,40 +27,42 @@ fun ToolsScreen(
                     Text(
                         text = "Tools",
                         style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
                     )
-                }
+                },
             )
-        }
+        },
     ) { paddingValues ->
         if (uiState.isLoading) {
             Box(
                 modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
+                contentAlignment = Alignment.Center,
             ) {
                 CircularProgressIndicator(
-                    color = MaterialTheme.colorScheme.primary
+                    color = MaterialTheme.colorScheme.primary,
                 )
             }
         } else {
             LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues),
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues),
                 contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 items(uiState.plugins) { plugin ->
                     ModernToolCard(
                         plugin = plugin,
                         onClick = { onNavigateToPlugin(plugin.id) },
-                        onUpdate = if (plugin.available) {
-                            { viewModel.updateToolOta(plugin.id) }
-                        } else {
-                            null
-                        },
+                        onUpdate =
+                            if (plugin.available) {
+                                { viewModel.updateToolOta(plugin.id) }
+                            } else {
+                                null
+                            },
                         updating = uiState.updatingToolId == plugin.id,
-                        updateEnabled = uiState.updatingToolId == null
+                        updateEnabled = uiState.updatingToolId == null,
                     )
                 }
                 uiState.otaMessage?.let { message ->
@@ -68,7 +70,7 @@ fun ToolsScreen(
                         Text(
                             text = message,
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
