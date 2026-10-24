@@ -423,6 +423,8 @@ class CoreManager
 
                     markExecutables(dir)
                     installWordlist(dir)
+                    installGobusterBinary(dir)
+                    installDirWordlist(dir)
                     File(dir, "VERSION").writeText(CORE_VERSION)
                     Logger.i("Core $CORE_VERSION installed to ${dir.absolutePath}")
 
@@ -451,6 +453,40 @@ class CoreManager
                     target.outputStream().use { output -> input.copyTo(output) }
                 }
             }.onFailure { Logger.w("Cannot install wordlist: ${it.message}") }
+        }
+
+        private fun installGobusterBinary(dir: File) {
+            val targetDir = File(dir, "tools/gobuster")
+            if (!targetDir.exists() && !targetDir.mkdirs()) {
+                Logger.w("Cannot create gobuster directory ${targetDir.absolutePath}")
+                return
+            }
+            val target = File(targetDir, "gobuster")
+            val abi = android.os.Build.SUPPORTED_ABIS.firstOrNull { it == "arm64-v8a" || it == "armeabi-v7a" } ?: "armeabi-v7a"
+            val assetName = "gobuster/$abi".replace("arm64-v8a","arm64-v8a").let {
+                if (abi == "arm64-v8a") "gobuster/gobuster-arm64-v8a" else "gobuster/gobuster-armeabi-v7a"
+            }
+            runCatching {
+                context.assets.open(assetName).use { input ->
+                    target.outputStream().use { output -> input.copyTo(output) }
+                }
+                target.setExecutable(true, false)
+            }.onFailure { Logger.w("Cannot install gobuster binary: ${it.message}") }
+        }
+
+        private fun installDirWordlist(dir: File) {
+            val target = File(dir, "wordlists/common-dirs.txt")
+            target.parentFile?.let { parent ->
+                if (!parent.exists() && !parent.mkdirs()) {
+                    Logger.w("Cannot create wordlist directory ${parent.absolutePath}")
+                    return
+                }
+            }
+            runCatching {
+                context.assets.open("wordlists/common-dirs.txt").use { input ->
+                    target.outputStream().use { output -> input.copyTo(output) }
+                }
+            }.onFailure { Logger.w("Cannot install dir wordlist: ${it.message}") }
         }
 
         /**

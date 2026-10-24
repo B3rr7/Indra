@@ -36,7 +36,7 @@ class GobusterViewModel
         private val networkHelper: NetworkHelper,
         private val networkRepository: NetworkRepository,
     ) : ViewModel() {
-        private val _uiState = MutableStateFlow(GobusterUiState(gobusterInstalled = coreManager.isGobusterInstalled(), wordlist = toolBox.defaultWordlist()))
+        private val _uiState = MutableStateFlow(GobusterUiState(gobusterInstalled = coreManager.isGobusterInstalled(), wordlist = toolBox.defaultDirWordlist()))
         val uiState: StateFlow<GobusterUiState> = _uiState.asStateFlow()
 
         init {
@@ -78,7 +78,7 @@ class GobusterViewModel
                 val runner = toolBox.getTool("gobuster")
                 if (runner == null || !runner.isAvailable()) { _uiState.value = st.copy(error = "Native daemon not available"); return@launch }
                 _uiState.value = st.copy(isLoading = true, error = null, output = emptyList())
-                val wl = st.wordlist.trim().ifBlank { toolBox.defaultWordlist() }
+                val wl = st.wordlist.trim().ifBlank { toolBox.defaultDirWordlist() }
                 val ext = st.extensions.trim()
                 val args = buildString {
                     append("dir -u ").append(org.indra.android.core.system.SmartToolBox.shellQuote(url))

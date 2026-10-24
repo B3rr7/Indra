@@ -267,6 +267,9 @@ class SmartToolBox
         /** Bundled password list used when a screen does not supply one. */
         fun defaultWordlist(): String = File(context.filesDir, WORDLIST_PATH).absolutePath
 
+        /** Bundled directory list used by Gobuster when a screen does not supply one. */
+        fun defaultDirWordlist(): String = File(context.filesDir, "wordlists/common-dirs.txt").absolutePath
+
         /** Absolute path of the capture file Packet Capture saves to (and WiFi
          *  Audit can be prefilled with). */
         fun capturePath(): String = File(context.filesDir, CAPTURE_PATH).absolutePath
