@@ -125,7 +125,7 @@ Stryker's killer UX feature. Indra has a `shell` handler but no terminal screen.
 Currently WiFi Audit needs an external pcap; capture needs monitor-mode dump.
 
 - [ ] **Monitor-mode toggle** in Packet Capture / WiFi Audit: `iw dev <iface> set type monitor` via `raw`, with a warning dialog (moto g60 class risk — reuse the MITM risk dialog pattern).
-- [ ] **airodump-class capture**: bundle `airodump-ng` (or use tcpdump in monitor mode) to produce handshakes; save to `captures/`.
+- [x] **Monitor-mode probe**: `CoreManager.isMonitorModeSupported()` (read-only `iw list`) reports whether the chipset/kernel exposes monitor mode; surfaced so WiFi Audit can honestly say 'not supported on this device' (moto g60 does support it).\n- [ ] **airodump-ng**: not bundled in the base core — the osdep radio layer is a large native port and monitor mode needs a patched driver on most phones. Advanced users can cross-compile airodump-ng and drop it into `tools/airodump-ng/`; the `raw` handler runs any binary placed there. Terminal is provided for loading USB WiFi dongle drivers.
 - [x] **Handshake storage**: list saved `.cap` files, delete, refresh, rename, share (via FileProvider), export manifest. Done.
 - [x] **WiFi scanner**: list nearby APs via `iw dev scan`. One-tap capture TODO.
 - Acceptance: end-to-end from UI: scan → capture handshake → crack with bundled wordlist → "Key found" (already works for pcap input).
