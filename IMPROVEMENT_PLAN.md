@@ -32,7 +32,7 @@ Completed:
 - [ ] **Principle: build every advertised tool for real.** Do not delete plugin cards to hide gaps — ship the binaries. Removal is only the last resort for tools genuinely infeasible on Android (see Phase 2 "infeasible" list). While a binary is still being built, the card shows "coming soon — not yet bundled" with a disabled action; never a fake result.
 - [ ] **Fix the `Plugin.requires` → handler mapping.** Several plugins map to `raw` (mitm, network_radar, packet_capture, packet_forger, wifi_audit), which is always available, so they never dim even when their real binary is missing. Make `requires` reference the *actual* binary (`arpspoof`, `tcpdump`, `hping3`, `aircrack-ng`, …) and add those to `SmartToolBox` as named tools, or keep `raw` but gate on a binary-existence check via `CoreManager`.
   - Files: `core/system/PluginManager.kt`, `core/system/SmartToolBox.kt`, `core/system/CoreManager.kt`.
-- [ ] **Add a "Tools status" diagnostic** in Settings showing which bundled binaries exist, their version, and ABI, plus a one-tap "Install/Update core" (reuses `rawProbe` + `CoreManager`).
+- [x] **Add a "Tools status" diagnostic** in Settings showing which bundled binaries exist, their version, and ABI, plus a one-tap "Install/Update core" (reuses `rawProbe` + `CoreManager`). Done — `ToolsStatusCard` in SettingsScreen.
 - [x] **Bump target SDK** from 34 → 35 (compileSdk + targetSdk in all modules).
 
 ---
@@ -80,9 +80,9 @@ Goal: ship a real binary for each plugin card. Removal is only the last resort, 
 ### Build real (high priority)
 - [ ] **Nuclei** (`vuln_scanner`): vendor a static arm64 build; wire `SmartToolBox.nuclei()` (already exists) to a real screen; bundle a minimal template set as an asset; add an OTA "update templates" action.
 - [x] **Metasploit** (`exploit_finder`): optional chroot download flow (URL configurable in Settings, SHA-free tar.xz extraction into core/msf), console runs `chroot <msfdir> msfconsole` via shell handler. Card gated on isMsfInstalled().
-- [ ] **Nikto** (`web_tester` alternative): pure Perl, small. Vendor perl + nikto; or replace the Web Tester screen with nuclei-based web scanning (recommended: reuse nuclei with http templates).
+- [x] **Nikto** (`web_tester`): replaced by nuclei-based web scanning (sqli/xss templates). Web Tester gated on `isNucleiInstalled()`. Done.
 - [x] **Masscan**: cross-compiled for arm64+armv7 (patched getifaddrs/pthread_setaffinity_np/getservbyport_r), bundled in core, MasscanScreen + ViewModel.
-- [ ] **iptables**: kernel-dependent; ship the userspace binary but gate execution behind a "iptables supported by kernel" check; honest error if the kernel lacks NETFILTER.
+- [x] **iptables**: kernel-dependent; shipped userspace binary gated behind `CoreManager.isIptablesSupported()` (kernel netfilter probe); honest error if the kernel lacks NETFILTER. Done.
 - [x] **Bettercap**: cross-compiled for arm64+armv7 (CGO, libpcap 1.10.4, hid module disabled), bundled as optional download, BettercapScreen + ViewModel with install flow. Done.
 
 ### Build real (medium priority)
