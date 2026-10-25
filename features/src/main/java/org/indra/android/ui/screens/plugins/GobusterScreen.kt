@@ -1,16 +1,40 @@
 package org.indra.android.ui.screens.plugins
 
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+
+private const val PERCENT = 100
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -37,21 +61,13 @@ fun GobusterScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             if (!uiState.gobusterInstalled) {
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Gobuster is not installed.", style = MaterialTheme.typography.bodyMedium)
-                        OutlinedTextField(
-                            value = uiState.installUrl,
-                            onValueChange = { viewModel.updateInstallUrl(it) },
-                            label = { Text("Binary URL") },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true,
-                        )
-                        Button(onClick = { viewModel.install() }, enabled = !uiState.isInstalling, modifier = Modifier.fillMaxWidth()) {
-                            Text(if (uiState.isInstalling) "Installing… ${(uiState.installProgress * 100).toInt()}%" else "Install")
-                        }
-                    }
-                }
+                GobusterInstallCard(
+                    installUrl = uiState.installUrl,
+                    isInstalling = uiState.isInstalling,
+                    installProgress = uiState.installProgress,
+                    onUrlChange = viewModel::updateInstallUrl,
+                    onInstall = { viewModel.install() },
+                )
             }
             OutlinedTextField(
                 value = uiState.url,
@@ -95,11 +111,42 @@ fun GobusterScreen(
             if (uiState.output.isNotEmpty()) {
                 LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     items(uiState.output) { line ->
-                        Text(line, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, fontSize = 12.sp)
+                        Text(line, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
                     }
                 }
             }
             uiState.error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+        }
+    }
+}
+
+@Composable
+private fun GobusterInstallCard(
+    installUrl: String,
+    isInstalling: Boolean,
+    installProgress: Float,
+    onUrlChange: (String) -> Unit,
+    onInstall: () -> Unit,
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Gobuster is not installed.", style = MaterialTheme.typography.bodyMedium)
+            OutlinedTextField(
+                value = installUrl,
+                onValueChange = onUrlChange,
+                label = { Text("Binary URL") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+            )
+            Button(onClick = onInstall, enabled = !isInstalling, modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    if (isInstalling) {
+                        "Installing… ${(installProgress * PERCENT).toInt()}%"
+                    } else {
+                        "Install"
+                    },
+                )
+            }
         }
     }
 }

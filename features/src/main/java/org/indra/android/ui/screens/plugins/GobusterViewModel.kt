@@ -36,7 +36,13 @@ class GobusterViewModel
         private val networkHelper: NetworkHelper,
         private val networkRepository: NetworkRepository,
     ) : ViewModel() {
-        private val _uiState = MutableStateFlow(GobusterUiState(gobusterInstalled = coreManager.isGobusterInstalled(), wordlist = toolBox.defaultDirWordlist()))
+        private val _uiState =
+            MutableStateFlow(
+                GobusterUiState(
+                    gobusterInstalled = coreManager.isGobusterInstalled(),
+                    wordlist = toolBox.defaultDirWordlist(),
+                ),
+            )
         val uiState: StateFlow<GobusterUiState> = _uiState.asStateFlow()
 
         init {
@@ -64,7 +70,14 @@ class GobusterViewModel
             viewModelScope.launch {
                 _uiState.value = _uiState.value.copy(isInstalling = true, installProgress = 0f, error = null)
                 coreManager.installGobuster(url) { p -> _uiState.value = _uiState.value.copy(installProgress = p) }
-                    .onSuccess { _uiState.value = _uiState.value.copy(isInstalling = false, gobusterInstalled = true, installProgress = 1f) }
+                    .onSuccess {
+                        _uiState.value =
+                            _uiState.value.copy(
+                                isInstalling = false,
+                                gobusterInstalled = true,
+                                installProgress = 1f,
+                            )
+                    }
                     .onFailure { e -> _uiState.value = _uiState.value.copy(isInstalling = false, error = "Install failed: ${e.message}") }
             }
         }
@@ -74,9 +87,16 @@ class GobusterViewModel
                 val st = _uiState.value
                 val url = st.url.trim()
                 if (url.isBlank()) { _uiState.value = st.copy(error = "Target URL required"); return@launch }
-                if (!coreManager.isGobusterInstalled()) { _uiState.value = st.copy(error = "Gobuster is not installed. Provide a binary URL and tap Install."); return@launch }
+                if (!coreManager.isGobusterInstalled()) {
+                    _uiState.value =
+                        st.copy(error = "Gobuster is not installed. Provide a binary URL and tap Install.")
+                    return@launch
+                }
                 val runner = toolBox.getTool("gobuster")
-                if (runner == null || !runner.isAvailable()) { _uiState.value = st.copy(error = "Native daemon not available"); return@launch }
+                if (runner == null || !runner.isAvailable()) {
+                    _uiState.value = st.copy(error = "Native daemon not available")
+                    return@launch
+                }
                 _uiState.value = st.copy(isLoading = true, error = null, output = emptyList())
                 val wl = st.wordlist.trim().ifBlank { toolBox.defaultDirWordlist() }
                 val ext = st.extensions.trim()

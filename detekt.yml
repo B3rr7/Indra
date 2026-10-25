@@ -4,6 +4,12 @@ build:
   maxIssues: 0
   excludeCorrectable: false
 
+naming:
+  # Compose screens/components are PascalCase by convention; the default rule targets
+  # ordinary functions. Applying this here replaces ~60 per-file baseline entries.
+  FunctionNaming:
+    ignoreAnnotated: ['Composable']
+
 complexity:
   LongMethod:
     threshold: 80

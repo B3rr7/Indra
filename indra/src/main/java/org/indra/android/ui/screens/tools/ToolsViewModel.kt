@@ -12,6 +12,7 @@ import kotlinx.coroutines.launch
 import org.indra.android.core.system.CoreManager
 import org.indra.android.core.system.OtaUpdateManager
 import org.indra.android.core.system.SettingsRepository
+import org.indra.android.core.system.Plugin
 import org.indra.android.core.system.PluginManager
 import org.indra.android.core.system.SmartToolBox
 import org.indra.android.ui.screens.home.PluginInfo
@@ -76,13 +77,7 @@ class ToolsViewModel
                             id = plugin.id,
                             name = plugin.name,
                             description = plugin.description,
-                            available =
-                                toolBox.getTool(plugin.requires)?.isAvailable() == true &&
-                                    (plugin.id !in listOf("vuln_scanner", "web_tester") || coreManager.isNucleiInstalled()) &&
-                                    (plugin.id != "gobuster" || coreManager.isGobusterInstalled()) &&
-                                    (plugin.id != "exploit_finder" || coreManager.isMsfInstalled()) &&
-                                    (plugin.id != "iptables" || coreManager.isIptablesSupported()) &&
-                                    (!plugin.requiresRoot || !settings.rootlessMode),
+                            available = isPluginAvailable(plugin),
                         )
                     }
                 _uiState.value = _uiState.value.copy(plugins = plugins, isLoading = false)
@@ -112,5 +107,24 @@ class ToolsViewModel
                             },
                     )
             }
+        }
+
+        /**
+         * A plugin is usable when its daemon handler exists AND every extra artifact it
+         * needs (nuclei templates, gobuster, msf, iptables) is installed, unless the user
+         * is running in rootless mode and the plugin needs raw sockets.
+         */
+        private fun isPluginAvailable(plugin: Plugin): Boolean {
+            val handlerReady = toolBox.getTool(plugin.requires)?.isAvailable() == true
+            val artifactReady =
+                when (plugin.id) {
+                    "vuln_scanner", "web_tester" -> coreManager.isNucleiInstalled()
+                    "gobuster" -> coreManager.isGobusterInstalled()
+                    "exploit_finder" -> coreManager.isMsfInstalled()
+                    "iptables" -> coreManager.isIptablesSupported()
+                    else -> true
+                }
+            val rootReady = !plugin.requiresRoot || !settings.rootlessMode
+            return handlerReady && artifactReady && rootReady
         }
     }

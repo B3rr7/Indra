@@ -53,7 +53,11 @@ fun MasscanScreen(
             if (uiState.suggestions.isNotEmpty()) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     uiState.suggestions.forEach { s ->
-                        AssistChip(onClick = { viewModel.updateTarget(s) }, label = { Text(s, fontSize = 12.sp) }, enabled = !uiState.isRunning)
+                        AssistChip(
+                            onClick = { viewModel.updateTarget(s) },
+                            label = { Text(s, fontSize = 12.sp) },
+                            enabled = !uiState.isRunning,
+                        )
                     }
                 }
             }

@@ -561,6 +561,10 @@ fun getToolIcon(id: String): ImageVector =
         else -> Icons.Default.Extension
     }
 
+@Suppress(
+    "MagicNumber", // A palette is data, not opaque numbers: each literal is a commented hue.
+    "CyclomaticComplexMethod", // One branch per tool id, by design.
+)
 @Composable
 fun getToolColor(id: String): Color {
     // One distinct hue per tool — no repeats, no fallback to the theme primary.
