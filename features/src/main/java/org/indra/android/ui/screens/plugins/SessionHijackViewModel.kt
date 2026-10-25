@@ -45,7 +45,10 @@ class SessionHijackViewModel @Inject constructor(
         }
         _uiState.value = _uiState.value.copy(isRunning = true, error = null, sessions = emptyList(), output = emptyList())
         job = viewModelScope.launch {
-            toolBox.shell("./tools/tcpdump/tcpdump -i ${SmartToolBox.shellQuote(iface)} -A -l tcp port 80 2>/dev/null").collect { result ->
+            // stderr is kept: tcpdump's "SIOCGIFHWADDR: No such device" and its capture
+            // summary are the only explanation a failing run gives, and ToolResult.error
+            // carries the last output line.
+            toolBox.shell("./tools/tcpdump/tcpdump -i ${SmartToolBox.shellQuote(iface)} -A -l tcp port 80").collect { result ->
                 if (result.pid > 0) pid = result.pid
                 result.streamedLine?.let { line ->
                     _uiState.value = _uiState.value.copy(output = _uiState.value.output + line)

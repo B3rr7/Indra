@@ -45,8 +45,45 @@ class SmartToolBox
              * Single-quotes a value for the shell that executes `shell()` command strings
              * (POSIX `'"'"'` escaping, same rule as `CoreManager.shellQuote`).
              * Every user-typed field interpolated into a command must go through this.
+             *
+             * This quoting is for `sh` *inside* the script. It is not how the script is
+             * handed to the daemon — see [encodeArg].
              */
             fun shellQuote(value: String): String = "'" + value.replace("'", "'\\''") + "'"
+
+            /**
+             * Encodes one argument for the daemon's tokenizer (`cSploitClient/command.c:
+             * parse_cmd`), which is *not* a POSIX shell.
+             *
+             * A quote starts a quoted run and the argument **ends at the first closing
+             * quote**: `a 'b c' d` is `a`, `b c`, `d`, but `'a b'c` is `a b` followed by
+             * `c`. So adjacent quoted/unquoted segments cannot be joined into one word,
+             * and POSIX single-quoting a whole script silently splits it — that turned
+             * `sh -c "./tools/tcpdump -i 'nosuchif0' -A …"` into three arguments, `sh`
+             * ran `tcpdump -i`, and the screen reported tcpdump's usage text.
+             *
+             * What the tokenizer does honour is backslash-escaping of space, tab, `'`,
+             * `"` and `\` (`\x` yields `x`, each escape counted and removed). Everything
+             * else — `;`, `|`, `>`, `$`, `?`, `&`, newlines — passes through untouched for
+             * `sh` to interpret.
+             *
+             * Note `start` is only recorded for a plain character, so a *leading* escaped
+             * space/tab/quote/backslash is dropped; [shell] prefixes a newline for those.
+             */
+            fun encodeArg(value: String): String =
+                buildString {
+                    value.forEach { c ->
+                        when (c) {
+                            ' ', '\t', '\'', '"', '\\' -> append('\\').append(c)
+                            else -> append(c)
+                        }
+                    }
+                }
+
+            /** True when [value] begins with a character [encodeArg] must escape but the
+             *  tokenizer would drop (it only starts an argument on a plain character). */
+            private fun startsWithDroppedChar(value: String): Boolean =
+                value.isNotEmpty() && value[0] in charArrayOf(' ', '\t', '\'', '"', '\\')
 
             /**
              * Status values carried by [ToolResult].
@@ -286,12 +323,18 @@ class SmartToolBox
          * literal arguments. Wrapping the script in sh -c is what makes `&&`, `|`,
          * redirection and globbing work.
          *
-         * The script is passed as a single [shellQuote]d argument, which the daemon's
-         * tokenizer unwraps verbatim — so anything interpolated into [command] that came
-         * from user input MUST be shell-quoted by the caller. Without that, this is a root
-         * shell (which it already is, since the daemon runs as root).
+         * The script is encoded by [encodeArg] so that the daemon's tokenizer (which is
+         * not a shell) hands it to `sh -c` as one argument — so anything interpolated
+         * into [command] that came from user input MUST be [shellQuote]d by the caller.
+         * Without that, this is a root shell (which it already is, since the daemon runs
+         * as root).
          */
-        fun shell(command: String): Flow<ToolResult> = execute("shell", "$SH_BINARY -c ${shellQuote(command)}")
+        fun shell(command: String): Flow<ToolResult> {
+            // A leading escaped space/tab/quote/backslash would be dropped by parse_cmd
+            // (it only opens an argument on a plain char); a newline is plain and inert.
+            val script = if (startsWithDroppedChar(command)) "\n$command" else command
+            return execute("shell", "$SH_BINARY -c ${encodeArg(script)}")
+        }
 
         /** Path (relative to the core dir, the daemon's cwd) of a bundled tool binary. */
         private fun binary(name: String): String = "./tools/$name/$name"
