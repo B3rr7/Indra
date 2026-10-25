@@ -9,6 +9,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.indra.android.core.system.NetworkHelper
 import org.indra.android.core.system.SmartToolBox
+import org.indra.android.core.system.isStreaming
+import org.indra.android.core.system.streamedLine
 import org.indra.android.data.repository.NetworkRepository
 import javax.inject.Inject
 
@@ -92,8 +94,7 @@ class CredentialTesterViewModel
                 var found = false
 
                 toolBox.hydraCredential(target, "ssh", user, password, port = state.port.trim().takeIf { it.isNotBlank() }).collect { result ->
-                    val line = result.rawOutput
-                    if (result.status == "running" && line.isNotBlank() && !line.startsWith("Executing:")) {
+                    result.streamedLine?.let { line ->
                         output.appendLine(line)
                         if (isHydraSuccess(line)) found = true
                         _uiState.value =
@@ -101,9 +102,8 @@ class CredentialTesterViewModel
                                 result = output.toString().trim(),
                                 success = found,
                             )
-                    } else if (result.status == "completed" || result.status == "timeout") {
-                        if (!result.success) failure = result.error
                     }
+                    if (!result.isStreaming && !result.success) failure = result.error
                 }
 
                 val text = output.toString().trim()

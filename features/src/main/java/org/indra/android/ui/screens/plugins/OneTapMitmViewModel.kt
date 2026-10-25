@@ -10,6 +10,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.indra.android.core.system.NetworkHelper
 import org.indra.android.core.system.SmartToolBox
+import org.indra.android.core.system.isStreaming
+import org.indra.android.core.system.streamedLine
 import org.indra.android.data.repository.NetworkRepository
 import javax.inject.Inject
 
@@ -105,11 +107,10 @@ class OneTapMitmViewModel @Inject constructor(
             // ARP spoof: tell target that we are the gateway
             toolBox.arpspoof(iface, target, gateway).collect { result ->
                 if (result.pid > 0) pid = result.pid
-                val line = result.rawOutput
-                if (line.isNotBlank() && !line.startsWith("Executing:")) {
+                result.streamedLine?.let { line ->
                     _uiState.value = _uiState.value.copy(output = _uiState.value.output + line)
                 }
-                if (result.status != "running") {
+                if (!result.isStreaming) {
                     _uiState.value = _uiState.value.copy(isRunning = false)
                     pid = -1
                     if (!result.success) _uiState.value = _uiState.value.copy(error = result.error)

@@ -13,6 +13,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.indra.android.core.system.SmartToolBox
+import org.indra.android.core.system.isStreaming
+import org.indra.android.core.system.streamedLine
 import javax.inject.Inject
 
 data class MacChangerUiState(
@@ -39,6 +41,8 @@ class MacChangerViewModel
         private val toolBox: SmartToolBox,
     ) : ViewModel() {
         private val prefs = context.getSharedPreferences("mac_profiles", Context.MODE_PRIVATE)
+        private val macPattern = Regex("^[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){5}$")
+
         private val gson = Gson()
 
         private val _uiState = MutableStateFlow(MacChangerUiState())
@@ -99,9 +103,11 @@ class MacChangerViewModel
         }
 
         fun randomize() {
-            val bytes = (0..5).map { "%02x".format((Math.random() * 256).toInt()) }
-            val mac = bytes.joinToString(":").replaceFirst(":", "2", true) // locally administered bit
-            _uiState.value = _uiState.value.copy(newMac = mac)
+            // Locally administered (bit 1 set) and unicast (bit 0 clear) in the first octet.
+            // Replacing the first ':' with "2" used to produce "aa2bb:cc:dd:ee:ff".
+            val first = (kotlin.random.Random.nextInt(OCTETS) and LOCALLY_ADMINISTERED_MASK) or UNICAST_BIT
+            val octets = listOf(first) + List(OCTETS - 1) { kotlin.random.Random.nextInt(OCTETS) }
+            _uiState.value = _uiState.value.copy(newMac = octets.joinToString(":") { "%02x".format(it) })
         }
 
         fun apply() {
@@ -113,27 +119,49 @@ class MacChangerViewModel
                 _uiState.value = st.copy(error = "Interface and MAC are required")
                 return
             }
+            if (!macPattern.matches(mac)) {
+                _uiState.value = st.copy(error = "MAC must look like aa:bb:cc:dd:ee:ff")
+                return
+            }
             val runner = toolBox.getTool("shell")
             if (runner == null || !runner.isAvailable()) {
                 _uiState.value = st.copy(error = "Native daemon not available")
                 return
             }
             _uiState.value = st.copy(isRunning = true, error = null, output = emptyList())
-            val cmd = "ip link set $iface down && ip link set $iface address $mac && ip link set $iface up"
+            // The script runs through /system/bin/sh as root, so both fields are quoted.
+            val qu = SmartToolBox.shellQuote(iface)
+            val cmd =
+                "ip link set $qu down && ip link set $qu address ${SmartToolBox.shellQuote(mac)} && " +
+                    "ip link set $qu up"
             job =
                 viewModelScope.launch {
                     toolBox.shell(cmd).collect { result ->
                         if (result.pid > 0) pid = result.pid
-                        val line = result.rawOutput
-                        if (line.isNotBlank() && !line.startsWith("Executing:")) {
+                        result.streamedLine?.let { line ->
                             _uiState.value = _uiState.value.copy(output = _uiState.value.output + line)
                         }
-                        if (result.status != "running") {
-                            _uiState.value = _uiState.value.copy(isRunning = false)
+                        if (!result.isStreaming) {
+                            _uiState.value =
+                                _uiState.value.copy(
+                                    isRunning = false,
+                                    error = if (result.success) null else result.error,
+                                )
                             pid = -1
                         }
                     }
                 }
+        }
+
+        private companion object {
+            /** 0x00..0xFF, the range of one MAC octet. */
+            const val OCTETS = 256
+
+            /** Clears the multicast bit and the two administratively-assigned bits. */
+            const val LOCALLY_ADMINISTERED_MASK = 0xFC
+
+            /** Bit 1 set: locally administered rather than vendor-assigned. */
+            const val UNICAST_BIT = 0x02
         }
 
         fun stop() {

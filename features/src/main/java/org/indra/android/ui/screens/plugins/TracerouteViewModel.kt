@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.indra.android.core.system.NetworkHelper
 import org.indra.android.core.system.SmartToolBox
+import org.indra.android.core.system.isStreaming
 import org.indra.android.data.repository.NetworkRepository
 import javax.inject.Inject
 
@@ -74,7 +75,7 @@ class TracerouteViewModel
                 var failure: String? = null
 
                 toolBox.traceroute(target).collect { result ->
-                    if (result.status == "running") {
+                    if (result.isStreaming) {
                         result.rawOutput.lines().forEach { line ->
                             val match = HOP_LINE.matchEntire(line) ?: return@forEach
                             val (number, time, address) = match.destructured
@@ -83,10 +84,8 @@ class TracerouteViewModel
                         _uiState.value = _uiState.value.copy(hops = hops.values.toList())
                     }
 
-                    if (result.status == "completed" || result.status == "timeout") {
-                        if (!result.success && result.error != null) {
-                            failure = result.error
-                        }
+                    if (!result.isStreaming && !result.success && result.error != null) {
+                        failure = result.error
                     }
                 }
 

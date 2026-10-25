@@ -9,6 +9,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.indra.android.core.system.SmartToolBox
+import org.indra.android.core.system.isStreaming
+import org.indra.android.core.system.streamedLine
 import org.indra.android.data.repository.NetworkRepository
 import javax.inject.Inject
 
@@ -91,8 +93,8 @@ class NetworkRadarViewModel
                 viewModelScope.launch {
                     toolBox.networkRadar(iface).collect { result ->
                         if (result.pid > 0) pid = result.pid
-                        applyLine(result.rawOutput)
-                        if (result.status == "completed" || result.status == "timeout") {
+                        result.streamedLine?.let { applyLine(it) }
+                        if (!result.isStreaming) {
                             _uiState.value =
                                 _uiState.value.copy(
                                     isActive = false,

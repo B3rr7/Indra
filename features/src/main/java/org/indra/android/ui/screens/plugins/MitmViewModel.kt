@@ -10,6 +10,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.indra.android.core.system.NetworkHelper
 import org.indra.android.core.system.SmartToolBox
+import org.indra.android.core.system.isStreaming
+import org.indra.android.core.system.streamedLine
 import org.indra.android.data.repository.NetworkRepository
 import javax.inject.Inject
 
@@ -124,14 +126,16 @@ class MitmViewModel
                 viewModelScope.launch {
                     toolBox.arpspoof(iface, target, gateway).collect { result ->
                         if (result.pid > 0) pid = result.pid
-                        val line = result.rawOutput.trim()
-                        if (line.isNotEmpty() && result.status == "running" && !line.startsWith("Executing:")) {
-                            _uiState.value =
-                                _uiState.value.copy(
-                                    log = (_uiState.value.log + line).takeLast(LOG_LINES),
-                                )
+                        result.streamedLine?.let { raw ->
+                            val line = raw.trim()
+                            if (line.isNotEmpty()) {
+                                _uiState.value =
+                                    _uiState.value.copy(
+                                        log = (_uiState.value.log + line).takeLast(LOG_LINES),
+                                    )
+                            }
                         }
-                        if (result.status == "completed" || result.status == "timeout") {
+                        if (!result.isStreaming) {
                             _uiState.value =
                                 _uiState.value.copy(
                                     isActive = false,

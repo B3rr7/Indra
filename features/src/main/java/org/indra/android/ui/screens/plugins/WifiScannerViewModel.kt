@@ -9,6 +9,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.indra.android.core.system.SmartToolBox
+import org.indra.android.core.system.isStreaming
+import org.indra.android.core.system.streamedLine
 import javax.inject.Inject
 
 data class WifiScannerUiState(
@@ -48,16 +50,15 @@ class WifiScannerViewModel
             _uiState.value = _uiState.value.copy(isScanning = true, error = null, networks = emptyList())
             job =
                 viewModelScope.launch {
-                    toolBox.shell("iw dev $iface scan").collect { result ->
+                    toolBox.shell("iw dev ${SmartToolBox.shellQuote(iface)} scan").collect { result ->
                         if (result.pid > 0) pid = result.pid
-                        val line = result.rawOutput
-                        if (line.isNotBlank() && !line.startsWith("Executing:")) {
+                        result.streamedLine?.let { line ->
                             // Collect BSS lines as network entries
                             if (line.trim().startsWith("BSS ")) {
                                 _uiState.value = _uiState.value.copy(networks = _uiState.value.networks + line.trim())
                             }
                         }
-                        if (result.status != "running") {
+                        if (!result.isStreaming) {
                             _uiState.value = _uiState.value.copy(isScanning = false)
                             pid = -1
                             if (!result.success) _uiState.value = _uiState.value.copy(error = result.error)

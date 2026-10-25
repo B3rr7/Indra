@@ -9,6 +9,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.indra.android.core.system.NetworkHelper
 import org.indra.android.core.system.SmartToolBox
+import org.indra.android.core.system.isStreaming
+import org.indra.android.core.system.streamedLine
 import org.indra.android.data.repository.NetworkRepository
 import javax.inject.Inject
 
@@ -78,11 +80,11 @@ class LoginCrackerViewModel
                         port = state.port.trim().takeIf { it.isNotBlank() },
                     )
                     .collect { result ->
-                        val line = result.rawOutput
-                        if (result.status == "running" && line.isNotBlank() && !line.startsWith("Executing:")) {
+                        result.streamedLine?.let { line ->
                             output.appendLine(line)
                             _uiState.value = _uiState.value.copy(result = output.toString().trim())
-                        } else if (result.status == "completed" || result.status == "timeout") {
+                        }
+                        if (!result.isStreaming) {
                             if (result.success) {
                                 if (output.isEmpty()) output.append(result.rawOutput)
                             } else {

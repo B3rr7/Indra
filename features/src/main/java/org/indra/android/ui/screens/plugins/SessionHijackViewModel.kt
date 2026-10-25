@@ -9,6 +9,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.indra.android.core.system.SmartToolBox
+import org.indra.android.core.system.isStreaming
+import org.indra.android.core.system.streamedLine
 import javax.inject.Inject
 
 data class HijackedSession(val host: String, val cookie: String)
@@ -43,10 +45,9 @@ class SessionHijackViewModel @Inject constructor(
         }
         _uiState.value = _uiState.value.copy(isRunning = true, error = null, sessions = emptyList(), output = emptyList())
         job = viewModelScope.launch {
-            toolBox.shell("./tools/tcpdump/tcpdump -i $iface -A -l tcp port 80 2>/dev/null").collect { result ->
+            toolBox.shell("./tools/tcpdump/tcpdump -i ${SmartToolBox.shellQuote(iface)} -A -l tcp port 80 2>/dev/null").collect { result ->
                 if (result.pid > 0) pid = result.pid
-                val line = result.rawOutput
-                if (line.isNotBlank() && !line.startsWith("Executing:")) {
+                result.streamedLine?.let { line ->
                     _uiState.value = _uiState.value.copy(output = _uiState.value.output + line)
                     // Extract Cookie headers from ASCII payload
                     val lower = line.lowercase()
@@ -61,7 +62,7 @@ class SessionHijackViewModel @Inject constructor(
                         }
                     }
                 }
-                if (result.status != "running") {
+                if (!result.isStreaming) {
                     _uiState.value = _uiState.value.copy(isRunning = false)
                     pid = -1
                     if (!result.success) _uiState.value = _uiState.value.copy(error = result.error)

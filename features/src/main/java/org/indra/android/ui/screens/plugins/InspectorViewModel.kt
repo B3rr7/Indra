@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.indra.android.core.system.NetworkHelper
 import org.indra.android.core.system.SmartToolBox
+import org.indra.android.core.system.isStreaming
 import org.indra.android.data.repository.NetworkRepository
 import javax.inject.Inject
 
@@ -72,7 +73,7 @@ class InspectorViewModel
                 val osSeen = mutableSetOf<String>()
 
                 toolBox.nmapXml(target, "1-1000", withOs = true).collect { result ->
-                    if (result.status == "running") {
+                    if (result.isStreaming) {
                         result.ports.forEach { port ->
                             val version =
                                 listOfNotNull(
@@ -100,8 +101,8 @@ class InspectorViewModel
                                 services = services.values.toList(),
                                 osInfo = osGuessList.joinToString("\n"),
                             )
-                    } else if (result.status == "completed" || result.status == "timeout") {
-                        if (!result.success) failure = result.error
+                    } else if (!result.success) {
+                        failure = result.error
                     }
                 }
 

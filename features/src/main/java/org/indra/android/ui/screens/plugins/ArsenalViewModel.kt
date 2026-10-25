@@ -11,6 +11,8 @@ import kotlinx.coroutines.launch
 import org.indra.android.core.system.ArsenalRepository
 import org.indra.android.core.system.ArsenalTemplate
 import org.indra.android.core.system.SmartToolBox
+import org.indra.android.core.system.isStreaming
+import org.indra.android.core.system.streamedLine
 import java.util.UUID
 import javax.inject.Inject
 
@@ -112,11 +114,10 @@ class ArsenalViewModel
                 viewModelScope.launch {
                     toolBox.shell(cmd).collect { result ->
                         if (result.pid > 0) pid = result.pid
-                        val line = result.rawOutput
-                        if (line.isNotBlank() && !line.startsWith("Executing:")) {
+                        result.streamedLine?.let { line ->
                             _uiState.value = _uiState.value.copy(output = _uiState.value.output + line)
                         }
-                        if (result.status != "running") {
+                        if (!result.isStreaming) {
                             _uiState.value = _uiState.value.copy(runningId = null)
                             pid = -1
                             if (!result.success) _uiState.value = _uiState.value.copy(error = result.error)

@@ -8,8 +8,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import org.indra.android.core.system.SmartToolBox
 import org.indra.android.core.system.CoreManager
+import org.indra.android.core.system.SmartToolBox
+import org.indra.android.core.system.isStreaming
+import org.indra.android.core.system.streamedLine
 import javax.inject.Inject
 
 data class TerminalUiState(
@@ -74,23 +76,20 @@ class TerminalViewModel
                     val flow = if (chrootMode) toolBox.chroot(cmd) else toolBox.shell(cmd)
                     flow.collect { result ->
                         if (result.pid > 0) pid = result.pid
-                        val line = result.rawOutput
-                        if (result.status == "running") {
-                            if (line.isNotBlank() && !line.startsWith("Executing:")) {
-                                _uiState.value =
-                                    _uiState.value.copy(
-                                        output = _uiState.value.output + line,
-                                    )
-                            }
-                        } else {
-                            // completed / timeout
-                            if (line.isNotBlank() && !line.startsWith("Executing:")) {
-                                _uiState.value =
-                                    _uiState.value.copy(
-                                        output = _uiState.value.output + line,
-                                    )
-                            }
-                            _uiState.value = _uiState.value.copy(isRunning = false)
+                        // Only live lines are appended: the final emission repeats the
+                        // whole transcript, which would print the command's output twice.
+                        result.streamedLine?.let { line ->
+                            _uiState.value =
+                                _uiState.value.copy(
+                                    output = _uiState.value.output + line,
+                                )
+                        }
+                        if (!result.isStreaming) {
+                            _uiState.value =
+                                _uiState.value.copy(
+                                    isRunning = false,
+                                    error = if (result.success) null else result.error,
+                                )
                             pid = -1
                         }
                     }

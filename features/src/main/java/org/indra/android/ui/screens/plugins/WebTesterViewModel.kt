@@ -10,6 +10,7 @@ import kotlinx.coroutines.launch
 import org.indra.android.core.system.CoreManager
 import org.indra.android.core.system.NetworkHelper
 import org.indra.android.core.system.SmartToolBox
+import org.indra.android.core.system.isStreaming
 import org.indra.android.data.repository.NetworkRepository
 import javax.inject.Inject
 
@@ -83,6 +84,8 @@ class WebTesterViewModel
                         }
 
                     toolBox.nuclei(_uiState.value.target, templates).collect { result ->
+                        // Only the terminal emission carries the whole transcript.
+                        if (result.isStreaming) return@collect
                         if (result.success) {
                             _uiState.value = _uiState.value.copy(isLoading = false, result = result.rawOutput)
                         } else {

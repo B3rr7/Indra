@@ -9,6 +9,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.indra.android.core.system.SmartToolBox
+import org.indra.android.core.system.isStreaming
+import org.indra.android.core.system.streamedLine
 import javax.inject.Inject
 
 data class WifiAuditUiState(
@@ -103,10 +105,10 @@ class WifiAuditViewModel
 
             val args =
                 buildString {
-                    append("-w ").append(wordlist)
-                    sanitized(state.bssid)?.let { append(" -b ").append(it) }
-                    sanitized(state.essid)?.let { append(" -e ").append(it) }
-                    append(' ').append(capture)
+                    append("-w ").append(SmartToolBox.shellQuote(wordlist))
+                    sanitized(state.bssid)?.let { append(" -b ").append(SmartToolBox.shellQuote(it)) }
+                    sanitized(state.essid)?.let { append(" -e ").append(SmartToolBox.shellQuote(it)) }
+                    append(' ').append(SmartToolBox.shellQuote(capture))
                 }
 
             job =
@@ -114,28 +116,21 @@ class WifiAuditViewModel
                     var found = false
                     toolBox.aircrack(args).collect { result ->
                         if (result.pid > 0) pid = result.pid
-                        val line = result.rawOutput
-                        when (result.status) {
-                            "running" -> {
-                                if (line.isNotBlank() && !line.startsWith("Executing:")) {
-                                    if (line.contains("KEY FOUND")) {
-                                        found = true
-                                    }
-                                    _uiState.value =
-                                        _uiState.value.copy(
-                                            lines = (_uiState.value.lines + line).takeLast(MAX_LINES),
-                                            keyFound = _uiState.value.keyFound || line.contains("KEY FOUND"),
-                                        )
-                                }
-                            }
-                            "completed", "timeout" -> {
-                                _uiState.value =
-                                    _uiState.value.copy(
-                                        isActive = false,
-                                        keyFound = _uiState.value.keyFound || found,
-                                        error = if (result.success) null else result.error,
-                                    )
-                            }
+                        result.streamedLine?.let { line ->
+                            if (line.contains("KEY FOUND")) found = true
+                            _uiState.value =
+                                _uiState.value.copy(
+                                    lines = (_uiState.value.lines + line).takeLast(MAX_LINES),
+                                    keyFound = _uiState.value.keyFound || line.contains("KEY FOUND"),
+                                )
+                        }
+                        if (!result.isStreaming) {
+                            _uiState.value =
+                                _uiState.value.copy(
+                                    isActive = false,
+                                    keyFound = _uiState.value.keyFound || found,
+                                    error = if (result.success) null else result.error,
+                                )
                         }
                     }
                     _uiState.value = _uiState.value.copy(isActive = false)

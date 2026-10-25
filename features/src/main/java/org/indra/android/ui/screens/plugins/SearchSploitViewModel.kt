@@ -10,6 +10,8 @@ import kotlinx.coroutines.launch
 import org.indra.android.core.system.CoreManager
 import org.indra.android.core.system.SettingsRepository
 import org.indra.android.core.system.SmartToolBox
+import org.indra.android.core.system.isStreaming
+import org.indra.android.core.system.streamedLine
 import javax.inject.Inject
 
 @HiltViewModel
@@ -72,11 +74,14 @@ class SearchSploitViewModel
                 }
                 _uiState.value = _uiState.value.copy(isLoading = true, error = null, results = emptyList())
                 val dir = coreManager.exploitdbPath().absolutePath
-                toolBox.shell("grep -ril \"$q\" $dir 2>/dev/null | head -50").collect { result ->
-                    if (result.rawOutput.isNotBlank() && !result.rawOutput.startsWith("Executing:")) {
-                        _uiState.value = _uiState.value.copy(results = _uiState.value.results + result.rawOutput)
+                // Single quotes, not double: the script goes through sh, so "$q" would still
+                // expand $(...) and backticks typed by the user.
+                val grep = "grep -ril ${SmartToolBox.shellQuote(q)} ${SmartToolBox.shellQuote(dir)}"
+                toolBox.shell("$grep 2>/dev/null | head -50").collect { result ->
+                    result.streamedLine?.let { line ->
+                        _uiState.value = _uiState.value.copy(results = _uiState.value.results + line)
                     }
-                    if (result.status != "running") {
+                    if (!result.isStreaming) {
                         _uiState.value = _uiState.value.copy(isLoading = false)
                         if (!result.success) _uiState.value = _uiState.value.copy(error = result.error)
                     }

@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import org.indra.android.core.system.NetworkHelper
 import org.indra.android.core.system.SmartToolBox
+import org.indra.android.core.system.isStreaming
 import org.indra.android.data.repository.NetworkRepository
 import java.io.File
 import javax.inject.Inject
@@ -130,6 +131,8 @@ class PacketForgerViewModel
                     // hping3() appends the target itself.
                     try {
                         toolBox.hping3(state.target, args.toString()).collect { result ->
+                            // Only the terminal emission carries the whole transcript.
+                            if (result.isStreaming) return@collect
                             if (result.success) {
                                 _uiState.value =
                                     _uiState.value.copy(

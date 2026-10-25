@@ -10,6 +10,8 @@ import kotlinx.coroutines.launch
 import org.indra.android.core.system.CoreManager
 import org.indra.android.core.system.NetworkHelper
 import org.indra.android.core.system.SmartToolBox
+import org.indra.android.core.system.isStreaming
+import org.indra.android.core.system.streamedLine
 import org.indra.android.data.repository.NetworkRepository
 import javax.inject.Inject
 
@@ -106,10 +108,10 @@ class GobusterViewModel
                     if (ext.isNotBlank()) append(" -x ").append(org.indra.android.core.system.SmartToolBox.shellQuote(ext))
                 }
                 toolBox.gobuster(args).collect { result ->
-                    if (result.rawOutput.isNotBlank() && !result.rawOutput.startsWith("Executing:")) {
-                        _uiState.value = _uiState.value.copy(output = _uiState.value.output + result.rawOutput)
+                    result.streamedLine?.let { line ->
+                        _uiState.value = _uiState.value.copy(output = _uiState.value.output + line)
                     }
-                    if (result.status != "running") {
+                    if (!result.isStreaming) {
                         _uiState.value = _uiState.value.copy(isLoading = false)
                         if (!result.success) _uiState.value = _uiState.value.copy(error = result.error)
                     }

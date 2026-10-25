@@ -11,6 +11,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.indra.android.core.system.SmartToolBox
+import org.indra.android.core.system.streamedLine
+import org.indra.android.core.system.isStreaming
 import java.io.File
 import javax.inject.Inject
 
@@ -67,15 +69,16 @@ class PacketCaptureViewModel
             val iface = _uiState.value.iface.trim()
             if (iface.isEmpty()) return
             val enable = _uiState.value.monitorMode
+            val qu = SmartToolBox.shellQuote(iface)
             val cmd =
                 if (enable) {
-                    "ip link set $iface down && iw dev $iface set type monitor && ip link set $iface up"
+                    "ip link set $qu down && iw dev $qu set type monitor && ip link set $qu up"
                 } else {
-                    "ip link set $iface down && iw dev $iface set type managed && ip link set $iface up"
+                    "ip link set $qu down && iw dev $qu set type managed && ip link set $qu up"
                 }
             viewModelScope.launch {
                 toolBox.shell(cmd).collect { result ->
-                    if (!result.success && result.status != "running") {
+                    if (!result.success && !result.isStreaming) {
                         _uiState.value = _uiState.value.copy(error = result.error ?: "monitor mode change failed")
                     }
                 }
@@ -120,15 +123,13 @@ class PacketCaptureViewModel
                 viewModelScope.launch {
                     toolBox.tcpdump(iface, state.filter.trim(), count, outFile).collect { result ->
                         if (result.pid > 0) pid = result.pid
-                        val line = result.rawOutput
-                        if (result.status == "running") {
-                            if (line.isNotBlank() && !line.startsWith("Executing:")) {
-                                _uiState.value =
-                                    _uiState.value.copy(
-                                        packets = (_uiState.value.packets + line).takeLast(MAX_LINES),
-                                    )
-                            }
-                        } else if (result.status == "completed" || result.status == "timeout") {
+                        result.streamedLine?.let { line ->
+                            _uiState.value =
+                                _uiState.value.copy(
+                                    packets = (_uiState.value.packets + line).takeLast(MAX_LINES),
+                                )
+                        }
+                        if (!result.isStreaming) {
                             _uiState.value =
                                 _uiState.value.copy(
                                     isActive = false,
