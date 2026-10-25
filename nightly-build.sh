@@ -71,6 +71,7 @@ cd indra/jni >&3 2>&1 || die
 ./build.sh  >&3 2>&1 || jni_die
 cd "$oldpwd" >&3 2>&1 || die
 ./gradlew assembleRelease >&3 2>&1 || die
+"${DIR}/scripts/verify-release-keeps.sh" >&3 2>&1 || die
 
 echo -n -e "${GREEN}Copying signed apk to output directory${RESET}\n" | tee >(cat - >&3)
 cp $(find . -name "indra-release.apk" -type f) $NIGHTLIES_OUT_DIR/indra-$LAST_COMMIT.apk >&3 2>&1 || die

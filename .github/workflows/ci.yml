@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build, test, release integrity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # JDK 21 is required: JDK 17 lacks jlink for the toolchain, JDK 25 breaks Gradle 8.7.
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      # compileSdk 35 needs an SDK that is not guaranteed on the runner image; AGP will
+      # fetch the platform once the licences are accepted.
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Unit tests
+        run: ./gradlew --no-daemon test
+
+      - name: detekt
+        run: ./gradlew --no-daemon detekt
+
+      # Unsigned (no KEYSTORE_* secrets) but fully R8-processed, which is the part that
+      # cannot be verified by a debug build.
+      - name: Release APK
+        run: ./gradlew --no-daemon :indra:assembleRelease
+
+      # Guards the JNI event pipeline: R8 must not rename the classes that
+      # cSploitClient/cache.c resolves by name.
+      - name: Verify R8 keeps survived
+        run: scripts/verify-release-keeps.sh

@@ -13,6 +13,15 @@
     native <methods>;
 }
 
+# The client library resolves these by exact name at runtime
+# (indra/jni/cSploitClient/cache.c), so R8 must not rename, shrink or strip them:
+#  - ChildProcessManager.onEvent(id, event) is the single daemon callback entry point
+#  - org.indra.android.events.* are instantiated by native code one class at a time
+# Without these keeps the release build silently loses every child event (no output,
+# no ChildEnd) and each tool runs to its timeout.
+-keep class org.indra.android.events.** { *; }
+-keep class org.indra.android.core.child.ChildProcessManager { *; }
+
 # Keep data models
 -keep class org.indra.android.data.model.** { *; }
 
