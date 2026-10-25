@@ -22,6 +22,7 @@ import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.indra.android.core.system.CoreManager
+import org.indra.android.core.system.IndraSystem
 import org.indra.android.core.system.PermissionManager
 import org.indra.android.core.system.RootManager
 import org.indra.android.ui.navigation.BottomNavBar
@@ -39,6 +40,9 @@ class MainActivity : ComponentActivity() {
 
     @Inject
     lateinit var coreManager: CoreManager
+
+    @Inject
+    lateinit var indraSystem: IndraSystem
 
     private val permissionLauncher =
         registerForActivityResult(
@@ -79,6 +83,17 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        // Nothing used to call this, so the "Keep Wake Lock" setting did nothing at all.
+        indraSystem.acquireLocks()
+    }
+
+    override fun onDestroy() {
+        indraSystem.releaseLocks()
+        super.onDestroy()
     }
 
     private fun requestPermissionsIfNeeded() {

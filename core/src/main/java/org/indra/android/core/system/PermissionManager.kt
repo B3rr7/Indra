@@ -41,6 +41,14 @@ class PermissionManager
                 permissions.add(Manifest.permission.FOREGROUND_SERVICE_SPECIAL_USE)
             }
 
+            // Both are declared in the manifest but were never requested, so WhisperPair's
+            // BLE scan threw SecurityException on API 31+ while the code "handled" it with
+            // @SuppressLint("MissingPermission").
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                permissions.add(Manifest.permission.BLUETOOTH_SCAN)
+                permissions.add(Manifest.permission.BLUETOOTH_CONNECT)
+            }
+
             return permissions.toTypedArray()
         }
 

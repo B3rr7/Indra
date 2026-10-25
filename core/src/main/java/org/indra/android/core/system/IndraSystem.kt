@@ -74,8 +74,26 @@ class IndraSystem
                     wifiLock = createWifiLock(wifiManager)
                 }
                 wifiLock?.takeIf { !it.isHeld }?.acquire()
+                applyWakeLockSetting()
+            } catch (e: Exception) {
+                // Lock acquisition failed, continue without locks
+            }
+        }
 
-                if (settings.wakeLockEnabled) {
+        fun releaseLocks() {
+            runCatching { wifiLock?.takeIf { it.isHeld }?.release() }
+            runCatching { wakeLock?.takeIf { it.isHeld }?.release() }
+        }
+
+        /**
+         * Applies the "Keep Wake Lock" setting on its own, leaving the WiFi lock alone.
+         *
+         * Both [acquireLocks]/[releaseLocks] existed but had no callers, so the Settings
+         * toggle flipped a boolean that nothing acted on.
+         */
+        fun applyWakeLockSetting() {
+            if (settings.wakeLockEnabled) {
+                try {
                     val powerManager = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
                     if (wakeLock == null) {
                         // Partial lock keeps the CPU alive for long scans without
@@ -83,15 +101,12 @@ class IndraSystem
                         wakeLock = powerManager?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "indra-wake-lock")
                     }
                     wakeLock?.takeIf { !it.isHeld }?.acquire()
+                } catch (e: Exception) {
+                    // Lock acquisition failed, continue without the lock
                 }
-            } catch (e: Exception) {
-                // Lock acquisition failed, continue without locks
+            } else {
+                runCatching { wakeLock?.takeIf { it.isHeld }?.release() }
             }
-        }
-
-        fun releaseLocks() {
-            wifiLock?.takeIf { it.isHeld }?.release()
-            wakeLock?.takeIf { it.isHeld }?.release()
         }
 
         fun isCoreInstalled(): Boolean = File(corePath, "VERSION").exists()

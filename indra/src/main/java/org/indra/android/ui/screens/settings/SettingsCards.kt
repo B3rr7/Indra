@@ -320,6 +320,7 @@ internal fun LogsCard(
     uiState: SettingsUiState,
     viewModel: SettingsViewModel,
 ) {
+    val context = LocalContext.current
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -333,41 +334,138 @@ internal fun LogsCard(
                 Modifier
                     .fillMaxWidth()
                     .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            if (uiState.otaChecking || uiState.otaUpdating) {
-                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-            }
-
-            uiState.otaMessage?.let { message ->
-                Text(
-                    text = message,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-
+            // This card used to be a second copy of the OTA check/update buttons under a
+            // "Logs & Reports" heading: nothing on it had anything to do with logs, and the
+            // real (already implemented) log/crash plumbing in the ViewModel had no caller.
+            LogsSummary(uiState)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Button(
-                    onClick = viewModel::checkOtaUpdates,
-                    enabled = !uiState.otaChecking && !uiState.otaUpdating,
+                    onClick = {
+                        shareFiles(
+                            context = context,
+                            files = listOfNotNull(viewModel.getDebugLogFile()),
+                            chooserTitle = "Share Indra log",
+                        )
+                    },
+                    enabled = uiState.debugLogSizeBytes > 0,
                     modifier = Modifier.weight(1f),
                 ) {
-                    Text("Check")
+                    Text("Share log")
                 }
                 FilledTonalButton(
-                    onClick = viewModel::installOtaUpdates,
-                    enabled = !uiState.otaChecking && !uiState.otaUpdating && uiState.otaUpdateAvailable,
+                    onClick = {
+                        shareFiles(
+                            context = context,
+                            files = viewModel.getCrashLogFiles(),
+                            chooserTitle = "Share Indra crash reports",
+                        )
+                    },
+                    enabled = uiState.crashLogCount > 0,
                     modifier = Modifier.weight(1f),
                 ) {
-                    Text("Update")
+                    Text("Share crashes")
                 }
             }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                TextButton(
+                    onClick = viewModel::clearDebugLog,
+                    enabled = uiState.debugLogSizeBytes > 0,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text("Clear log")
+                }
+                TextButton(
+                    onClick = viewModel::clearCrashLogs,
+                    enabled = uiState.crashLogCount > 0,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text("Clear crashes")
+                }
+            }
+            Text(
+                text = "Reports stay on this device until you share them.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
+}
+
+@Composable
+private fun LogsSummary(uiState: SettingsUiState) {
+    Text(
+        text = "Debug log: ${formatBytes(uiState.debugLogSizeBytes)}",
+        style = MaterialTheme.typography.bodyMedium,
+    )
+    Text(
+        text =
+            when (uiState.crashLogCount) {
+                0 -> "No crash reports"
+                1 -> "1 crash report"
+                else -> "${uiState.crashLogCount} crash reports"
+            },
+        style = MaterialTheme.typography.bodyMedium,
+    )
+    if (!uiState.debugErrorLogging) {
+        Text(
+            text = "File logging is off — enable \"Debug error logging\" above to record output.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+private const val BYTES_PER_KB = 1024.0
+private const val BYTES_PER_MB = BYTES_PER_KB * BYTES_PER_KB
+
+private fun formatBytes(bytes: Long): String =
+    when {
+        bytes <= 0 -> "empty"
+        bytes < BYTES_PER_KB -> "$bytes B"
+        bytes < BYTES_PER_MB -> String.format(java.util.Locale.US, "%.1f KB", bytes / BYTES_PER_KB)
+        else -> String.format(java.util.Locale.US, "%.1f MB", bytes / BYTES_PER_MB)
+    }
+
+/**
+ * Hands [files] to another app through the `${applicationId}.fileprovider` provider
+ * (`res/xml/file_paths.xml` exposes `logs/` and `crashes/`). Failures are swallowed on
+ * purpose: a device with no app able to receive the intent should not crash Settings.
+ */
+private fun shareFiles(
+    context: android.content.Context,
+    files: List<java.io.File>,
+    chooserTitle: String,
+) {
+    val existing = files.filter { it.isFile && it.length() > 0 }
+    if (existing.isEmpty()) return
+    val uris =
+        ArrayList(
+            existing.mapNotNull { file ->
+                runCatching {
+                    androidx.core.content.FileProvider.getUriForFile(
+                        context,
+                        "${context.packageName}.fileprovider",
+                        file,
+                    )
+                }.getOrNull()
+            },
+        )
+    if (uris.isEmpty()) return
+    val intent =
+        Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+            type = "text/plain"
+            putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+    runCatching { context.startActivity(Intent.createChooser(intent, chooserTitle)) }
 }
 
 @Composable

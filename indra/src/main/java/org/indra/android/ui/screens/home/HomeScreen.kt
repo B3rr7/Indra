@@ -102,7 +102,7 @@ fun HomeScreen(
                         networkName = uiState.networkName,
                         networkDetail = uiState.networkDetail,
                         isConnected = uiState.isConnected,
-                        targetCount = uiState.targets.size,
+                        targetCount = uiState.targetCount,
                         onClick = onNavigateToNetworkRadar,
                     )
                 }
@@ -216,7 +216,7 @@ fun NetworkStatusHeroCard(
     networkName: String,
     networkDetail: String,
     isConnected: Boolean,
-    targetCount: Int,
+    targetCount: Int?,
     modifier: Modifier = Modifier,
     onClick: () -> Unit = {},
 ) {
@@ -257,27 +257,7 @@ fun NetworkStatusHeroCard(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                Box(
-                    modifier =
-                        Modifier
-                            .size(64.dp)
-                            .clip(CircleShape)
-                            .background(
-                                if (isConnected) {
-                                    StatusGreen.copy(alpha = 0.2f)
-                                } else {
-                                    StatusRed.copy(alpha = 0.2f)
-                                },
-                            ),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        imageVector = if (isConnected) Icons.Default.Wifi else Icons.Default.WifiOff,
-                        contentDescription = null,
-                        modifier = Modifier.size(32.dp),
-                        tint = if (isConnected) StatusGreen else StatusRed,
-                    )
-                }
+                HeroNetworkIcon(isConnected)
 
                 Column(
                     modifier = Modifier.weight(1f),
@@ -302,23 +282,7 @@ fun NetworkStatusHeroCard(
                         )
                     }
                     if (isConnected) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Devices,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp),
-                                tint = StatusCyan,
-                            )
-                            Text(
-                                text = "$targetCount targets discovered",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = StatusCyan,
-                                fontWeight = FontWeight.Medium,
-                            )
-                        }
+                        TargetCountRow(targetCount)
                     }
                 }
 
@@ -329,6 +293,59 @@ fun NetworkStatusHeroCard(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun HeroNetworkIcon(isConnected: Boolean) {
+    Box(
+        modifier =
+            Modifier
+                .size(64.dp)
+                .clip(CircleShape)
+                .background(
+                    if (isConnected) {
+                        StatusGreen.copy(alpha = 0.2f)
+                    } else {
+                        StatusRed.copy(alpha = 0.2f)
+                    },
+                ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = if (isConnected) Icons.Default.Wifi else Icons.Default.WifiOff,
+            contentDescription = null,
+            modifier = Modifier.size(32.dp),
+            tint = if (isConnected) StatusGreen else StatusRed,
+        )
+    }
+}
+
+@Composable
+private fun TargetCountRow(targetCount: Int?) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Icon(
+            imageVector = Icons.Default.Devices,
+            contentDescription = null,
+            modifier = Modifier.size(16.dp),
+            tint = StatusCyan,
+        )
+        Text(
+            // null = the neighbour-table probe could not run; claiming "0 targets" there
+            // would be a lie, so invite a scan instead.
+            text =
+                when (targetCount) {
+                    null -> "Tap to scan the network"
+                    1 -> "1 target discovered"
+                    else -> "$targetCount targets discovered"
+                },
+            style = MaterialTheme.typography.bodySmall,
+            color = StatusCyan,
+            fontWeight = FontWeight.Medium,
+        )
     }
 }
 

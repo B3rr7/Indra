@@ -19,7 +19,8 @@ data class HomeUiState(
     val networkName: String = "",
     val networkDetail: String = "",
     val isConnected: Boolean = false,
-    val targets: List<String> = emptyList(),
+    /** Hosts the kernel has seen on the link, or null when the probe could not run. */
+    val targetCount: Int? = null,
     val plugins: List<PluginInfo> = emptyList(),
     val isLoading: Boolean = false,
 )
@@ -89,21 +90,33 @@ class HomeViewModel
                         isConnected -> "Network"
                         else -> "Not connected"
                     }
+                val localIp = if (isConnected) networkHelper.getLocalIpAddress() else null
+                val gateway =
+                    if (!isConnected) {
+                        null
+                    } else if (onWifi) {
+                        networkHelper.getWifiGatewayAddress()
+                    } else {
+                        networkHelper.getGatewayAddress()
+                    }
                 val networkDetail =
                     if (!isConnected) {
                         ""
                     } else {
-                        val localIp = networkHelper.getLocalIpAddress()
-                        val gateway =
-                            if (onWifi) {
-                                networkHelper.getWifiGatewayAddress()
-                            } else {
-                                networkHelper.getGatewayAddress()
-                            }
                         listOfNotNull(
                             localIp?.let { "IP $it" },
                             gateway?.let { "GW $it" },
                         ).joinToString(" · ")
+                    }
+
+                // The kernel's neighbour table instead of an always-empty list: the old
+                // `targets = emptyList()` made the hero claim "0 targets discovered" forever.
+                // null (probe unavailable) is rendered differently from a real zero.
+                val hostCount =
+                    if (isConnected) {
+                        toolBox.neighborHosts(exclude = setOfNotNull(localIp, gateway))?.size
+                    } else {
+                        null
                     }
 
                 val plugins =
@@ -121,7 +134,7 @@ class HomeViewModel
                         networkName = networkName,
                         networkDetail = networkDetail,
                         isConnected = isConnected,
-                        targets = emptyList(),
+                        targetCount = hostCount,
                         plugins = plugins,
                         isLoading = false,
                     )

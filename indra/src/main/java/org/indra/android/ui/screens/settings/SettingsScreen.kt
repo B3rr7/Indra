@@ -142,7 +142,7 @@ fun SettingsScreen(
                 SettingsCard {
                     SettingsSwitchItem(
                         title = "Keep Wake Lock",
-                        subtitle = "Prevent device from sleeping",
+                        subtitle = "Hold a partial wake lock for long scans",
                         checked = uiState.wakeLockEnabled,
                         onCheckedChange = { viewModel.setWakeLockEnabled(it) },
                         icon = Icons.Default.BrightnessHigh,

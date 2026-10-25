@@ -47,6 +47,7 @@ data class SettingsUiState(
     val alpineMessage: String? = null,
     val debugErrorLogging: Boolean = false,
     val crashLogCount: Int = 0,
+    val debugLogSizeBytes: Long = 0,
     val appUpdateChecking: Boolean = false,
     val appUpdateAvailable: Boolean = false,
     val appUpdateVersion: String? = null,
@@ -106,6 +107,7 @@ class SettingsViewModel
                         alpineInstalled = coreManager.isAlpineInstalled(),
                         debugErrorLogging = settings.debugErrorLogging,
                         crashLogCount = crashReporter.getCrashFiles().size,
+                        debugLogSizeBytes = crashReporter.getLogFile()?.length() ?: 0,
                         toolStatus = toolBox.getAllTools().map { ToolStatus(it.name, it.isAvailable()) },
                     )
             }
@@ -227,6 +229,7 @@ class SettingsViewModel
 
         fun clearDebugLog() {
             Logger.clearLog()
+            _uiState.value = _uiState.value.copy(debugLogSizeBytes = 0)
         }
 
         fun getCrashLogFiles(): List<java.io.File> = crashReporter.getCrashFiles()
@@ -326,6 +329,9 @@ class SettingsViewModel
         fun setWakeLockEnabled(enabled: Boolean) {
             settings.wakeLockEnabled = enabled
             _uiState.value = _uiState.value.copy(wakeLockEnabled = enabled)
+            // Take effect immediately: the lock was never acquired before, so flipping the
+            // switch changed nothing until the next launch (which also did nothing).
+            system.applyWakeLockSetting()
         }
 
         fun installOtaUpdates() {
