@@ -129,13 +129,15 @@ fun TerminalScreen(
                 }
             }
 
-            Row(
+            // Chips on their own line: with everything in one Row the fillMaxWidth() chips
+            // took the whole width, the text field's weight(1f) collapsed to a sliver and
+            // the send button was pushed off-screen (the terminal could not be typed into).
+            Column(
                 modifier =
                     Modifier
                         .fillMaxWidth()
                         .padding(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -149,21 +151,27 @@ fun TerminalScreen(
                         )
                     }
                 }
-                OutlinedTextField(
-                    value = uiState.input,
-                    onValueChange = viewModel::updateInput,
-                    modifier = Modifier.weight(1f),
-                    placeholder = { Text("command…") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                    keyboardActions = KeyboardActions(onSend = { viewModel.run() }),
-                    textStyle = LocalTextStyle.current.copy(fontFamily = FontFamily.Monospace),
-                )
-                IconButton(
-                    onClick = viewModel::run,
-                    enabled = !uiState.isRunning && uiState.input.isNotBlank(),
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Run")
+                    OutlinedTextField(
+                        value = uiState.input,
+                        onValueChange = viewModel::updateInput,
+                        modifier = Modifier.weight(1f),
+                        placeholder = { Text("command…") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                        keyboardActions = KeyboardActions(onSend = { viewModel.run() }),
+                        textStyle = LocalTextStyle.current.copy(fontFamily = FontFamily.Monospace),
+                    )
+                    IconButton(
+                        onClick = viewModel::run,
+                        enabled = !uiState.isRunning && uiState.input.isNotBlank(),
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Run")
+                    }
                 }
             }
         }
