@@ -35,6 +35,9 @@ class SmartToolBox
             /** Packet capture / sniffers / scanners run until the user stops them. */
             private const val LONG_RUNNING_TIMEOUT_MS = 30 * 60_000L
 
+            /** Longest tool output line carried into `ToolResult.error` as the reason. */
+            private const val MAX_REASON_CHARS = 200
+
             private const val WORDLIST_PATH = "wordlists/common-passwords.txt"
 
             /** Where tcpdump writes .cap files when the Packet Capture screen's
@@ -430,6 +433,20 @@ class SmartToolBox
             return null
         }
 
+        /**
+         * `": <reason>"` for a failed child, taken from its last non-blank output line, or
+         * `""` when the tool printed nothing. Truncated so a chatty tool cannot push a
+         * multi-kilobyte line into a snackbar.
+         */
+        private fun reasonSuffix(rawOutput: String): String =
+            rawOutput
+                .lineSequence()
+                .map { it.trim() }
+                .lastOrNull { it.isNotEmpty() }
+                ?.let { if (it.length > MAX_REASON_CHARS) it.take(MAX_REASON_CHARS) + "…" else it }
+                ?.let { ": $it" }
+                ?: ""
+
         private fun execute(
             tool: String,
             args: String,
@@ -614,7 +631,11 @@ class SmartToolBox
                             when {
                                 finished != true -> "$label timed out or stopped"
                                 succeeded -> null
-                                else -> "$label exited with code $exitCode"
+                                // "shell exited with code 255" alone told the user a step failed
+                                // but never why (the reason is the tool's own last line: `ip: …
+                                // No such device`). Screens show `error` in place of output, so
+                                // carry the reason along instead of dropping it.
+                                else -> "$label exited with code $exitCode" + reasonSuffix(rawOutput)
                             },
                     ),
                 )
