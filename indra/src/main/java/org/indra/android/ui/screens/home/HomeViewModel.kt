@@ -56,11 +56,11 @@ class HomeViewModel
             if (plugin.id == "vuln_scanner" || plugin.id == "web_tester") return coreManager.isNucleiInstalled()
             if (plugin.id == "gobuster") return coreManager.isGobusterInstalled()
             if (plugin.id == "exploit_finder") return coreManager.isMsfInstalled()
-            // Responder and Wifite are Python-based and infeasible on Android
-            // without a bundled interpreter; keep the cards dimmed until a
-            // real binary ships (see IMPROVEMENT_PLAN Phase 2 "infeasible").
-            if (plugin.id == "responder" || plugin.id == "wifite") return false
-            if (plugin.id == "responder" || plugin.id == "wifite") return false
+            // Responder is Python-based and infeasible on Android without a bundled
+            // interpreter; keep the card dimmed until a real binary ships (see
+            // IMPROVEMENT_PLAN Phase 2 "infeasible"). Wifite is *not* in this list: its
+            // screen drives the bundled ip/iw/tcpdump/aircrack-ng binaries, not wifite.py.
+            if (plugin.id == "responder") return false
             if (plugin.id == "iptables") return coreManager.isIptablesSupported()
             // Rootless gating: disable raw-socket features when running without root.
             if (plugin.requiresRoot && settings.rootlessMode) {
