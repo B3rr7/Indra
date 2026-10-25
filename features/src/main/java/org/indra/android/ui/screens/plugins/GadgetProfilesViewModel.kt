@@ -10,9 +10,12 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.lastOrNull
 import kotlinx.coroutines.launch
 import org.indra.android.core.system.HidCapability
 import org.indra.android.core.system.SmartToolBox
+import org.indra.android.core.system.isStreaming
+import org.indra.android.core.system.streamedLine
 import javax.inject.Inject
 
 data class GadgetProfile(val name: String, val functions: List<String>) // e.g. ["hid", "mass_storage", "rndis"]
@@ -71,11 +74,6 @@ class GadgetProfilesViewModel @Inject constructor(
     }
 
     fun apply(p: GadgetProfile) {
-        val cap = _uiState.value.capability ?: hidCapability.detect()
-        if (!cap.isGadgetCapable) {
-            _uiState.value = _uiState.value.copy(error = "Gadget not supported on this device")
-            return
-        }
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(status = "Applying…", error = null)
             val runner = toolBox.getTool("shell")
@@ -83,19 +81,38 @@ class GadgetProfilesViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(status = "Idle", error = "Native daemon not available")
                 return@launch
             }
-            // Best-effort: create gadget + functions via configfs (requires root).
-            val cmds = mutableListOf<String>()
-            cmds.add("mkdir -p /config/usb_gadget/g1")
-            p.functions.forEach { f ->
-                cmds.add("mkdir -p /config/usb_gadget/g1/functions/$f.usb0 2>/dev/null || true")
+            // configfs is root-only, so HidCapability (app process) cannot see it; ask the
+            // daemon instead of refusing on a value that cannot be read.
+            if (toolBox.shell("[ -d /config/usb_gadget ]").lastOrNull()?.success != true) {
+                _uiState.value =
+                    _uiState.value.copy(
+                        status = "Idle",
+                        error = "This kernel has no configfs USB gadget support (/config/usb_gadget)",
+                    )
+                return@launch
             }
-            cmds.add("ls /config/usb_gadget/g1/functions/ 2>&1")
-            toolBox.shell(cmds.joinToString(" && ")).collect { r ->
-                if (r.rawOutput.isNotBlank() && !r.rawOutput.startsWith("Executing:")) {
-                    _uiState.value = _uiState.value.copy(status = r.rawOutput)
-                }
-                if (r.status != "running") {
-                    _uiState.value = _uiState.value.copy(status = "Done")
+            // Creates the gadget directory and one function per selection. Binding the
+            // gadget to a UDC is not implemented, so the status reports exactly that
+            // instead of claiming the device is now usable.
+            val cmds = mutableListOf("mkdir -p /config/usb_gadget/g1")
+            p.functions.forEach { f ->
+                cmds.add("mkdir -p ${SmartToolBox.shellQuote("/config/usb_gadget/g1/functions/$f.usb0")} 2>/dev/null || true")
+            }
+            cmds.add("ls /config/usb_gadget/g1/functions 2>&1")
+            val created = mutableListOf<String>()
+            toolBox.shell(cmds.joinToString("; ")).collect { r ->
+                r.streamedLine?.let { line -> created += line.trim() }
+                if (!r.isStreaming) {
+                    _uiState.value =
+                        _uiState.value.copy(
+                            status =
+                                if (r.success && created.isNotEmpty()) {
+                                    "Functions: ${created.joinToString(", ")} (not bound to a UDC)"
+                                } else {
+                                    "Idle"
+                                },
+                            error = if (r.success) null else (r.error ?: "configfs write failed"),
+                        )
                 }
             }
         }

@@ -6,8 +6,11 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.lastOrNull
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.indra.android.core.system.HidCapability
+import org.indra.android.core.system.HidReports
 import org.indra.android.core.system.SmartToolBox
 import javax.inject.Inject
 
@@ -68,9 +71,8 @@ class DuckyScriptViewModel @Inject constructor(
 
     fun run() {
         val st = _uiState.value
-        val cap = st.capability ?: hidCapability.detect()
-        if (!cap.supportsHid) {
-            _uiState.value = st.copy(error = "HID not supported on this device")
+        if (st.parsed.isEmpty()) {
+            _uiState.value = st.copy(error = "Nothing to run: parse the script first")
             return
         }
         viewModelScope.launch {
@@ -80,28 +82,61 @@ class DuckyScriptViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(status = "Idle", error = "Native daemon not available")
                 return@launch
             }
-            // Best-effort: type text and inject keys via /dev/hidg0 HID reports.
-            st.parsed.forEach { step ->
-                when (step) {
-                    is DuckyStep.TypeText -> {
-                        val escaped = step.text.replace("'", "'\\''")
-                        toolBox.shell("printf '%s' '$escaped' > /dev/hidg0").collect {}
-                    }
-                    is DuckyStep.Delay -> kotlinx.coroutines.delay(step.ms.toLong())
-                    is DuckyStep.Key -> {
-                        val code = hidKeyCode(step.code)
-                        val mod = step.modifiers.fold(0) { acc, m -> acc or hidModifier(m) }
-                        // Press report: [modifier, reserved, key1..key6]
-                        val press = byteArrayOf(mod.toByte(), 0, code.toByte(), 0, 0, 0, 0, 0)
-                        val release = byteArrayOf(0, 0, 0, 0, 0, 0, 0, 0)
-                        toolBox.shell("printf '\\x${press.joinToString("") { "%02x".format(it.toInt() and 0xff) }}' > /dev/hidg0").collect {}
-                        kotlinx.coroutines.delay(10)
-                        toolBox.shell("printf '\\x${release.joinToString("") { "%02x".format(it.toInt() and 0xff) }}' > /dev/hidg0").collect {}
-                    }
-                    is DuckyStep.Repeat -> { /* repeat last step; simplified: skip */ }
-                }
+            // /dev/hidg0 is the authority, not HidCapability (configfs is root-only and the
+            // app-side probe under-reports). Without it every write would silently vanish.
+            if (toolBox.shell("[ -e ${HidReports.DEVICE} ]").lastOrNull()?.success != true) {
+                _uiState.value = _uiState.value.copy(status = "Idle", error = HidReports.DEVICE_MISSING_MESSAGE)
+                return@launch
             }
-            _uiState.value = _uiState.value.copy(status = "Done")
+
+            // Steps are awaited one at a time: firing them off with collect {} let a key's
+            // press/release interleave with the following steps' writes.
+            var failure: String? = null
+            for (step in st.parsed) {
+                failure = runStep(step)
+                if (failure != null) break
+            }
+            _uiState.value =
+                _uiState.value.copy(
+                    status = if (failure == null) "Done (${st.parsed.size} steps)" else "Idle",
+                    error = failure,
+                )
         }
+    }
+
+    /** Runs one parsed step; returns a failure message, or null when it succeeded. */
+    private suspend fun runStep(step: DuckyStep): String? =
+        when (step) {
+            is DuckyStep.TypeText -> {
+                val script = HidReports.typingScript(step.text)
+                if (script.isEmpty()) null else write(script)
+            }
+
+            is DuckyStep.Delay -> {
+                delay(step.ms.toLong())
+                null
+            }
+
+            is DuckyStep.Key -> runKey(step)
+
+            is DuckyStep.Repeat -> "REPEAT is not supported"
+        }
+
+    private suspend fun runKey(step: DuckyStep.Key): String? {
+        val code = hidKeyCode(step.code)
+        val mod = step.modifiers.fold(0) { acc, m -> acc or hidModifier(m) }
+        write(HidReports.writeCommand(HidReports.pressReport(mod, code)))?.let { return it }
+        delay(KEY_HOLD_MS)
+        return write(HidReports.writeCommand(HidReports.releaseReport()))
+    }
+
+    private suspend fun write(script: String): String? =
+        toolBox.shell(script).lastOrNull()?.let { result ->
+            if (result.success) null else result.error ?: "HID write failed"
+        }
+
+    private companion object {
+        /** How long a key stays pressed before the release report. */
+        const val KEY_HOLD_MS = 10L
     }
 }

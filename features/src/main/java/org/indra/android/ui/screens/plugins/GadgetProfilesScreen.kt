@@ -48,13 +48,10 @@ fun GadgetProfilesScreen(
                     Text("UDC: ${cap?.hasUdc == true}  Configfs: ${cap?.hasConfigfs == true}", style = MaterialTheme.typography.bodySmall)
                 }
             }
-            if (cap?.isGadgetCapable != true) {
-                Text(
-                    "This device does not support USB gadget mode (no UDC/configfs). HID/USB Arsenal unavailable.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            } else {
+            // Shown unconditionally: the card is filled in from the app process, which
+            // cannot read the root-only configfs tree, so a "NO" there proves nothing.
+            // Apply probes configfs through the daemon and reports what actually happened.
+            run {
                 Text("Select functions for a new profile:", style = MaterialTheme.typography.titleSmall)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf("hid", "mass_storage", "rndis", "ecm").forEach { f ->

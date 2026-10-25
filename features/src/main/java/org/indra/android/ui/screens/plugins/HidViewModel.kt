@@ -6,9 +6,13 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.lastOrNull
 import kotlinx.coroutines.launch
 import org.indra.android.core.system.HidCapability
+import org.indra.android.core.system.HidReports
 import org.indra.android.core.system.SmartToolBox
+import org.indra.android.core.system.isStreaming
+import org.indra.android.core.system.streamedLine
 import javax.inject.Inject
 
 data class HidUiState(
@@ -32,12 +36,14 @@ class HidViewModel @Inject constructor(
         val st = _uiState.value
         val text = st.text
         if (text.isBlank()) return
-        val cap = st.capability ?: hidCapability.detect()
-        if (!cap.supportsHid) {
-            _uiState.value = st.copy(error = "HID not supported on this device (no configfs/UDC)")
+        val script = HidReports.typingScript(text)
+        if (script.isEmpty()) {
+            _uiState.value = st.copy(error = "Nothing in that text can be typed on a boot keyboard")
             return
         }
-        // Writing to /dev/hidg0 requires the gadget to be configured; this is a best-effort.
+        // The text is sent as boot-keyboard reports, not ASCII: the gadget only understands
+        // 8-byte reports. /dev/hidg0 itself only exists once a hid.* function is bound to a
+        // UDC, so the outcome is reported from the child's exit status instead of assumed.
         viewModelScope.launch {
             _uiState.value = st.copy(status = "Typing…", error = null)
             val runner = toolBox.getTool("shell")
@@ -45,14 +51,27 @@ class HidViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(status = "Idle", error = "Native daemon not available")
                 return@launch
             }
-            // Escape single quotes for shell
-            val escaped = text.replace("'", "'\\''")
-            toolBox.shell("printf '%s' '$escaped' > /dev/hidg0 2>&1 || echo 'hidg0 not available'").collect { r ->
-                if (r.rawOutput.isNotBlank() && !r.rawOutput.startsWith("Executing:")) {
-                    _uiState.value = _uiState.value.copy(status = r.rawOutput)
+            // A missing /dev/hidg0 (no gadget bound to a UDC) is the common case; report it
+            // instead of letting the write silently go nowhere.
+            if (toolBox.shell("[ -e ${HidReports.DEVICE} ]").lastOrNull()?.success != true) {
+                _uiState.value = _uiState.value.copy(status = "Idle", error = HidReports.DEVICE_MISSING_MESSAGE)
+                return@launch
+            }
+            toolBox.shell(script).collect { r ->
+                r.streamedLine?.let { line ->
+                    _uiState.value = _uiState.value.copy(status = line)
                 }
-                if (r.status != "running") {
-                    _uiState.value = _uiState.value.copy(status = "Done")
+                if (!r.isStreaming) {
+                    _uiState.value =
+                        _uiState.value.copy(
+                            status =
+                                if (r.success) {
+                                    "Typed ${text.length} characters"
+                                } else {
+                                    "Idle"
+                                },
+                            error = if (r.success) null else (r.error ?: "HID write failed"),
+                        )
                 }
             }
         }

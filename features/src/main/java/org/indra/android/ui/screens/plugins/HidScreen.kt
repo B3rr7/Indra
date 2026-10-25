@@ -54,24 +54,25 @@ fun HidScreen(
                     )
                 }
             }
-            if (cap?.supportsHid == true) {
-                OutlinedTextField(
-                    value = uiState.text,
-                    onValueChange = { viewModel.updateText(it) },
-                    label = { Text("Text to type via HID") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Button(onClick = { viewModel.typeText() }, modifier = Modifier.fillMaxWidth()) {
-                    Text("Type (best-effort)")
-                }
-                Text(uiState.status, style = MaterialTheme.typography.bodySmall)
-            } else {
-                Text(
-                    "This device does not support USB gadget/HID. Requires a gadget-capable kernel (CONFIG_USB_CONFIGFS_F_HID).",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+            // The card above is filled in from the app process, which cannot read the
+            // root-only configfs tree, so "NO" does not mean the device lacks HID. The run
+            // itself is the authoritative check: it looks for /dev/hidg0 as root.
+            OutlinedTextField(
+                value = uiState.text,
+                onValueChange = { viewModel.updateText(it) },
+                label = { Text("Text to type via HID") },
+                modifier = Modifier.fillMaxWidth()
+            )
+            Button(onClick = { viewModel.typeText() }, modifier = Modifier.fillMaxWidth()) {
+                Text("Type")
             }
+            Text(uiState.status, style = MaterialTheme.typography.bodySmall)
+            Text(
+                "Sends boot-keyboard reports to /dev/hidg0, which only exists once a HID " +
+                    "function is bound to a UDC (CONFIG_USB_CONFIGFS_F_HID).",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
             uiState.error?.let {
                 Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
             }
