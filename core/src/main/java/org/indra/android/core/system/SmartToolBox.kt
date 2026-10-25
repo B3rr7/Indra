@@ -38,6 +38,9 @@ class SmartToolBox
             /** Longest tool output line carried into `ToolResult.error` as the reason. */
             private const val MAX_REASON_CHARS = 200
 
+            /** `ip neigh show` returns immediately; a missing daemon must not hang Home. */
+            private const val NEIGHBOR_PROBE_TIMEOUT_MS = 10_000L
+
             private const val WORDLIST_PATH = "wordlists/common-passwords.txt"
 
             /** Where tcpdump writes .cap files when the Packet Capture screen's
@@ -286,8 +289,18 @@ class SmartToolBox
 
         fun ettercap(args: String): Flow<ToolResult> =
             rawCommand("ettercap", "${binary("ettercap")} $args", timeoutMs = LONG_RUNNING_TIMEOUT_MS)
+        /**
+         * Bettercap is an optional artifact installed by [CoreManager.installBettercap] into
+         * `<core>/bettercap/`, not a bundled `./tools/<name>` binary — so it runs from its
+         * real install path. The old `./tools/bettercap/bettercap` never existed, which made
+         * the screen fail even after a successful install.
+         */
         fun bettercap(args: String = ""): Flow<ToolResult> =
-            rawCommand("bettercap", "${binary("bettercap")} $args", timeoutMs = LONG_RUNNING_TIMEOUT_MS)
+            rawCommand(
+                "bettercap",
+                "${coreManager.bettercapPath().absolutePath} $args",
+                timeoutMs = LONG_RUNNING_TIMEOUT_MS,
+            )
 
         fun nuclei(
             target: String,
@@ -358,6 +371,17 @@ class SmartToolBox
             runCatching { client.kill(pid, 9) }
                 .onFailure { Logger.w("kill($pid) failed: ${it.message}") }
         }
+
+        /**
+         * Hosts the kernel has actually seen on the link (its neighbour table), or `null`
+         * when the probe could not run — the distinction matters, because "0 targets" and
+         * "we could not look" must not render the same. See [NeighborTable] for parsing.
+         */
+        suspend fun neighborHosts(exclude: Set<String> = emptySet()): List<String>? =
+            runCatching {
+                val result = command("ip neigh", "ip neigh show", NEIGHBOR_PROBE_TIMEOUT_MS).last()
+                if (result.success) NeighborTable.parse(result.rawOutput, exclude) else null
+            }.getOrElse { null }
 
         private fun rawCommand(
             label: String,

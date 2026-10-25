@@ -1,135 +1,258 @@
 package org.indra.android.ui.screens.plugins
 
-import android.content.Context
-import android.net.wifi.WifiManager
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.last
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.indra.android.core.system.DnsWire
+import org.indra.android.core.system.SmartToolBox
+import java.io.IOException
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
 import javax.inject.Inject
 
+/**
+ * Unprivileged port the responder binds. Port 53 needs root, which this process does not
+ * have — the old code bound 53 and always failed with a BindException.
+ */
+private const val LISTEN_PORT = 5353
+
+/** Largest UDP payload the responder reads; a DNS query never needs more. */
+private const val MAX_DNS_PACKET = 512
+
+private const val REDIRECT_RULE =
+    "iptables -t nat -A PREROUTING -p udp --dport 53 -j REDIRECT --to-ports $LISTEN_PORT"
+
+private const val UNREDIRECT_RULE =
+    "iptables -t nat -D PREROUTING -p udp --dport 53 -j REDIRECT --to-ports $LISTEN_PORT"
+
+/**
+ * The blocking receive loop, kept out of the ViewModel so it can be closed from any
+ * thread ([close]) and so cancellation is just "close the socket".
+ */
+private class DnsSocketLoop(
+    private val port: Int,
+) {
+    @Volatile
+    private var running = true
+
+    private var socket: DatagramSocket? = null
+
+    /** Binds [port] on all interfaces; throws when the port is taken or denied. */
+    fun open() {
+        socket = DatagramSocket(port, InetAddress.getByName("0.0.0.0"))
+    }
+
+    fun close() {
+        running = false
+        runCatching { socket?.close() }
+        socket = null
+    }
+
+    /** Sends [payload] back to whoever sent [to]; failures are not worth surfacing. */
+    fun send(
+        payload: ByteArray,
+        to: DatagramPacket,
+    ) {
+        runCatching { socket?.send(DatagramPacket(payload, payload.size, to.address, to.port)) }
+    }
+
+    fun loop(onQuery: (DatagramPacket) -> Unit) {
+        val buffer = ByteArray(MAX_DNS_PACKET)
+        while (running) {
+            val packet = DatagramPacket(buffer, buffer.size)
+            val received =
+                try {
+                    socket?.receive(packet)
+                    true
+                } catch (ignored: IOException) {
+                    // The socket was closed under us: this is how the loop is stopped.
+                    false
+                }
+            if (received) {
+                onQuery(packet)
+            } else if (running) {
+                continue
+            }
+        }
+    }
+}
+
 data class DnsSpooferUiState(
     val domain: String = "",
     val spoofIp: String = "",
     val isRunning: Boolean = false,
+    val redirectActive: Boolean = false,
     val log: List<String> = emptyList(),
-    val error: String? = null
+    val error: String? = null,
 )
 
 @HiltViewModel
-class DnsSpooferViewModel @Inject constructor(
-    @ApplicationContext private val context: Context
-) : ViewModel() {
-    private val _uiState = MutableStateFlow(DnsSpooferUiState())
-    val uiState: StateFlow<DnsSpooferUiState> = _uiState.asStateFlow()
+class DnsSpooferViewModel
+    @Inject
+    constructor(
+        private val toolBox: SmartToolBox,
+    ) : ViewModel() {
+        private val _uiState = MutableStateFlow(DnsSpooferUiState())
+        val uiState: StateFlow<DnsSpooferUiState> = _uiState.asStateFlow()
 
-    fun updateDomain(v: String) { _uiState.value = _uiState.value.copy(domain = v) }
-    fun updateIp(v: String) { _uiState.value = _uiState.value.copy(spoofIp = v) }
+        private var job: Job? = null
+        private var loop: DnsSocketLoop? = null
 
-    private var job: Job? = null
-
-    fun start() {
-        if (job?.isActive == true) return
-        val st = _uiState.value
-        val domain = st.domain.trim()
-        val spoofIp = st.spoofIp.trim()
-        if (domain.isEmpty() || spoofIp.isEmpty()) {
-            _uiState.value = st.copy(error = "Domain and spoof IP required")
-            return
+        /** Updates one input field; the other one is left untouched. */
+        fun updateInput(
+            domain: String? = null,
+            ip: String? = null,
+        ) {
+            _uiState.value =
+                _uiState.value.copy(
+                    domain = domain ?: _uiState.value.domain,
+                    spoofIp = ip ?: _uiState.value.spoofIp,
+                )
         }
-        _uiState.value = st.copy(isRunning = true, error = null, log = emptyList())
-        job = viewModelScope.launch(Dispatchers.IO) {
-            var socket: DatagramSocket? = null
+
+        fun start() {
+            if (job?.isActive == true) return
+            val state = _uiState.value
+            val domain = state.domain.trim().lowercase().trimEnd('.')
+            val spoofIp = state.spoofIp.trim()
+            val ipBytes = DnsWire.parseIpv4(spoofIp)
+            if (domain.isEmpty() || ipBytes == null) {
+                _uiState.value =
+                    state.copy(
+                        error =
+                            if (domain.isEmpty()) {
+                                "Domain is required"
+                            } else {
+                                "Spoof IP must be an IPv4 address, e.g. 192.168.1.10"
+                            },
+                    )
+                return
+            }
+            _uiState.value = state.copy(isRunning = true, error = null, log = emptyList())
+            job = viewModelScope.launch(Dispatchers.IO) { serve(domain, spoofIp, ipBytes) }
+        }
+
+        fun stop() {
+            job?.cancel()
+            job = null
+            runCatching { loop?.close() }
+            loop = null
+            _uiState.value = _uiState.value.copy(isRunning = false)
+            // Never leave a DNS redirect behind: with the responder gone, every query from
+            // other devices through this phone would be black-holed.
+            if (_uiState.value.redirectActive) disableRedirect()
+        }
+
+        /**
+         * Sends other devices' DNS (UDP/53 arriving at this phone) to [LISTEN_PORT] so the
+         * responder actually sees the queries. Needs root, which the daemon has; iptables is
+         * passed as an argv vector, so nothing here is a shell string.
+         *
+         * Only `PREROUTING` is touched: the phone's own queries leave through `OUTPUT` and
+         * keep resolving via its normal resolver.
+         */
+        fun enableRedirect() {
+            if (_uiState.value.redirectActive) return
+            viewModelScope.launch {
+                val ok = runIptables(REDIRECT_RULE)
+                _uiState.value =
+                    _uiState.value.copy(
+                        redirectActive = ok,
+                        error = if (ok) null else "Redirect failed: iptables rejected the rule (root required)",
+                    )
+                if (ok) log("Redirecting UDP/53 from other devices to $LISTEN_PORT")
+            }
+        }
+
+        fun disableRedirect() {
+            viewModelScope.launch {
+                val ok = runIptables(UNREDIRECT_RULE)
+                if (ok) {
+                    _uiState.value = _uiState.value.copy(redirectActive = false)
+                    log("DNS redirect removed")
+                } else {
+                    _uiState.value =
+                        _uiState.value.copy(error = "Could not remove the DNS redirect; check IPTables")
+                }
+            }
+        }
+
+        private suspend fun runIptables(rule: String): Boolean =
+            runCatching { toolBox.command("iptables", rule).last().success }.getOrElse { false }
+
+        private fun log(line: String) {
+            viewModelScope.launch(Dispatchers.Main) {
+                _uiState.value = _uiState.value.copy(log = _uiState.value.log + line)
+            }
+        }
+
+        private suspend fun serve(
+            domain: String,
+            spoofIp: String,
+            ipBytes: ByteArray,
+        ) {
+            val responder = DnsSocketLoop(LISTEN_PORT)
+            loop = responder
             try {
-                socket = DatagramSocket(53, InetAddress.getByName("0.0.0.0"))
-                val buf = ByteArray(512)
-                val ipBytes = spoofIp.split(".").map { it.toInt().toByte() }.toByteArray()
-                while (isActive) {
-                    val pkt = DatagramPacket(buf, buf.size)
-                    try { socket.receive(pkt) } catch (e: Exception) { if (!isActive) break; continue }
-                    val data = pkt.data.copyOf(pkt.length)
-                    // Parse DNS question to get queried domain
-                    val qname = parseDnsQuestion(data)
-                    if (qname != null && (qname == domain || qname.endsWith(".$domain"))) {
-                        withContext(Dispatchers.Main) {
-                            _uiState.value = _uiState.value.copy(log = _uiState.value.log + "Spoofing $qname -> $spoofIp")
-                        }
-                        val resp = buildDnsResponse(data, ipBytes)
-                        if (resp != null) {
-                            val out = DatagramPacket(resp, resp.size, pkt.address, pkt.port)
-                            socket.send(out)
-                        }
-                    }
+                responder.open()
+                log("Listening on UDP $LISTEN_PORT for $domain -> $spoofIp")
+                responder.loop { packet ->
+                    handleQuery(packet, domain, ipBytes)?.let { response -> responder.send(response, packet) }
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
-                    _uiState.value = _uiState.value.copy(error = e.message, isRunning = false)
+                    _uiState.value =
+                        _uiState.value.copy(
+                            error = "Cannot listen on UDP $LISTEN_PORT: ${e.message}",
+                            isRunning = false,
+                        )
                 }
             } finally {
-                socket?.close()
+                responder.close()
+                loop = null
             }
         }
-    }
 
-    fun stop() {
-        job?.cancel(); job = null
-        _uiState.value = _uiState.value.copy(isRunning = false)
-    }
-
-    private fun parseDnsQuestion(data: ByteArray): String? {
-        if (data.size < 12) return null
-        val qdcount = ((data[4].toInt() and 0xff) shl 8) or (data[5].toInt() and 0xff)
-        if (qdcount < 1) return null
-        var idx = 12
-        val labels = mutableListOf<String>()
-        while (idx < data.size) {
-            val len = data[idx].toInt() and 0xff
-            if (len == 0) { idx++; break }
-            if (len > 63 || idx + 1 + len > data.size) return null
-            labels.add(String(data, idx + 1, len))
-            idx += 1 + len
+        /**
+         * The response to [packet] when it asks for [domain] (or a subdomain), or null.
+         *
+         * Anything else is left unanswered on purpose: a wrong answer is worse than a
+         * timeout, and only PREROUTING is redirected, so the phone's own resolver is
+         * unaffected.
+         */
+        private fun handleQuery(
+            packet: DatagramPacket,
+            domain: String,
+            ipBytes: ByteArray,
+        ): ByteArray? {
+            val query = packet.data.copyOf(packet.length)
+            val normalized = DnsWire.questionName(query)?.lowercase()?.trimEnd('.')
+            val matches = normalized != null && (normalized == domain || normalized.endsWith(".$domain"))
+            if (matches) log("Spoofing $normalized")
+            return if (matches) DnsWire.spoofResponse(query, ipBytes) else null
         }
-        return labels.joinToString(".")
-    }
 
-    private fun buildDnsResponse(query: ByteArray, ip: ByteArray): ByteArray? {
-        if (query.size < 12) return null
-        // Header: copy ID, set flags (response, authoritative), qdcount=1, ancount=1
-        val resp = ByteArray(query.size + 16)
-        System.arraycopy(query, 0, resp, 0, 12)
-        resp[2] = 0x81.toByte(); resp[3] = 0x80.toByte() // response + recursion available
-        // qdcount already 1; ancount = 1
-        resp[6] = 0x00; resp[7] = 0x01
-        // Copy question section
-        var idx = 12
-        while (idx < query.size && query[idx].toInt() != 0) {
-            val len = query[idx].toInt() and 0xff
-            if (len > 63) return null
-            idx += 1 + len
+        override fun onCleared() {
+            job?.cancel()
+            runCatching { loop?.close() }
+            loop = null
+            if (_uiState.value.redirectActive) {
+                // Best effort with a detached scope: viewModelScope is already cancelled here.
+                CoroutineScope(Dispatchers.IO).launch {
+                    runCatching { toolBox.command("iptables", UNREDIRECT_RULE).last() }
+                }
+            }
+            super.onCleared()
         }
-        idx++ // null terminator
-        idx += 4 // QTYPE + QCLASS
-        if (idx > query.size) return null
-        System.arraycopy(query, 12, resp, 12, idx - 12)
-        // Answer: pointer to name (0xC00C), type A, class IN, TTL, rdlength 4, rdata IP
-        val aidx = idx
-        resp[aidx] = 0xC0.toByte(); resp[aidx + 1] = 0x0C.toByte()
-        resp[aidx + 2] = 0x00; resp[aidx + 3] = 0x01 // type A
-        resp[aidx + 4] = 0x00; resp[aidx + 5] = 0x01 // class IN
-        resp[aidx + 6] = 0x00; resp[aidx + 7] = 0x00; resp[aidx + 8] = 0x00; resp[aidx + 9] = 0x1E // TTL 30
-        resp[aidx + 10] = 0x00; resp[aidx + 11] = 0x04 // rdlength
-        resp[aidx + 12] = ip[0]; resp[aidx + 13] = ip[1]; resp[aidx + 14] = ip[2]; resp[aidx + 15] = ip[3]
-        return resp.copyOf(aidx + 16)
     }
-}

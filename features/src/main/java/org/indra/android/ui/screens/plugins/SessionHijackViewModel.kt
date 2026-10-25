@@ -13,10 +13,17 @@ import org.indra.android.core.system.isStreaming
 import org.indra.android.core.system.streamedLine
 import javax.inject.Inject
 
+/** Port 80 plus the usual alternates; editable on the screen. */
+private const val DEFAULT_HTTP_FILTER = "tcp port 80 or tcp port 8080"
+
 data class HijackedSession(val host: String, val cookie: String)
 
 data class SessionHijackUiState(
     val iface: String = "wlan0",
+    /** BPF expression handed to tcpdump. Was hardcoded to `tcp port 80`, so cookies on
+     *  any other HTTP port (8080, 8000, …) were invisible even though the screen claimed
+     *  to capture HTTP traffic. */
+    val filter: String = DEFAULT_HTTP_FILTER,
     val isRunning: Boolean = false,
     val sessions: List<HijackedSession> = emptyList(),
     val output: List<String> = emptyList(),
@@ -32,12 +39,15 @@ class SessionHijackViewModel @Inject constructor(
 
     fun updateIface(v: String) { _uiState.value = _uiState.value.copy(iface = v) }
 
+    fun updateFilter(v: String) { _uiState.value = _uiState.value.copy(filter = v) }
+
     private var job: Job? = null
     private var pid = -1
 
     fun start() {
         if (job?.isActive == true) return
         val iface = _uiState.value.iface.trim().ifEmpty { "wlan0" }
+        val filter = _uiState.value.filter.trim().ifEmpty { DEFAULT_HTTP_FILTER }
         val runner = toolBox.getTool("raw")
         if (runner == null || !runner.isAvailable()) {
             _uiState.value = _uiState.value.copy(error = "Native daemon not available")
@@ -48,7 +58,10 @@ class SessionHijackViewModel @Inject constructor(
             // stderr is kept: tcpdump's "SIOCGIFHWADDR: No such device" and its capture
             // summary are the only explanation a failing run gives, and ToolResult.error
             // carries the last output line.
-            toolBox.shell("./tools/tcpdump/tcpdump -i ${SmartToolBox.shellQuote(iface)} -A -l tcp port 80").collect { result ->
+            toolBox.shell(
+                "./tools/tcpdump/tcpdump -i ${SmartToolBox.shellQuote(iface)} -A -l " +
+                    SmartToolBox.shellQuote(filter),
+            ).collect { result ->
                 if (result.pid > 0) pid = result.pid
                 result.streamedLine?.let { line ->
                     _uiState.value = _uiState.value.copy(output = _uiState.value.output + line)
