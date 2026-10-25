@@ -42,11 +42,29 @@ class SmartToolBox
             const val CAPTURE_PATH = "captures/last.cap"
 
             /**
-             * Single-quotes a value for the shell that executes raw-handler command
-             * strings (POSIX `'"'"'` escaping, same rule as `CoreManager.shellQuote`).
+             * Single-quotes a value for the shell that executes `shell()` command strings
+             * (POSIX `'"'"'` escaping, same rule as `CoreManager.shellQuote`).
              * Every user-typed field interpolated into a command must go through this.
              */
             fun shellQuote(value: String): String = "'" + value.replace("'", "'\\''") + "'"
+
+            /**
+             * Status values carried by [ToolResult].
+             *
+             * - [STATUS_RUNNING]: one streamed line (or the initial "Executing: …" echo).
+             * - [STATUS_COMPLETED]: final summary of a child that terminated.
+             * - [STATUS_TIMEOUT]: final summary of a child that was killed or timed out.
+             * - [STATUS_FAILED]: the command never ran (no handler, handler unavailable,
+             *   start rejected). Always final, always `success = false`.
+             */
+            const val STATUS_RUNNING = "running"
+            const val STATUS_COMPLETED = "completed"
+            const val STATUS_TIMEOUT = "timeout"
+            const val STATUS_FAILED = "failed"
+
+            /** Android's toybox shell. The daemon `execvp()`s its argv directly, so a real
+             *  shell only happens when it is asked for explicitly — see [shell]. */
+            const val SH_BINARY = "/system/bin/sh"
 
             /** One row per registered tool. The table is the single source of
              *  truth: a name may appear only once — repeated registrations
@@ -259,7 +277,21 @@ class SmartToolBox
         ): Flow<ToolResult> = rawCommand("reaver", "${binary("reaver")} -i ${shellQuote(iface)} -b ${shellQuote(bssid)} $args")
 
 
-        fun shell(command: String): Flow<ToolResult> = execute("shell", command)
+        /**
+         * Runs a POSIX shell script through `/system/bin/sh -c`.
+         *
+         * The daemon does NOT use a shell: it tokenizes the command string itself and
+         * `execvp()`s the resulting argv (see `cSploitClient/command.c` + `cSploitDaemon/
+         * command.c`). Handing it `a && b > f` therefore passes `&&` and `>` to `a` as
+         * literal arguments. Wrapping the script in sh -c is what makes `&&`, `|`,
+         * redirection and globbing work.
+         *
+         * The script is passed as a single [shellQuote]d argument, which the daemon's
+         * tokenizer unwraps verbatim — so anything interpolated into [command] that came
+         * from user input MUST be shell-quoted by the caller. Without that, this is a root
+         * shell (which it already is, since the daemon runs as root).
+         */
+        fun shell(command: String): Flow<ToolResult> = execute("shell", "$SH_BINARY -c ${shellQuote(command)}")
 
         /** Path (relative to the core dir, the daemon's cwd) of a bundled tool binary. */
         private fun binary(name: String): String = "./tools/$name/$name"
@@ -301,6 +333,20 @@ class SmartToolBox
             )
 
         /**
+         * Runs one command as an argument vector through the daemon's raw handler.
+         *
+         * Unlike [shell] this does NOT involve a shell: the daemon tokenizes the string and
+         * `execvp()`s it, so `;`, `|`, `>` and `&&` are ordinary arguments. Use it for
+         * "arguments for one binary" fields, where the user should not be able to chain a
+         * second command by typing a separator.
+         */
+        fun command(
+            label: String,
+            command: String,
+            timeoutMs: Long = TOOL_TIMEOUT_MS,
+        ): Flow<ToolResult> = execute("raw", command, label, timeoutMs)
+
+        /**
          * Public wrapper running an arbitrary command through the daemon's raw handler.
          * Used by OTA version probes (`<binary> --version`) outside tool screens.
          */
@@ -308,7 +354,7 @@ class SmartToolBox
             label: String,
             command: String,
             timeoutMs: Long = TOOL_TIMEOUT_MS,
-        ): Flow<ToolResult> = execute("raw", command, label, timeoutMs)
+        ): Flow<ToolResult> = command(label, command, timeoutMs)
 
         /**
          * Best-effort version string for a tool binary. Tries a handful of common
@@ -350,7 +396,15 @@ class SmartToolBox
             channelFlow {
                 val toolInstance = tools[tool]
                 if (toolInstance == null) {
-                    send(ToolResult(tool = label, success = false, error = "Tool '$label' not found", rawOutput = ""))
+                    send(
+                        ToolResult(
+                            tool = label,
+                            success = false,
+                            status = STATUS_FAILED,
+                            error = "Tool '$label' not found",
+                            rawOutput = "",
+                        ),
+                    )
                     return@channelFlow
                 }
                 if (!toolInstance.isAvailable()) {
@@ -358,6 +412,7 @@ class SmartToolBox
                         ToolResult(
                             tool = label,
                             success = false,
+                            status = STATUS_FAILED,
                             error = "Tool '$label' is not available (native handler missing)",
                             rawOutput = "",
                         ),
@@ -375,7 +430,15 @@ class SmartToolBox
                 val pid = toolInstance.start(args)
                 if (pid == -1) {
                     pump.cancel()
-                    send(ToolResult(tool = label, success = false, error = "Failed to start $label", rawOutput = ""))
+                    send(
+                        ToolResult(
+                            tool = label,
+                            success = false,
+                            status = STATUS_FAILED,
+                            error = "Failed to start $label",
+                            rawOutput = "",
+                        ),
+                    )
                     return@channelFlow
                 }
 
@@ -383,7 +446,7 @@ class SmartToolBox
                     ToolResult(
                         tool = label,
                         success = true,
-                        status = "running",
+                        status = STATUS_RUNNING,
                         pid = pid,
                         rawOutput = "Executing: $label $args",
                     ),
@@ -414,7 +477,7 @@ class SmartToolBox
                                                 ToolResult(
                                                     tool = label,
                                                     success = true,
-                                                    status = "running",
+                                                    status = STATUS_RUNNING,
                                                     pid = pid,
                                                     rawOutput = event.line,
                                                     ports = ports.toList(),
@@ -432,7 +495,7 @@ class SmartToolBox
                                                 ToolResult(
                                                     tool = label,
                                                     success = true,
-                                                    status = "running",
+                                                    status = STATUS_RUNNING,
                                                     pid = pid,
                                                     rawOutput = event.line,
                                                     ports = ports.toList(),
@@ -498,7 +561,7 @@ class SmartToolBox
                     ToolResult(
                         tool = label,
                         success = succeeded,
-                        status = if (finished == true) "completed" else "timeout",
+                        status = if (finished == true) STATUS_COMPLETED else STATUS_TIMEOUT,
                         pid = pid,
                         rawOutput = rawOutput,
                         ports = ports.toList(),
@@ -596,6 +659,11 @@ data class ToolOs(
 data class ToolResult(
     val tool: String,
     val success: Boolean,
+    /**
+     * One of `SmartToolBox.STATUS_*`. A collector that renders output must append
+     * [rawOutput] only while this is `running` — the final emission carries the whole
+     * transcript, so appending it unconditionally duplicates everything.
+     */
     val status: String = "",
     val pid: Int = -1,
     val rawOutput: String = "",
@@ -623,3 +691,23 @@ data class ToolResult(
             }
     }
 }
+
+/**
+ * True for the per-line emissions a child produces while it runs.
+ *
+ * The final emission ([SmartToolBox.STATUS_COMPLETED], [SmartToolBox.STATUS_TIMEOUT]) and
+ * the never-ran emissions ([SmartToolBox.STATUS_FAILED]) carry the whole transcript in
+ * [ToolResult.rawOutput], so collectors must not treat them as "one more line".
+ */
+val ToolResult.isStreaming: Boolean
+    get() = status == SmartToolBox.STATUS_RUNNING
+
+/**
+ * The line to append to a scrolling transcript, or null when there is nothing new to show:
+ * the initial "Executing: …" echo, blank lines and every terminal emission.
+ */
+val ToolResult.streamedLine: String?
+    get() {
+        if (!isStreaming) return null
+        return rawOutput.takeIf { it.isNotBlank() && !it.startsWith("Executing:") }
+    }
