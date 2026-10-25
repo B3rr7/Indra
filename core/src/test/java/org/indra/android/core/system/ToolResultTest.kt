@@ -13,6 +13,7 @@ class ToolResultTest {
         assertEquals(-1, result.pid)
         assertEquals("", result.rawOutput)
         assertNull(result.error)
+        assertNull(result.exitValue)
     }
 
     @Test

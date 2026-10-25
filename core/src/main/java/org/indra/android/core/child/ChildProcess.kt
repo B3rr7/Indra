@@ -40,6 +40,8 @@ sealed class ProcessEvent {
 
     data class Ended(
         val processId: Int,
+        /** Process exit status (`WEXITSTATUS`), or null when it was not reported. */
+        val exitValue: Int? = null,
     ) : ProcessEvent()
 
     data class Crashed(

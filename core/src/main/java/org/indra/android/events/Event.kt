@@ -8,12 +8,26 @@ class Newline(
     val line: String,
 ) : Event()
 
+/**
+ * Emitted when a child exits normally.
+ *
+ * [exitValue] is `WEXITSTATUS` — the *command id* is not carried here, it arrives as the
+ * `id` argument of `ChildProcessManager.onEvent`. Native code passes it through
+ * `create_child_end_event()` (`cSploitClient/command.c`), which narrows it to one byte,
+ * so values above 255 are truncated (exit codes are 0..255 by definition).
+ */
 class ChildEnd(
-    val id: Int,
+    val exitValue: Int,
 ) : Event()
 
+/**
+ * Emitted when a child was killed by a signal.
+ *
+ * [signal] is the terminating signal (`WTERMSIG`), not a command id — same split as
+ * [ChildEnd]: the command id arrives as `ChildProcessManager.onEvent`'s first argument.
+ */
 class ChildDied(
-    val id: Int,
+    val signal: Int,
 ) : Event()
 
 class StderrNewline(

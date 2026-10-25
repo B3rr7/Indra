@@ -394,6 +394,7 @@ class SmartToolBox
                 val osMatches = mutableListOf<ToolOs>()
 
                 var finished: Boolean? = null
+                var exitValue: Int? = null
                 try {
                     finished =
                         withTimeoutOrNull(timeoutMs) {
@@ -455,7 +456,11 @@ class SmartToolBox
                                             output.appendLine(listOfNotNull(event.title, event.body).joinToString(": "))
                                         }
 
-                                    is ProcessEvent.Ended -> if (event.processId == pid) done = true
+                                    is ProcessEvent.Ended ->
+                                        if (event.processId == pid) {
+                                            exitValue = event.exitValue
+                                            done = true
+                                        }
 
                                     is ProcessEvent.Crashed -> if (event.processId == pid) done = false
                                 }
@@ -482,16 +487,29 @@ class SmartToolBox
                         }
                     }
 
+                val exitCode = exitValue
+                // The daemon execvp()s the argv vector directly (no shell), so tools report
+                // failures through the exit status: `ip` rejecting a malformed MAC, hydra on
+                // an unknown module, grep finding nothing, msfconsole usage errors. Treating
+                // "the process ended" as success made every one of those look like a pass.
+                val succeeded = finished == true && (exitCode ?: 0) == 0
+
                 send(
                     ToolResult(
                         tool = label,
-                        success = finished == true,
+                        success = succeeded,
                         status = if (finished == true) "completed" else "timeout",
                         pid = pid,
                         rawOutput = rawOutput,
                         ports = ports.toList(),
                         osMatches = osMatches.toList(),
-                        error = if (finished == true) null else "$label timed out or stopped",
+                        exitValue = exitCode,
+                        error =
+                            when {
+                                finished != true -> "$label timed out or stopped"
+                                succeeded -> null
+                                else -> "$label exited with code $exitCode"
+                            },
                     ),
                 )
             }.flowOn(Dispatchers.IO)
@@ -583,6 +601,8 @@ data class ToolResult(
     val rawOutput: String = "",
     val ports: List<ToolPort> = emptyList(),
     val osMatches: List<ToolOs> = emptyList(),
+    /** Exit status of the child on the final emission; null while running or if unknown. */
+    val exitValue: Int? = null,
     val parsedData: Map<String, Any>? = null,
     val error: String? = null,
     val timestamp: Long = System.currentTimeMillis(),

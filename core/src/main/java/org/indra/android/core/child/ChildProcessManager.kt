@@ -52,7 +52,7 @@ class ChildProcessManager
                         is Port -> ProcessEvent.PortFound(id, event.port, event.protocol, event.service, event.version)
                         is Os -> ProcessEvent.OsFound(id, event.accuracy, event.name, event.type)
                         is Message -> ProcessEvent.Message(id, event.severity, event.message)
-                        is ChildEnd -> ProcessEvent.Ended(id)
+                        is ChildEnd -> ProcessEvent.Ended(id, event.exitValue)
                         is ChildDied -> ProcessEvent.Crashed(id)
                         else -> null
                     }
