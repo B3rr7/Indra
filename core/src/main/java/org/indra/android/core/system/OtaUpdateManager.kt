@@ -5,6 +5,7 @@ import com.google.gson.JsonParser
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.last
 import kotlinx.coroutines.withContext
+import org.indra.android.core.BuildConfig
 import okhttp3.CertificatePinner
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -56,11 +57,12 @@ class OtaUpdateManager
             private const val PAYLOAD_FIELD = "payload"
 
             /**
-             * Placeholder until the release signing key is provisioned. While it starts
-             * with REPLACE_ME, manifest signatures are only logged as unverified —
-             * this state must never ship.
+             * Provisioned at build time (`-Pindra.otaSigningKey=<base64 X.509 SPKI>` or the
+             * `INDRA_OTA_SIGNING_KEY` env var) instead of being a source constant, so a
+             * release no longer needs a code edit to publish signed manifests. While the
+             * value starts with REPLACE_ME, signature verification stays fail-closed.
              */
-            private const val OTA_SIGNING_KEY_SPKI = "REPLACE_ME_WITH_BASE64_X509_PUBLIC_KEY"
+            private val OTA_SIGNING_KEY_SPKI: String = BuildConfig.OTA_SIGNING_KEY_SPKI
 
             private const val MANIFEST_TIMEOUT_SECONDS = 15L
             private const val DOWNLOAD_TIMEOUT_SECONDS = 300L
@@ -68,10 +70,10 @@ class OtaUpdateManager
 
             private const val TLS_PIN_HOST = "ota.indra.dev"
 
-            // Empty until the release pin is provisioned. Pinning is defence-in-depth on
-            // top of the manifest signature check; a placeholder value must never be
-            // installed because CertificatePinner rejects non-base64 pins at class init.
-            private const val TLS_PIN = ""
+            // Optional, provisioned at build time (`-Pindra.otaTlsPin` / INDRA_OTA_TLS_PIN).
+            // Pinning is defence-in-depth on top of the manifest signature check; an empty
+            // value disables it because CertificatePinner rejects non-base64 pins at init.
+            private val TLS_PIN: String = BuildConfig.OTA_TLS_PIN
 
             private val okHttpClient: OkHttpClient =
                 OkHttpClient

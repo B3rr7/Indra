@@ -14,6 +14,23 @@ android {
         minSdk 26
         targetSdk 35
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+
+        // Release provisioning without editing source: pass -Pindra.otaSigningKey=<base64 SPKI>
+        // (or export INDRA_OTA_SIGNING_KEY) at build time. The placeholder default keeps the
+        // fail-closed "unverified signature refused" path in OtaUpdateManager.
+        buildConfigField 'String', 'OTA_SIGNING_KEY_SPKI',
+                '"' + (findProperty('indra.otaSigningKey')
+                        ?: System.getenv('INDRA_OTA_SIGNING_KEY')
+                        ?: 'REPLACE_ME_WITH_BASE64_X509_PUBLIC_KEY') + '"'
+        // Optional TLS pin (<sha256>/<base64>); empty disables pinning (signature still checked).
+        buildConfigField 'String', 'OTA_TLS_PIN',
+                '"' + (findProperty('indra.otaTlsPin')
+                        ?: System.getenv('INDRA_OTA_TLS_PIN')
+                        ?: '') + '"'
+    }
+
+    buildFeatures {
+        buildConfig true
     }
 
     compileOptions {
