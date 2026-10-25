@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import org.indra.android.core.system.MacAddress
 import org.indra.android.core.system.SmartToolBox
 import org.indra.android.core.system.isStreaming
 import org.indra.android.core.system.streamedLine
@@ -41,8 +42,6 @@ class MacChangerViewModel
         private val toolBox: SmartToolBox,
     ) : ViewModel() {
         private val prefs = context.getSharedPreferences("mac_profiles", Context.MODE_PRIVATE)
-        private val macPattern = Regex("^[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){5}$")
-
         private val gson = Gson()
 
         private val _uiState = MutableStateFlow(MacChangerUiState())
@@ -103,11 +102,11 @@ class MacChangerViewModel
         }
 
         fun randomize() {
-            // Locally administered (bit 1 set) and unicast (bit 0 clear) in the first octet.
-            // Replacing the first ':' with "2" used to produce "aa2bb:cc:dd:ee:ff".
-            val first = (kotlin.random.Random.nextInt(OCTETS) and LOCALLY_ADMINISTERED_MASK) or UNICAST_BIT
-            val octets = listOf(first) + List(OCTETS - 1) { kotlin.random.Random.nextInt(OCTETS) }
-            _uiState.value = _uiState.value.copy(newMac = octets.joinToString(":") { "%02x".format(it) })
+            // Locally administered, unicast, six octets — MacAddress.random(). One
+            // constant used to mean both the octet range (256) and the octet count (6),
+            // so "Randomize" filled the field with 256 colon separated pairs; splicing
+            // "2" over the first ':' used to produce "aa2bb:cc:dd:ee:ff".
+            _uiState.value = _uiState.value.copy(newMac = MacAddress.random())
         }
 
         fun apply() {
@@ -119,7 +118,7 @@ class MacChangerViewModel
                 _uiState.value = st.copy(error = "Interface and MAC are required")
                 return
             }
-            if (!macPattern.matches(mac)) {
+            if (!MacAddress.isValid(mac)) {
                 _uiState.value = st.copy(error = "MAC must look like aa:bb:cc:dd:ee:ff")
                 return
             }
@@ -151,17 +150,6 @@ class MacChangerViewModel
                         }
                     }
                 }
-        }
-
-        private companion object {
-            /** 0x00..0xFF, the range of one MAC octet. */
-            const val OCTETS = 256
-
-            /** Clears the multicast bit and the two administratively-assigned bits. */
-            const val LOCALLY_ADMINISTERED_MASK = 0xFC
-
-            /** Bit 1 set: locally administered rather than vendor-assigned. */
-            const val UNICAST_BIT = 0x02
         }
 
         fun stop() {
