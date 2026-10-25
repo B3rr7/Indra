@@ -32,8 +32,15 @@ class SmartToolBox
             /** Tools that never emit ChildEnd (long-running daemons) are bounded by this. */
             private const val TOOL_TIMEOUT_MS = 120_000L
 
-            /** Packet capture / sniffers / scanners run until the user stops them. */
+            /** Sniffers, spoofers and crackers run until the user stops them. */
             private const val LONG_RUNNING_TIMEOUT_MS = 30 * 60_000L
+
+            /**
+             * Bounded scans (nuclei, masscan, traceroute, crafted packets). These finish on
+             * their own but routinely outlive the 120 s default — a masscan of a /16, or a
+             * nuclei template run, used to be killed mid-scan and reported as a timeout.
+             */
+            private const val SCAN_TIMEOUT_MS = 15 * 60_000L
 
             /** Longest tool output line carried into `ToolResult.error` as the reason. */
             private const val MAX_REASON_CHARS = 200
@@ -244,7 +251,12 @@ class SmartToolBox
             )
 
         /** nmap's traceroute: its hop table is the only traceroute available on-device. */
-        fun traceroute(target: String): Flow<ToolResult> = rawCommand("traceroute", "${binary("nmap")} -sn --traceroute -v -n ${shellQuote(target)}")
+        fun traceroute(target: String): Flow<ToolResult> =
+            rawCommand(
+                "traceroute",
+                "${binary("nmap")} -sn --traceroute -v -n ${shellQuote(target)}",
+                timeoutMs = SCAN_TIMEOUT_MS,
+            )
 
         fun tcpdump(
             iface: String = "wlan0",
@@ -305,7 +317,12 @@ class SmartToolBox
         fun nuclei(
             target: String,
             templates: String = "",
-        ): Flow<ToolResult> = rawCommand("nuclei", "${binary("nuclei")} -u ${shellQuote(target)} $templates")
+        ): Flow<ToolResult> =
+            rawCommand(
+                "nuclei",
+                "${binary("nuclei")} -u ${shellQuote(target)} $templates",
+                timeoutMs = SCAN_TIMEOUT_MS,
+            )
 
         fun aircrack(args: String): Flow<ToolResult> =
             rawCommand("aircrack", "${binary("aircrack-ng")} $args", timeoutMs = LONG_RUNNING_TIMEOUT_MS)
@@ -316,18 +333,34 @@ class SmartToolBox
         fun hping3(
             target: String,
             args: String = "",
-        ): Flow<ToolResult> = rawCommand("hping3", "${binary("hping3")} $args ${shellQuote(target)}")
+        ): Flow<ToolResult> =
+            rawCommand(
+                "hping3",
+                "${binary("hping3")} $args ${shellQuote(target)}",
+                timeoutMs = SCAN_TIMEOUT_MS,
+            )
 
         fun masscan(
             target: String,
             args: String = "",
-        ): Flow<ToolResult> = rawCommand("masscan", "${binary("masscan")} $args ${shellQuote(target)}")
+        ): Flow<ToolResult> =
+            rawCommand(
+                "masscan",
+                "${binary("masscan")} $args ${shellQuote(target)}",
+                timeoutMs = SCAN_TIMEOUT_MS,
+            )
 
         fun reaver(
             iface: String,
             bssid: String,
             args: String = "",
-        ): Flow<ToolResult> = rawCommand("reaver", "${binary("reaver")} -i ${shellQuote(iface)} -b ${shellQuote(bssid)} $args")
+        ): Flow<ToolResult> =
+            rawCommand(
+                "reaver",
+                "${binary("reaver")} -i ${shellQuote(iface)} -b ${shellQuote(bssid)} $args",
+                // WPS PIN attacks run for hours; the screen's Stop button ends it.
+                timeoutMs = LONG_RUNNING_TIMEOUT_MS,
+            )
 
 
         /**
