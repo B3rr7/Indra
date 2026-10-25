@@ -39,7 +39,9 @@ class OneTapMitmViewModel @Inject constructor(
 
     private fun refreshSuggestions() {
         val list = linkedSetOf<String>()
-        networkHelper.getLocalIpAddress()?.let { list += it }
+        // Deliberately excludes this device's own address: the chips are one tap away and
+        // ARP-spoofing yourself loops your own traffic through the stack (observed as a
+        // WiFi-driver hard reset on some devices). See the guard in start().
         networkHelper.getGatewayAddress()?.let { list += it }
         list += networkRepository.discoveredHostsSnapshot()
         _uiState.value = _uiState.value.copy(suggestions = list.toList())
@@ -62,6 +64,37 @@ class OneTapMitmViewModel @Inject constructor(
             _uiState.value = st.copy(error = "Target and gateway required")
             return
         }
+
+        // Same guards as MitmViewModel: spoofing this device (or its own address as the
+        // gateway) rewrites its gateway entry, sends traffic in a loop, and can take the
+        // WiFi driver down — documented as hard reboots on the moto g60 test device.
+        val localAddresses = networkHelper.getLocalIpv4Addresses()
+        if (target in localAddresses) {
+            _uiState.value =
+                st.copy(
+                    error =
+                        "$target is this device. Spoofing yourself loops your own traffic " +
+                            "through the network stack; pick another host on the LAN as the target.",
+                )
+            return
+        }
+        if (gateway in localAddresses) {
+            _uiState.value =
+                st.copy(
+                    error = "$gateway is this device, it cannot be the gateway. Use the router's address.",
+                )
+            return
+        }
+        if (target == gateway) {
+            _uiState.value =
+                st.copy(
+                    error =
+                        "Target and gateway are identical, arpspoof would fall back to " +
+                            "spoofing the whole subnet. Pick a host as the target and the router as the gateway.",
+                )
+            return
+        }
+
         val runner = toolBox.getTool("arpspoof")
         if (runner == null || !runner.isAvailable()) {
             _uiState.value = st.copy(error = "arpspoof not available (root required)")
