@@ -94,5 +94,23 @@ class OtaModelsTest {
     // ---- requirePinnedOtaHost ----
 
     @Test
-    fun `pinned host is required unless test hosts are allowed`() {    }
+    fun `pinned host is required unless test hosts are allowed`() {
+        // Production host: always accepted, regardless of test mode.
+        requirePinnedOtaHost("https://ota.indra.dev/v1/manifest.json", "ota.indra.dev", allowTestHosts = false)
+        requirePinnedOtaHost("https://ota.indra.dev/v1/manifest.json", "ota.indra.dev", allowTestHosts = true)
+
+        // Anything else is refused while test mode is off — including loopback, which is
+        // what the local OTA recipe uses.
+        assertThrows(SecurityException::class.java) {
+            requirePinnedOtaHost("http://127.0.0.1:8443/manifest.json", "ota.indra.dev", allowTestHosts = false)
+        }
+        assertThrows(SecurityException::class.java) {
+            requirePinnedOtaHost("https://evil.example/manifest.json", "ota.indra.dev", allowTestHosts = false)
+        }
+
+        // Test mode relaxes the host restriction to any host (not just loopback), which is
+        // why it is also the switch that tolerates an unverified manifest envelope. Both
+        // default to off; see OtaUpdateManager.allowUnverifiedSignature().
+        requirePinnedOtaHost("http://127.0.0.1:8443/manifest.json", "ota.indra.dev", allowTestHosts = true)
+    }
 }

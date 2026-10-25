@@ -65,6 +65,7 @@ enum class PortField(
     MSF_RPC("MSF RPC Port"),
 }
 
+@Suppress("LongParameterList") // Hilt-injected settings hub; splitting it is a separate refactor.
 @HiltViewModel
 class SettingsViewModel
     @Inject
@@ -270,7 +271,16 @@ class SettingsViewModel
                 val manifest = result.manifest
                 _uiState.value =
                     if (manifest == null) {
-                        _uiState.value.copy(otaChecking = false, otaMessage = "Update check failed")
+                        _uiState.value.copy(
+                            otaChecking = false,
+                            otaMessage =
+                                if (otaManager.isSignatureConfigured()) {
+                                    "Update check failed"
+                                } else {
+                                    "Binary updates are not configured in this build " +
+                                        "(no signing key provisioned)"
+                                },
+                        )
                     } else {
                         val outdated = manifest.binaries.count { result.localVersions[it.name] != it.version }
                         _uiState.value.copy(
@@ -324,7 +334,17 @@ class SettingsViewModel
                 _uiState.value = _uiState.value.copy(otaUpdating = true, otaMessage = "Installing updates…")
                 val manifest = otaManager.checkForUpdate().manifest
                 if (manifest == null) {
-                    _uiState.value = _uiState.value.copy(otaUpdating = false, otaMessage = "No update manifest available")
+                    _uiState.value =
+                        _uiState.value.copy(
+                            otaUpdating = false,
+                            otaMessage =
+                                if (otaManager.isSignatureConfigured()) {
+                                    "No update manifest available"
+                                } else {
+                                    "Binary updates are not configured in this build " +
+                                        "(no signing key provisioned)"
+                                },
+                        )
                 } else {
                     otaManager
                         .installLatest(manifest)

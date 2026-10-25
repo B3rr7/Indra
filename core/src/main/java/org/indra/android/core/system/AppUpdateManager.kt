@@ -18,9 +18,14 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * In-app APK updater. Fetches a signed JSON manifest ({version, url, sha256})
- * from a pinned HTTPS host, compares to the installed version, downloads the
- * APK into the cache dir, verifies its SHA-256, and hands it to PackageInstaller.
+ * In-app APK updater. Fetches a JSON manifest ({version, url, sha256}) over HTTPS,
+ * compares it to the installed version, downloads the APK into the cache dir, verifies
+ * its SHA-256, and hands it to the system installer.
+ *
+ * The manifest itself is not signed yet, so the integrity of an update rests on (a) HTTPS
+ * to the production endpoint and (b) the mandatory SHA-256 of the APK. Both are enforced
+ * here — an update with a missing or malformed hash is refused rather than installed.
+ * The system installer still validates the APK's signature before replacing the app.
  *
  * This is deliberately separate from [OtaUpdateManager], which only swaps native
  * binaries; the APK itself must go through the system installer.
@@ -34,6 +39,10 @@ class AppUpdateManager
         companion object {
             // Override via Settings if needed; production default.
             const val DEFAULT_MANIFEST_URL = "https://ota.indra.dev/app/version.json"
+
+            /** Length of a hex-encoded SHA-256 digest. */
+            private const val SHA256_HEX_LENGTH = 64
+            private const val HEX_DIGITS = "0123456789abcdef"
         }
 
         data class UpdateInfo(
@@ -62,7 +71,8 @@ class AppUpdateManager
                         UpdateInfo(
                             version = json.getString("version"),
                             url = json.getString("url"),
-                            sha256 = json.optString("sha256", ""),
+                            // Mandatory: a manifest without a hash is refused at install time.
+                            sha256 = json.getString("sha256").trim().lowercase(),
                         )
                     }
                 } catch (e: Exception) {
@@ -95,6 +105,14 @@ class AppUpdateManager
         ): Result<Unit> =
             withContext(Dispatchers.IO) {
                 runCatching {
+                    require(info.url.startsWith("https://", ignoreCase = true)) {
+                        "Update URL must be HTTPS; refusing ${info.url}"
+                    }
+                    val expectedSha256 = info.sha256.trim().lowercase()
+                    require(expectedSha256.length == SHA256_HEX_LENGTH && expectedSha256.all { it in HEX_DIGITS }) {
+                        "Manifest sha256 is missing or malformed; refusing an unverifiable update"
+                    }
+
                     val client = OkHttpClient()
                     val request = Request.Builder().url(info.url).build()
                     val apkFile = File(context.cacheDir, "indra-update.apk")
@@ -115,19 +133,17 @@ class AppUpdateManager
                             }
                         }
                     }
-                    // Verify SHA-256 if provided.
-                    if (info.sha256.isNotBlank()) {
-                        val digest = MessageDigest.getInstance("SHA-256")
-                        apkFile.inputStream().use { s ->
-                            val b = ByteArray(8192)
-                            var r: Int
-                            while (s.read(b).also { r = it } != -1) digest.update(b, 0, r)
-                        }
-                        val actual = digest.digest().joinToString("") { "%02x".format(it) }
-                        if (!actual.equals(info.sha256, ignoreCase = true)) {
-                            apkFile.delete()
-                            error("SHA-256 mismatch: $actual != ${info.sha256}")
-                        }
+                    // Always verify: the hash is the only integrity check on the APK bytes.
+                    val digest = MessageDigest.getInstance("SHA-256")
+                    apkFile.inputStream().use { s ->
+                        val b = ByteArray(8192)
+                        var r: Int
+                        while (s.read(b).also { r = it } != -1) digest.update(b, 0, r)
+                    }
+                    val actual = digest.digest().joinToString("") { "%02x".format(it) }
+                    if (actual != expectedSha256) {
+                        apkFile.delete()
+                        error("SHA-256 mismatch: $actual != $expectedSha256")
                     }
                     // Hand off to the system installer.
                     installApk(apkFile)

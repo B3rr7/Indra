@@ -67,17 +67,25 @@ class OtaUpdateManager
             private const val PROBE_TIMEOUT_MS = 60_000L
 
             private const val TLS_PIN_HOST = "ota.indra.dev"
-            private const val TLS_PIN = "sha256/REPLACE_ME_WITH_REAL_BASE64_PIN=="
+
+            // Empty until the release pin is provisioned. Pinning is defence-in-depth on
+            // top of the manifest signature check; a placeholder value must never be
+            // installed because CertificatePinner rejects non-base64 pins at class init.
+            private const val TLS_PIN = ""
 
             private val okHttpClient: OkHttpClient =
                 OkHttpClient
                     .Builder()
-                    .certificatePinner(
-                        CertificatePinner
-                            .Builder()
-                            .add(TLS_PIN_HOST, TLS_PIN)
-                            .build(),
-                    ).connectTimeout(MANIFEST_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                    .apply {
+                        if (TLS_PIN.isNotBlank()) {
+                            certificatePinner(
+                                CertificatePinner
+                                    .Builder()
+                                    .add(TLS_PIN_HOST, TLS_PIN)
+                                    .build(),
+                            )
+                        }
+                    }.connectTimeout(MANIFEST_TIMEOUT_SECONDS, TimeUnit.SECONDS)
                     .readTimeout(DOWNLOAD_TIMEOUT_SECONDS, TimeUnit.SECONDS)
                     .writeTimeout(DOWNLOAD_TIMEOUT_SECONDS, TimeUnit.SECONDS)
                     .build()
@@ -109,14 +117,44 @@ class OtaUpdateManager
             return parseManifest(payload)
         }
 
+        /**
+         * True when this build can authenticate manifests at all (a real signing key is
+         * provisioned). Callers use it to tell "not configured in this build" apart from
+         * "the check failed" instead of showing one opaque error for both.
+         */
+        fun isSignatureConfigured(): Boolean = !OTA_SIGNING_KEY_SPKI.startsWith("REPLACE_ME")
+
+        /**
+         * Fail-closed policy for the "signing key not provisioned" state.
+         *
+         * Without a key the envelope is unauthenticated, so anyone who can answer the
+         * manifest URL could push a binary the daemon then executes as root. The LAN/OTA
+         * test flow opts in explicitly via Settings -> "allow test hosts", which also
+         * relaxes the host restriction in [requirePinnedHost] — hence both defaults are off.
+         */
+        private fun allowUnverifiedSignature(): Boolean {
+            if (allowTestHosts()) {
+                Logger.w(
+                    "OTA manifest signature NOT verified: signing key not configured and " +
+                        "test-host mode is enabled (development only)",
+                )
+                return true
+            }
+            Logger.e(
+                "OTA manifest refused: signing key not provisioned " +
+                    "(enable test hosts in Settings only for local OTA testing)",
+            )
+            return false
+        }
+
         private fun verifyManifestSignature(
             payload: ByteArray,
             signatureBase64: String,
         ): Boolean {
             if (OTA_SIGNING_KEY_SPKI.startsWith("REPLACE_ME")) {
-                Logger.w("OTA manifest signature NOT verified: signing key not configured (dev only)")
-                return true
+                return allowUnverifiedSignature()
             }
+
             return try {
                 val publicKey =
                     java.security.KeyFactory
