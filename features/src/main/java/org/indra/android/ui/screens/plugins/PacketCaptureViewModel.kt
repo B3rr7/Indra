@@ -23,6 +23,12 @@ data class PacketCaptureUiState(
     val monitorMode: Boolean = false,
     val monitorWarningShown: Boolean = false,
     val packets: List<String> = emptyList(),
+    /**
+     * Total lines ever appended to [packets] — monotonic, so the auto-follow
+     * scroll effect keeps a usable key after the 500-line cap stops [packets]
+     * from growing (a size-keyed effect freezes at the cap).
+     */
+    val packetCount: Long = 0,
     val error: String? = null,
 )
 
@@ -128,7 +134,7 @@ class PacketCaptureViewModel
 
             val count = state.count.trim().toIntOrNull() ?: 0
 
-            _uiState.value = state.copy(isActive = true, error = null, packets = emptyList())
+            _uiState.value = state.copy(isActive = true, error = null, packets = emptyList(), packetCount = 0)
 
             job =
                 viewModelScope.launch {
@@ -153,9 +159,11 @@ class PacketCaptureViewModel
                     toolBox.tcpdump(iface, state.filter.trim(), count, outFile).collect { result ->
                         if (result.pid > 0) pid = result.pid
                         result.streamedLine?.let { line ->
+                            val current = _uiState.value
                             _uiState.value =
-                                _uiState.value.copy(
-                                    packets = (_uiState.value.packets + line).takeLast(MAX_LINES),
+                                current.copy(
+                                    packets = (current.packets + line).takeLast(MAX_LINES),
+                                    packetCount = current.packetCount + 1,
                                 )
                         }
                         if (!result.isStreaming) {

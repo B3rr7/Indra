@@ -21,6 +21,11 @@ data class MitmUiState(
     val iface: String = "wlan0",
     val isActive: Boolean = false,
     val log: List<String> = emptyList(),
+    /**
+     * Total lines ever appended to [log] — monotonic, so auto-follow keeps a
+     * usable key after the rolling cap stops [log] from growing.
+     */
+    val logCount: Long = 0,
     val error: String? = null,
     val suggestions: List<String> = emptyList(),
 )
@@ -120,6 +125,7 @@ class MitmViewModel
                     isActive = true,
                     error = null,
                     log = listOf("arp spoof: $target via $gateway on $iface (root required)"),
+                    logCount = 1,
                 )
 
             job =
@@ -129,9 +135,11 @@ class MitmViewModel
                         result.streamedLine?.let { raw ->
                             val line = raw.trim()
                             if (line.isNotEmpty()) {
+                                val current = _uiState.value
                                 _uiState.value =
-                                    _uiState.value.copy(
-                                        log = (_uiState.value.log + line).takeLast(LOG_LINES),
+                                    current.copy(
+                                        log = (current.log + line).takeLast(LOG_LINES),
+                                        logCount = current.logCount + 1,
                                     )
                             }
                         }
@@ -152,10 +160,12 @@ class MitmViewModel
             job = null
             toolBox.stop(pid)
             pid = -1
+            val current = _uiState.value
             _uiState.value =
-                _uiState.value.copy(
+                current.copy(
                     isActive = false,
-                    log = _uiState.value.log + "stopped",
+                    log = (current.log + "stopped").takeLast(LOG_LINES),
+                    logCount = current.logCount + 1,
                 )
         }
 

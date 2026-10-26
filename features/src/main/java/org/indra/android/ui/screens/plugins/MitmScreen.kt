@@ -161,7 +161,16 @@ fun MitmScreen(
                     )
                     val logState = rememberLazyListState()
                     val logFollow = rememberAutoFollowState(logState)
-                    AutoFollowScrollEffect(logState, uiState.log.size, { uiState.log.size - 1 }, logFollow)
+                    // logCount is monotonic while the log itself is capped, so it is
+                    // the follow key; a size-keyed effect would freeze at the cap.
+                    val headTrimmed = (uiState.logCount - uiState.log.size).toInt()
+                    AutoFollowScrollEffect(
+                        logState,
+                        uiState.logCount.toInt(),
+                        { uiState.log.size - 1 },
+                        logFollow,
+                        headTrimmed,
+                    )
                     Card(modifier = Modifier.fillMaxWidth().weight(1f)) {
                         LazyColumn(
                             state = logState,

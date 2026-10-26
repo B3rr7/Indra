@@ -180,7 +180,16 @@ fun PacketCaptureScreen(
 
             val listState = rememberLazyListState()
             val listFollow = rememberAutoFollowState(listState)
-            AutoFollowScrollEffect(listState, uiState.packets.size, { uiState.packets.size - 1 }, listFollow)
+            // packetCount (not packets.size) is the follow key: the list is capped,
+            // so its size stops changing and a size-keyed effect freezes at the cap.
+            val headTrimmed = (uiState.packetCount - uiState.packets.size).toInt()
+            AutoFollowScrollEffect(
+                listState,
+                uiState.packetCount.toInt(),
+                { uiState.packets.size - 1 },
+                listFollow,
+                headTrimmed,
+            )
             Card(modifier = Modifier.fillMaxWidth().weight(1f)) {
                 if (uiState.packets.isEmpty()) {
                     Box(

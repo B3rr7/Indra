@@ -18,8 +18,9 @@ data class TerminalUiState(
     val input: String = "",
     val output: List<String> = emptyList(),
     /**
-     * Total lines ever appended — unlike [output] (capped) this never stops
-     * growing, so the UI can key auto-follow scroll effects on it.
+     * Lines appended since the transcript was last cleared — unlike [output]
+     * (capped, and reset by Clear) this only ever grows while a transcript is
+     * live, so the UI can key auto-follow scroll effects on it.
      */
     val lineCount: Long = 0,
     val isRunning: Boolean = false,
@@ -126,6 +127,9 @@ class TerminalViewModel
 
         fun clear() {
             if (job?.isActive == true) return
-            _uiState.value = _uiState.value.copy(output = emptyList())
+            // Reset the counter with the transcript: leaving it behind would make
+            // headTrimmed (= lineCount - output.size) jump by the whole cleared
+            // length and hand the follower a bogus trim baseline.
+            _uiState.value = _uiState.value.copy(output = emptyList(), lineCount = 0)
         }
     }

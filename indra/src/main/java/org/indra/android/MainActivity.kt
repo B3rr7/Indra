@@ -18,7 +18,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -50,7 +50,9 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var indraSystem: IndraSystem
 
-    private var permissionsDenied by mutableStateOf(false)
+    // Counts denied attempts, not just "denied": a boolean key could not re-fire
+    // the snackbar when the user taps Grant and denies again (silent dead end).
+    private var permissionDenials by mutableIntStateOf(0)
 
     private val permissionLauncher =
         registerForActivityResult(
@@ -58,7 +60,7 @@ class MainActivity : ComponentActivity() {
         ) { permissions ->
             val denied = permissions.filterValues { !it }.keys
             // Denial rationale: a snackbar tells the user what broke and offers a retry.
-            permissionsDenied = denied.isNotEmpty()
+            permissionDenials = if (denied.isEmpty()) 0 else permissionDenials + 1
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -87,7 +89,7 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background,
                 ) {
                     MainScaffold(
-                        permissionsDenied = permissionsDenied,
+                        permissionDenials = permissionDenials,
                         onRequestPermissions = ::requestPermissionsIfNeeded,
                     )
                 }
@@ -129,16 +131,16 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun MainScaffold(
-    permissionsDenied: Boolean = false,
+    permissionDenials: Int = 0,
     onRequestPermissions: () -> Unit = {},
 ) {
     val navController = androidx.navigation.compose.rememberNavController()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    if (permissionsDenied) {
+    if (permissionDenials > 0) {
         val message =
             "Some permissions were denied — Wi-Fi details and network discovery may not work."
-        LaunchedEffect(permissionsDenied) {
+        LaunchedEffect(permissionDenials) {
             when (
                 snackbarHostState.showSnackbar(
                     message = message,
