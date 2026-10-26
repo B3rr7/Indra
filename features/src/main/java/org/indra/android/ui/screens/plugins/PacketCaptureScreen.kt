@@ -13,6 +13,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import org.indra.android.ui.components.AutoFollowScrollEffect
+import org.indra.android.ui.components.rememberAutoFollowState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -20,7 +23,7 @@ fun PacketCaptureScreen(
     onNavigateBack: () -> Unit,
     viewModel: PacketCaptureViewModel = hiltViewModel(),
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     Scaffold(
         topBar = {
@@ -176,11 +179,8 @@ fun PacketCaptureScreen(
             )
 
             val listState = rememberLazyListState()
-            LaunchedEffect(uiState.packets.size) {
-                if (uiState.packets.isNotEmpty()) {
-                    listState.scrollToItem(uiState.packets.size - 1)
-                }
-            }
+            val listFollow = rememberAutoFollowState(listState)
+            AutoFollowScrollEffect(listState, uiState.packets.size, { uiState.packets.size - 1 }, listFollow)
             Card(modifier = Modifier.fillMaxWidth().weight(1f)) {
                 if (uiState.packets.isEmpty()) {
                     Box(

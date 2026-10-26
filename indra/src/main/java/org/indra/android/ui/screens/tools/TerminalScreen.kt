@@ -20,6 +20,9 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import org.indra.android.ui.components.AutoFollowScrollEffect
+import org.indra.android.ui.components.rememberAutoFollowState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -27,13 +30,18 @@ fun TerminalScreen(
     onNavigateBack: () -> Unit,
     viewModel: TerminalViewModel = hiltViewModel(),
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
 
-    LaunchedEffect(uiState.output.size) {
-        if (uiState.output.isNotEmpty()) {
-            listState.animateScrollToItem(uiState.output.size - 1)
-        }
+    val listFollow = rememberAutoFollowState(listState)
+    // headTrimmed = lines evicted from the list head by the rolling cap — pass
+    // it so a paused history view does not drift as the transcript rolls by.
+    val headTrimmed = (uiState.lineCount - uiState.output.size).toInt()
+    AutoFollowScrollEffect(listState, uiState.lineCount.toInt(), { uiState.output.size - 1 }, listFollow, headTrimmed)
+    // A newly submitted command must be visible even if the user had scrolled up
+    // to read history — jump to its prompt once, then normal follow resumes.
+    LaunchedEffect(uiState.isRunning) {
+        if (uiState.isRunning) listFollow.resumeFollowing()
     }
 
     Scaffold(

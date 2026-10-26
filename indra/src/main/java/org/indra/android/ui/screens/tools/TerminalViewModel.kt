@@ -17,11 +17,19 @@ import javax.inject.Inject
 data class TerminalUiState(
     val input: String = "",
     val output: List<String> = emptyList(),
+    /**
+     * Total lines ever appended — unlike [output] (capped) this never stops
+     * growing, so the UI can key auto-follow scroll effects on it.
+     */
+    val lineCount: Long = 0,
     val isRunning: Boolean = false,
     val error: String? = null,
     val chrootMode: Boolean = false,
     val alpineInstalled: Boolean = false,
 )
+
+/** Rolling transcript bound — verbose tools must not grow the list unbounded. */
+private const val MAX_OUTPUT_LINES = 500
 
 @HiltViewModel
 class TerminalViewModel
@@ -36,6 +44,16 @@ class TerminalViewModel
         private var job: Job? = null
         private var pid = -1
 
+        private fun appendOutput(line: String) {
+            val state = _uiState.value
+            val appended = state.output + line
+            _uiState.value =
+                state.copy(
+                    output = if (appended.size > MAX_OUTPUT_LINES) appended.takeLast(MAX_OUTPUT_LINES) else appended,
+                    lineCount = state.lineCount + 1,
+                )
+        }
+
         fun toggleChroot(enabled: Boolean) {
             _uiState.value = _uiState.value.copy(chrootMode = enabled)
         }
@@ -45,9 +63,15 @@ class TerminalViewModel
         }
 
         fun run() {
-            if (job?.isActive == true) return
             val cmd = _uiState.value.input.trim()
             if (cmd.isEmpty()) return
+            if (job?.isActive == true) {
+                // A job is active: do not start a second one, but never let the
+                // keystroke vanish silently — tell the user on the transcript.
+                appendOutput("[busy] '$cmd' not run — a command is already running")
+                _uiState.value = _uiState.value.copy(input = "")
+                return
+            }
 
             val runner = toolBox.getTool("shell")
             if (runner == null || !runner.isAvailable()) {
@@ -68,8 +92,8 @@ class TerminalViewModel
                     isRunning = true,
                     error = null,
                     input = "",
-                    output = _uiState.value.output + prompt,
                 )
+            appendOutput(prompt)
 
             job =
                 viewModelScope.launch {
@@ -78,12 +102,7 @@ class TerminalViewModel
                         if (result.pid > 0) pid = result.pid
                         // Only live lines are appended: the final emission repeats the
                         // whole transcript, which would print the command's output twice.
-                        result.streamedLine?.let { line ->
-                            _uiState.value =
-                                _uiState.value.copy(
-                                    output = _uiState.value.output + line,
-                                )
-                        }
+                        result.streamedLine?.let { line -> appendOutput(line) }
                         if (!result.isStreaming) {
                             _uiState.value =
                                 _uiState.value.copy(
@@ -101,7 +120,8 @@ class TerminalViewModel
             job?.cancel()
             job = null
             pid = -1
-            _uiState.value = _uiState.value.copy(isRunning = false, output = _uiState.value.output + "[stopped]")
+            appendOutput("[stopped]")
+            _uiState.value = _uiState.value.copy(isRunning = false)
         }
 
         fun clear() {

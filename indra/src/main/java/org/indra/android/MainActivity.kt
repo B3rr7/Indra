@@ -10,11 +10,17 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.lifecycleScope
@@ -44,14 +50,15 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var indraSystem: IndraSystem
 
+    private var permissionsDenied by mutableStateOf(false)
+
     private val permissionLauncher =
         registerForActivityResult(
             ActivityResultContracts.RequestMultiplePermissions(),
         ) { permissions ->
             val denied = permissions.filterValues { !it }.keys
-            if (denied.isNotEmpty()) {
-                // Show rationale or handle denial
-            }
+            // Denial rationale: a snackbar tells the user what broke and offers a retry.
+            permissionsDenied = denied.isNotEmpty()
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -79,7 +86,10 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background,
                 ) {
-                    MainScaffold()
+                    MainScaffold(
+                        permissionsDenied = permissionsDenied,
+                        onRequestPermissions = ::requestPermissionsIfNeeded,
+                    )
                 }
             }
         }
@@ -118,9 +128,29 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun MainScaffold() {
+fun MainScaffold(
+    permissionsDenied: Boolean = false,
+    onRequestPermissions: () -> Unit = {},
+) {
     val navController = androidx.navigation.compose.rememberNavController()
     val snackbarHostState = remember { SnackbarHostState() }
+
+    if (permissionsDenied) {
+        val message =
+            "Some permissions were denied — Wi-Fi details and network discovery may not work."
+        LaunchedEffect(permissionsDenied) {
+            when (
+                snackbarHostState.showSnackbar(
+                    message = message,
+                    actionLabel = "Grant",
+                    duration = SnackbarDuration.Long,
+                )
+            ) {
+                SnackbarResult.ActionPerformed -> onRequestPermissions()
+                SnackbarResult.Dismissed -> Unit
+            }
+        }
+    }
 
     Scaffold(
         bottomBar = { BottomNavBar(navController) },

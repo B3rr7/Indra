@@ -26,6 +26,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.indra.android.ui.theme.StatusCyan
 import org.indra.android.ui.theme.StatusGreen
 import org.indra.android.ui.theme.StatusOrange
@@ -39,7 +40,7 @@ fun HomeScreen(
     onNavigateToSettings: () -> Unit,
     viewModel: HomeViewModel = hiltViewModel(),
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     // Re-read on every entry to Home (tab switch, back from a plugin screen) rather than
     // only once per ViewModel lifetime.

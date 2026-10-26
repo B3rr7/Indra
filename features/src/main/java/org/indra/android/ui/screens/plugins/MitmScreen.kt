@@ -14,6 +14,9 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import org.indra.android.ui.components.AutoFollowScrollEffect
+import org.indra.android.ui.components.rememberAutoFollowState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -21,7 +24,7 @@ fun MitmScreen(
     onNavigateBack: () -> Unit,
     viewModel: MitmViewModel = hiltViewModel(),
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var confirmStart by remember { mutableStateOf(false) }
 
     if (confirmStart) {
@@ -157,9 +160,8 @@ fun MitmScreen(
                         style = MaterialTheme.typography.titleSmall,
                     )
                     val logState = rememberLazyListState()
-                    LaunchedEffect(uiState.log.size) {
-                        logState.scrollToItem(uiState.log.size - 1)
-                    }
+                    val logFollow = rememberAutoFollowState(logState)
+                    AutoFollowScrollEffect(logState, uiState.log.size, { uiState.log.size - 1 }, logFollow)
                     Card(modifier = Modifier.fillMaxWidth().weight(1f)) {
                         LazyColumn(
                             state = logState,

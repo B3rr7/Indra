@@ -10,6 +10,8 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import org.indra.android.core.system.NetworkHelper
 import org.indra.android.core.system.SmartToolBox
+import org.indra.android.core.system.ToolResult
+import org.indra.android.core.system.streamedLine
 import org.indra.android.data.repository.NetworkRepository
 import javax.inject.Inject
 
@@ -18,9 +20,13 @@ data class PortScannerUiState(
     val portRange: String = "1-1000",
     val isLoading: Boolean = false,
     val results: List<PortScanResult> = emptyList(),
+    val liveLines: List<String> = emptyList(),
     val error: String? = null,
     val suggestions: List<String> = emptyList(),
 )
+
+/** Rolling live-output bound so a long scan cannot grow the list unbounded. */
+private const val MAX_LIVE_LINES = 200
 
 @HiltViewModel
 class PortScannerViewModel
@@ -58,7 +64,7 @@ class PortScannerViewModel
 
         fun scan() {
             viewModelScope.launch {
-                _uiState.value = _uiState.value.copy(isLoading = true, error = null, results = emptyList())
+                _uiState.value = _uiState.value.copy(isLoading = true, error = null, results = emptyList(), liveLines = emptyList())
 
                 try {
                     val nmapTool = toolBox.getTool("nmap")
@@ -77,28 +83,10 @@ class PortScannerViewModel
                     }
 
                     toolBox.nmap(_uiState.value.target, _uiState.value.portRange).collect { toolResult ->
-                        when (toolResult.status) {
-                            "running" -> Unit
-                            else -> {
-                                if (!toolResult.success) {
-                                    _uiState.value =
-                                        _uiState.value.copy(
-                                            isLoading = false,
-                                            error = toolResult.error ?: "Scan failed",
-                                        )
-                                } else {
-                                    val results =
-                                        toolResult.ports
-                                            .map { PortScanResult(it.port, it.service ?: it.protocol ?: "unknown") }
-                                            .ifEmpty { parsePorts(toolResult.rawOutput) }
-                                    _uiState.value =
-                                        _uiState.value.copy(
-                                            isLoading = false,
-                                            results = results,
-                                            error = if (results.isEmpty()) "No open ports found" else null,
-                                        )
-                                }
-                            }
+                        if (toolResult.status == "running") {
+                            mergeLiveResults(toolResult)
+                        } else {
+                            finishScan(toolResult)
                         }
                     }
                 } catch (e: Exception) {
@@ -109,6 +97,52 @@ class PortScannerViewModel
                         )
                 }
             }
+        }
+
+        /** Live update from a running emission: streamed line + structured Port events. */
+        private fun mergeLiveResults(toolResult: ToolResult) {
+            val live = toolResult.streamedLine
+            val merged =
+                buildList {
+                    addAll(_uiState.value.results)
+                    // Structured Port events arrive on running emissions too.
+                    toolResult.ports.forEach {
+                        add(PortScanResult(it.port, it.service ?: it.protocol ?: "unknown"))
+                    }
+                    if (live != null) addAll(parsePorts(live))
+                }.distinctBy { it.port }
+                    .sortedBy { it.port }
+            val lines =
+                if (live == null) {
+                    _uiState.value.liveLines
+                } else {
+                    (_uiState.value.liveLines + live).takeLast(MAX_LIVE_LINES)
+                }
+            _uiState.value = _uiState.value.copy(results = merged, liveLines = lines)
+        }
+
+        /** Final emission: authoritative result set, or the failure reason. */
+        private fun finishScan(toolResult: ToolResult) {
+            if (!toolResult.success) {
+                _uiState.value =
+                    _uiState.value.copy(
+                        isLoading = false,
+                        error = toolResult.error ?: "Scan failed",
+                    )
+                return
+            }
+            val results =
+                toolResult.ports
+                    .map { PortScanResult(it.port, it.service ?: it.protocol ?: "unknown") }
+                    .ifEmpty { parsePorts(toolResult.rawOutput) }
+                    .distinctBy { it.port }
+                    .sortedBy { it.port }
+            _uiState.value =
+                _uiState.value.copy(
+                    isLoading = false,
+                    results = results,
+                    error = if (results.isEmpty()) "No open ports found" else null,
+                )
         }
 
         private fun parsePorts(output: String): List<PortScanResult> {

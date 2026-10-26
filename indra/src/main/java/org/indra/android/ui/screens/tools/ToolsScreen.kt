@@ -10,6 +10,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.indra.android.ui.screens.home.ModernToolCard
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -18,7 +19,7 @@ fun ToolsScreen(
     onNavigateToPlugin: (String) -> Unit,
     viewModel: ToolsViewModel = hiltViewModel(),
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     Scaffold(
         topBar = {

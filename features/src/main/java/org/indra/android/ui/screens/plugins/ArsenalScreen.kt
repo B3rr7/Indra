@@ -14,6 +14,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.indra.android.core.system.ArsenalTemplate
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -22,7 +23,7 @@ fun ArsenalScreen(
     onNavigateBack: () -> Unit,
     viewModel: ArsenalViewModel = hiltViewModel(),
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val editing = uiState.editing
 
     if (editing != null) {

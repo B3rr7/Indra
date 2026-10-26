@@ -8,9 +8,11 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -18,7 +20,7 @@ fun PortScannerScreen(
     onNavigateBack: () -> Unit,
     viewModel: PortScannerViewModel = hiltViewModel(),
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     Scaffold(
         topBar = {
@@ -81,6 +83,29 @@ fun PortScannerScreen(
                     Spacer(modifier = Modifier.width(8.dp))
                 }
                 Text(if (uiState.isLoading) "Scanning..." else "Scan")
+            }
+
+            if (uiState.liveLines.isNotEmpty()) {
+                Text(
+                    text = "Live output",
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                Card(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 160.dp),
+                ) {
+                    LazyColumn(modifier = Modifier.fillMaxSize().padding(8.dp)) {
+                        items(uiState.liveLines) { line ->
+                            Text(
+                                text = line,
+                                style = MaterialTheme.typography.bodySmall,
+                                fontFamily = FontFamily.Monospace,
+                            )
+                        }
+                    }
+                }
             }
 
             if (uiState.results.isNotEmpty()) {
