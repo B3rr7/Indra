@@ -171,6 +171,13 @@ class SmartToolBox
         private val gson = Gson()
         private val tools = java.util.concurrent.ConcurrentHashMap<String, SmartTool>()
 
+        /**
+         * Pids whose death we caused through [stop]. The daemon reports a signal death
+         * without saying which signal, and Stop sends SIGKILL, so without this a
+         * user-pressed Stop on a tool read as a crash.
+         */
+        private val stoppedPids = java.util.concurrent.ConcurrentHashMap.newKeySet<Int>()
+
         init {
             TOOL_SPECS.forEach { spec ->
                 tools[spec.name] = SmartTool(spec.name, spec.handler, spec.description, spec.binary, client, gson)
@@ -431,6 +438,7 @@ class SmartToolBox
         /** Kills a running child started by [execute]. */
         fun stop(pid: Int) {
             if (pid <= 0) return
+            stoppedPids += pid
             runCatching { client.kill(pid, 9) }
                 .onFailure { Logger.w("kill($pid) failed: ${it.message}") }
         }
@@ -693,9 +701,10 @@ class SmartToolBox
 
                                     is ProcessEvent.Crashed ->
                                         if (event.processId == pid) {
-                                            // Died on a signal (SIGSEGV in a bundled tool says
-                                            // nothing about a timeout — report it as a crash).
-                                            crashed = true
+                                            // Died on a signal. SIGSEGV in a bundled tool says
+                                            // nothing about a timeout, so report a crash — but
+                                            // not when the signal was our own Stop (SIGKILL).
+                                            crashed = !stoppedPids.remove(pid)
                                             done = false
                                         }
                                 }
@@ -709,6 +718,9 @@ class SmartToolBox
                         Logger.w("$label (pid $pid) did not finish; killing it")
                         stop(pid)
                     }
+                    // Do not let a finished execution leave a stale "we killed it" mark
+                    // that would mislabel a later crash of the same pid.
+                    stoppedPids.remove(pid)
                 }
 
                 val rawOutput =
