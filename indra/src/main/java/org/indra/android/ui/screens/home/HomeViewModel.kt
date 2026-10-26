@@ -3,14 +3,15 @@ package org.indra.android.ui.screens.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import org.indra.android.core.system.CoreManager
+import kotlinx.coroutines.withContext
 import org.indra.android.core.system.NetworkHelper
+import org.indra.android.core.system.PluginAvailability
 import org.indra.android.core.system.PluginManager
-import org.indra.android.core.system.SettingsRepository
 import org.indra.android.core.system.SmartToolBox
 import org.indra.android.data.repository.NetworkRepository
 import javax.inject.Inject
@@ -41,42 +42,41 @@ class HomeViewModel
         private val networkRepository: NetworkRepository,
         private val pluginManager: PluginManager,
         private val toolBox: SmartToolBox,
-        private val coreManager: CoreManager,
-        private val settings: SettingsRepository,
+        private val pluginAvailability: PluginAvailability,
     ) : ViewModel() {
         private val _uiState = MutableStateFlow(HomeUiState())
         val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
 
-        init {
+        /**
+         * Reloads the hero and the plugin grid. Called from [HomeScreen] whenever the
+         * screen is (re)entered — the neighbour-table count and the daemon-dependent
+         * plugin availability are both stale objects otherwise: the old `init`-only load
+         * left the hero on "Tap to scan the network" forever after the core was installed
+         * while the app was already running.
+         */
+        fun refresh() {
             loadData()
         }
 
-        private fun isPluginAvailable(plugin: org.indra.android.core.system.Plugin): Boolean {
-            if (toolBox.getTool(plugin.requires)?.isAvailable() != true) return false
-            // Optional components that must be installed separately.
-            if (plugin.id == "vuln_scanner" || plugin.id == "web_tester") return coreManager.isNucleiInstalled()
-            if (plugin.id == "gobuster") return coreManager.isGobusterInstalled()
-            if (plugin.id == "exploit_finder") return coreManager.isMsfInstalled()
-            // Responder is Python-based and infeasible on Android without a bundled
-            // interpreter; keep the card dimmed until a real binary ships (see
-            // IMPROVEMENT_PLAN Phase 2 "infeasible"). Wifite is *not* in this list: its
-            // screen drives the bundled ip/iw/tcpdump/aircrack-ng binaries, not wifite.py.
-            if (plugin.id == "responder") return false
-            if (plugin.id == "iptables") return coreManager.isIptablesSupported()
-            // Rootless gating: disable raw-socket features when running without root.
-            if (plugin.requiresRoot && settings.rootlessMode) {
-                return false
-            }
-            return true
-        }
+        private fun isPluginAvailable(plugin: org.indra.android.core.system.Plugin): Boolean =
+            // Shared with the Tools screen — the two screens' copies had already
+            // drifted (Home dimmed Responder, Tools offered it).
+            pluginAvailability.isPluginAvailable(plugin)
 
         private fun loadData() {
+            // Blocking inside: daemon handler probes (JNI) per plugin, file checks, the
+            // neighbour-table probe and ConnectivityManager reads. ViewModelScope launches
+            // on Main — without this switch a dead daemon froze the screen.
             viewModelScope.launch {
-                _uiState.value = _uiState.value.copy(isLoading = true)
+                val state = withContext(Dispatchers.IO) { computeState() }
+                _uiState.value = state
+            }
+        }
 
-                networkRepository.refreshNetworkStatus()
+        private suspend fun computeState(): HomeUiState {
+            networkRepository.refreshNetworkStatus()
 
-                val isConnected = networkHelper.isNetworkAvailable()
+            val isConnected = networkHelper.isNetworkAvailable()
 
                 // SSID needs location permission (and location services) on Android 9+;
                 // when it is unavailable fall back to the connection type + addresses.
@@ -129,15 +129,13 @@ class HomeViewModel
                         )
                     }
 
-                _uiState.value =
-                    HomeUiState(
-                        networkName = networkName,
-                        networkDetail = networkDetail,
-                        isConnected = isConnected,
-                        targetCount = hostCount,
-                        plugins = plugins,
-                        isLoading = false,
-                    )
-            }
+                return HomeUiState(
+                    networkName = networkName,
+                    networkDetail = networkDetail,
+                    isConnected = isConnected,
+                    targetCount = hostCount,
+                    plugins = plugins,
+                    isLoading = false,
+                )
         }
     }

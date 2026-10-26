@@ -3,16 +3,17 @@ package org.indra.android.ui.screens.tools
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import org.indra.android.core.system.CoreManager
+import kotlinx.coroutines.withContext
 import org.indra.android.core.system.OtaUpdateManager
-import org.indra.android.core.system.SettingsRepository
 import org.indra.android.core.system.Plugin
+import org.indra.android.core.system.PluginAvailability
 import org.indra.android.core.system.PluginManager
 import org.indra.android.core.system.SmartToolBox
 import org.indra.android.ui.screens.home.PluginInfo
@@ -32,8 +33,7 @@ class ToolsViewModel
         private val pluginManager: PluginManager,
         private val toolBox: SmartToolBox,
         private val otaManager: OtaUpdateManager,
-        private val coreManager: CoreManager,
-        private val settings: SettingsRepository,
+        private val pluginAvailability: PluginAvailability,
     ) : ViewModel() {
         private val _uiState = MutableStateFlow(ToolsUiState())
         val uiState: StateFlow<ToolsUiState> = _uiState.asStateFlow()
@@ -69,62 +69,57 @@ class ToolsViewModel
         private fun loadPlugins() {
             viewModelScope.launch {
                 _uiState.value = _uiState.value.copy(isLoading = true)
-                val allPlugins = pluginManager.getAllPlugins()
-                val requiresById = allPlugins.associate { it.id to it.requires }
-                val plugins =
-                    allPlugins.map { plugin ->
-                        PluginInfo(
-                            id = plugin.id,
-                            name = plugin.name,
-                            description = plugin.description,
-                            available = isPluginAvailable(plugin),
-                        )
-                    }
-                _uiState.value = _uiState.value.copy(plugins = plugins, isLoading = false)
+                // Blocking inside: per-plugin daemon handler probes (JNI) and file checks —
+                // must stay off Main so a dead daemon cannot freeze the Tools screen.
+                val (allPlugins, requiresById) = withContext(Dispatchers.IO) { loadPluginList() }
+                // Cards render immediately; versions fill in below without blocking them.
+                _uiState.value = _uiState.value.copy(plugins = allPlugins, isLoading = false)
 
                 val versions =
-                    plugins.map { plugin ->
-                        async {
-                            val v =
-                                if (plugin.available) {
-                                    try {
-                                        toolBox.versionOf(requiresById[plugin.id] ?: plugin.id)
-                                    } catch (e: Exception) {
-                                        null
-                                    }
-                                } else {
-                                    null
+                    withContext(Dispatchers.IO) {
+                        allPlugins
+                            .map { plugin ->
+                                async {
+                                    val v =
+                                        if (plugin.available) {
+                                            try {
+                                                toolBox.versionOf(requiresById[plugin.id] ?: plugin.id)
+                                            } catch (e: Exception) {
+                                                null
+                                            }
+                                        } else {
+                                            null
+                                        }
+                                    plugin.id to v
                                 }
-                            plugin.id to v
-                        }
-                    }.awaitAll()
+                            }.awaitAll()
+                    }.toMap()
                 _uiState.value =
                     _uiState.value.copy(
                         plugins =
                             _uiState.value.plugins.map { p ->
-                                val v = versions.firstOrNull { it.first == p.id }?.second
+                                val v = versions[p.id]
                                 if (v != null) p.copy(version = v) else p
                             },
                     )
             }
         }
 
-        /**
-         * A plugin is usable when its daemon handler exists AND every extra artifact it
-         * needs (nuclei templates, gobuster, msf, iptables) is installed, unless the user
-         * is running in rootless mode and the plugin needs raw sockets.
-         */
-        private fun isPluginAvailable(plugin: Plugin): Boolean {
-            val handlerReady = toolBox.getTool(plugin.requires)?.isAvailable() == true
-            val artifactReady =
-                when (plugin.id) {
-                    "vuln_scanner", "web_tester" -> coreManager.isNucleiInstalled()
-                    "gobuster" -> coreManager.isGobusterInstalled()
-                    "exploit_finder" -> coreManager.isMsfInstalled()
-                    "iptables" -> coreManager.isIptablesSupported()
-                    else -> true
+        private fun loadPluginList(): Pair<List<PluginInfo>, Map<String, String>> {
+            val allPlugins = pluginManager.getAllPlugins()
+            val requiresById = allPlugins.associate { it.id to it.requires }
+            val plugins =
+                allPlugins.map { plugin ->
+                    PluginInfo(
+                        id = plugin.id,
+                        name = plugin.name,
+                        description = plugin.description,
+                        available = isPluginAvailable(plugin),
+                    )
                 }
-            val rootReady = !plugin.requiresRoot || !settings.rootlessMode
-            return handlerReady && artifactReady && rootReady
+            return plugins to requiresById
         }
+
+        /** The shared rule set — Home's copy and this one used to disagree on Responder. */
+        private fun isPluginAvailable(plugin: Plugin): Boolean = pluginAvailability.isPluginAvailable(plugin)
     }

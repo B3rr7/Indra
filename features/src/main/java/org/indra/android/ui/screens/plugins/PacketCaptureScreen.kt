@@ -121,7 +121,7 @@ fun PacketCaptureScreen(
 
             if (uiState.monitorWarningShown) {
                 AlertDialog(
-                    onDismissRequest = { viewModel.cancelMonitorMode() },
+                    onDismissRequest = { viewModel.onMonitorDialog(false) },
                     title = { Text("Monitor mode") },
                     text = {
                         Text(
@@ -129,15 +129,12 @@ fun PacketCaptureScreen(
                         )
                     },
                     confirmButton = {
-                        TextButton(onClick = {
-                            viewModel.confirmMonitorMode()
-                            viewModel.cancelMonitorMode()
-                        }) {
+                        TextButton(onClick = { viewModel.onMonitorDialog(true) }) {
                             Text("Enable")
                         }
                     },
                     dismissButton = {
-                        TextButton(onClick = { viewModel.cancelMonitorMode() }) {
+                        TextButton(onClick = { viewModel.onMonitorDialog(false) }) {
                             Text("Cancel")
                         }
                     },

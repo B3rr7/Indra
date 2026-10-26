@@ -1,10 +1,8 @@
 package org.indra.android.ui.screens.plugins
 
-import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -13,7 +11,6 @@ import kotlinx.coroutines.launch
 import org.indra.android.core.system.SmartToolBox
 import org.indra.android.core.system.streamedLine
 import org.indra.android.core.system.isStreaming
-import java.io.File
 import javax.inject.Inject
 
 data class PacketCaptureUiState(
@@ -33,7 +30,6 @@ data class PacketCaptureUiState(
 class PacketCaptureViewModel
     @Inject
     constructor(
-        @ApplicationContext private val context: Context,
         private val toolBox: SmartToolBox,
     ) : ViewModel() {
         private val _uiState =
@@ -62,31 +58,57 @@ class PacketCaptureViewModel
         }
 
         fun requestMonitorMode(enable: Boolean) {
-            _uiState.value = _uiState.value.copy(monitorWarningShown = true, monitorMode = enable)
+            if (enable) {
+                // Entering monitor mode is the risky direction — ask first.
+                _uiState.value = _uiState.value.copy(monitorWarningShown = true, monitorMode = true)
+            } else {
+                // Leaving monitor mode is harmless: flip the switch and revert the
+                // interface right away instead of showing the crash warning too.
+                _uiState.value = _uiState.value.copy(monitorWarningShown = false, monitorMode = false)
+                switchMode(enterMonitor = false)
+            }
         }
 
-        fun confirmMonitorMode() {
+        /** The warning dialog's button (accepted = Enable, rejected = Cancel). */
+        fun onMonitorDialog(accepted: Boolean) {
+            if (accepted) {
+                _uiState.value = _uiState.value.copy(monitorWarningShown = false)
+                switchMode(enterMonitor = true)
+            } else {
+                _uiState.value = _uiState.value.copy(monitorWarningShown = false, monitorMode = false)
+            }
+        }
+
+        /** `ip`/`iw` mode change. On failure the switch reverts so the UI matches reality. */
+        private fun switchMode(enterMonitor: Boolean) {
             val iface = _uiState.value.iface.trim()
-            if (iface.isEmpty()) return
-            val enable = _uiState.value.monitorMode
+            if (iface.isEmpty()) {
+                _uiState.value =
+                    _uiState.value.copy(
+                        monitorMode = false,
+                        error = "Interface is required",
+                    )
+                return
+            }
             val qu = SmartToolBox.shellQuote(iface)
             val cmd =
-                if (enable) {
+                if (enterMonitor) {
                     "ip link set $qu down && iw dev $qu set type monitor && ip link set $qu up"
                 } else {
                     "ip link set $qu down && iw dev $qu set type managed && ip link set $qu up"
                 }
             viewModelScope.launch {
                 toolBox.shell(cmd).collect { result ->
-                    if (!result.success && !result.isStreaming) {
-                        _uiState.value = _uiState.value.copy(error = result.error ?: "monitor mode change failed")
+                    if (!result.isStreaming && !result.success) {
+                        _uiState.value =
+                            _uiState.value.copy(
+                                // The device did not switch — don't leave the switch on.
+                                monitorMode = if (enterMonitor) false else _uiState.value.monitorMode,
+                                error = result.error ?: "monitor mode change failed",
+                            )
                     }
                 }
             }
-        }
-
-        fun cancelMonitorMode() {
-            _uiState.value = _uiState.value.copy(monitorWarningShown = false, monitorMode = false)
         }
 
         fun start() {
@@ -105,22 +127,29 @@ class PacketCaptureViewModel
             }
 
             val count = state.count.trim().toIntOrNull() ?: 0
-            val outFile =
-                if (state.saveToFile) {
-                    // The daemon runs as root and writes the file into the app's own
-                    // private dir; create the dir here so the path always exists.
-                    File(context.filesDir, SmartToolBox.CAPTURE_PATH)
-                        .parentFile
-                        ?.mkdirs()
-                    toolBox.capturePath()
-                } else {
-                    null
-                }
 
             _uiState.value = state.copy(isActive = true, error = null, packets = emptyList())
 
             job =
                 viewModelScope.launch {
+                    val outFile =
+                        if (state.saveToFile) {
+                            // The capture goes to the user-visible workspace
+                            // (/sdcard/Indra/captures). The app cannot create that directory
+                            // itself on Android 11+ without "All files access", so the root
+                            // daemon creates it right before tcpdump writes into it.
+                            if (!toolBox.ensureCaptureDir()) {
+                                _uiState.value =
+                                    _uiState.value.copy(
+                                        isActive = false,
+                                        error = "Could not create the capture folder; is the daemon running?",
+                                    )
+                                return@launch
+                            }
+                            toolBox.capturePath()
+                        } else {
+                            null
+                        }
                     toolBox.tcpdump(iface, state.filter.trim(), count, outFile).collect { result ->
                         if (result.pid > 0) pid = result.pid
                         result.streamedLine?.let { line ->

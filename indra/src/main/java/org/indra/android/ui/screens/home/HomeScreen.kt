@@ -41,6 +41,10 @@ fun HomeScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
+    // Re-read on every entry to Home (tab switch, back from a plugin screen) rather than
+    // only once per ViewModel lifetime.
+    LaunchedEffect(Unit) { viewModel.refresh() }
+
     Scaffold(
         topBar = {
             TopAppBar(

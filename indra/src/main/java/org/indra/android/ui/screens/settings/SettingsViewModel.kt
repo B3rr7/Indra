@@ -3,13 +3,16 @@ package org.indra.android.ui.screens.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.indra.android.core.system.AppUpdateManager
 import org.indra.android.core.system.CoreManager
 import org.indra.android.core.system.CrashReporter
+import org.indra.android.core.system.IndraWorkspace
 import org.indra.android.core.system.Logger
 import org.indra.android.core.system.IndraSystem
 import org.indra.android.core.system.OtaUpdateManager
@@ -48,6 +51,12 @@ data class SettingsUiState(
     val debugErrorLogging: Boolean = false,
     val crashLogCount: Int = 0,
     val debugLogSizeBytes: Long = 0,
+    val allFilesAccess: Boolean = false,
+    val indraDirPath: String = "",
+    val workspacePresent: List<String> = emptyList(),
+    val workspaceMissing: List<String> = emptyList(),
+    val workspaceCreating: Boolean = false,
+    val storageMessage: String? = null,
     val appUpdateChecking: Boolean = false,
     val appUpdateAvailable: Boolean = false,
     val appUpdateVersion: String? = null,
@@ -88,28 +97,91 @@ class SettingsViewModel
         }
 
         fun loadSettings() {
+            // Everything probed here blocks: `su`-based root detection (exec + waitFor),
+            // workspace tree walks, log-file stats, and 17 handler probes (JNI) when the
+            // daemon is down. ViewModelScope launches on Main — this screen used to ANR
+            // on every resume. StateFlow assignment off Main is thread-safe.
             viewModelScope.launch {
-                _uiState.value =
-                    _uiState.value.copy(
-                        httpProxyPort = settings.httpProxyPort,
-                        httpServerPort = settings.httpServerPort,
-                        httpsRedirectorPort = settings.httpsRedirectorPort,
-                        msfRpcPort = settings.msfRpcPort,
-                        version = "2.0.0",
-                        coreVersion = system.getCoreVersion() ?: "Not installed",
-                        daemonRunning = coreManager.isDaemonRunning,
-                        isRooted = rootManager.detectRoot().isRooted,
-                        rootType = rootManager.getRootTypeDisplayName(),
-                        otaManifestUrl = settings.otaManifestUrl,
-                        otaAllowTestHosts = settings.otaAllowTestHosts,
-                        rootlessMode = settings.rootlessMode,
-                        wakeLockEnabled = settings.wakeLockEnabled,
-                        alpineInstalled = coreManager.isAlpineInstalled(),
-                        debugErrorLogging = settings.debugErrorLogging,
-                        crashLogCount = crashReporter.getCrashFiles().size,
-                        debugLogSizeBytes = crashReporter.getLogFile()?.length() ?: 0,
-                        toolStatus = toolBox.getAllTools().map { ToolStatus(it.name, it.isAvailable()) },
-                    )
+                withContext(Dispatchers.IO) {
+                    val workspace = IndraWorkspace.inspect(IndraWorkspace.root())
+                    _uiState.value =
+                        _uiState.value.copy(
+                            httpProxyPort = settings.httpProxyPort,
+                            httpServerPort = settings.httpServerPort,
+                            httpsRedirectorPort = settings.httpsRedirectorPort,
+                            msfRpcPort = settings.msfRpcPort,
+                            version = "2.0.0",
+                            coreVersion = system.getCoreVersion() ?: "Not installed",
+                            daemonRunning = coreManager.isDaemonRunning,
+                            isRooted = rootManager.detectRoot().isRooted,
+                            rootType = rootManager.getRootTypeDisplayName(),
+                            otaManifestUrl = settings.otaManifestUrl,
+                            otaAllowTestHosts = settings.otaAllowTestHosts,
+                            rootlessMode = settings.rootlessMode,
+                            wakeLockEnabled = settings.wakeLockEnabled,
+                            alpineInstalled = coreManager.isAlpineInstalled(),
+                            debugErrorLogging = settings.debugErrorLogging,
+                            crashLogCount = crashReporter.getCrashFiles().size,
+                            debugLogSizeBytes = crashReporter.getLogFile()?.length() ?: 0,
+                            allFilesAccess = IndraWorkspace.hasAllFilesAccess(),
+                            indraDirPath = workspace.rootPath,
+                            workspacePresent = workspace.present,
+                            workspaceMissing = workspace.missing,
+                            toolStatus = toolBox.getAllTools().map { ToolStatus(it.name, it.isAvailable()) },
+                        )
+                }
+            }
+        }
+
+        /**
+         * Re-reads the workspace tree and the all-files-access flag without touching the rest
+         * of the screen — the Storage card and the log sizes are the parts that go stale while
+         * Settings stays open (e.g. after returning from the system "all files access" page).
+         */
+        fun refreshWorkspace() {
+            viewModelScope.launch {
+                withContext(Dispatchers.IO) {
+                    val workspace = IndraWorkspace.inspect(IndraWorkspace.root())
+                    _uiState.value =
+                        _uiState.value.copy(
+                            allFilesAccess = IndraWorkspace.hasAllFilesAccess(),
+                            indraDirPath = workspace.rootPath,
+                            workspacePresent = workspace.present,
+                            workspaceMissing = workspace.missing,
+                        )
+                }
+            }
+        }
+
+        /**
+         * Creates `/sdcard/Indra` and one subdirectory per kind of file. The app process can
+         * only write there once "All files access" is granted, so the daemon (which runs as
+         * root) does the `mkdir`; the result is read back from disk rather than assumed.
+         */
+        fun createWorkspaceDirs() {
+            if (_uiState.value.workspaceCreating) return
+            viewModelScope.launch {
+                _uiState.value = _uiState.value.copy(workspaceCreating = true, storageMessage = null)
+                withContext(Dispatchers.IO) {
+                    runCatching { IndraWorkspace.allDirectories().forEach { it.mkdirs() } }
+                    val alreadyVisible = IndraWorkspace.inspect(IndraWorkspace.root()).isReady
+                    val viaDaemon = if (alreadyVisible) false else toolBox.ensureWorkspaceDirs()
+                    val workspace = IndraWorkspace.inspect(IndraWorkspace.root())
+                    _uiState.value =
+                        _uiState.value.copy(
+                            workspaceCreating = false,
+                            allFilesAccess = IndraWorkspace.hasAllFilesAccess(),
+                            indraDirPath = workspace.rootPath,
+                            workspacePresent = workspace.present,
+                            workspaceMissing = workspace.missing,
+                            storageMessage =
+                                IndraWorkspace.statusMessage(
+                                    state = workspace,
+                                    allFilesAccess = IndraWorkspace.hasAllFilesAccess(),
+                                    rootCreatedByDaemon = viaDaemon,
+                                ),
+                        )
+                }
             }
         }
 
@@ -208,16 +280,32 @@ class SettingsViewModel
 
         fun installAppUpdate() {
             if (!_uiState.value.appUpdateAvailable) return
+            if (_uiState.value.appUpdateChecking) return
             viewModelScope.launch {
-                _uiState.value = _uiState.value.copy(appUpdateMessage = "Downloading update…")
-                val info = appUpdateManager.checkForUpdate() ?: return@launch
+                // appUpdateChecking doubles as the busy flag: without it a second tap
+                // re-downloaded, and a null manifest left "Downloading update…" forever.
+                _uiState.value = _uiState.value.copy(appUpdateChecking = true, appUpdateMessage = "Downloading update…")
+                val info = appUpdateManager.checkForUpdate()
+                if (info == null) {
+                    _uiState.value =
+                        _uiState.value.copy(
+                            appUpdateChecking = false,
+                            appUpdateMessage = "Update check failed",
+                        )
+                    return@launch
+                }
                 appUpdateManager
                     .downloadAndInstall(info) { p ->
                         _uiState.value = _uiState.value.copy(appUpdateMessage = "Downloading update… ${(p * 100).toInt()}%")
                     }.onSuccess {
-                        _uiState.value = _uiState.value.copy(appUpdateMessage = "Installer launched")
+                        _uiState.value =
+                            _uiState.value.copy(
+                                appUpdateChecking = false,
+                                appUpdateAvailable = false,
+                                appUpdateMessage = "Installer launched",
+                            )
                     }.onFailure { e ->
-                        _uiState.value = _uiState.value.copy(appUpdateMessage = "Update failed: ${e.message}")
+                        _uiState.value = _uiState.value.copy(appUpdateChecking = false, appUpdateMessage = "Update failed: ${e.message}")
                     }
             }
         }
@@ -369,13 +457,19 @@ class SettingsViewModel
         }
 
         private fun refreshCoreState() {
-            _uiState.value =
-                _uiState.value.copy(
-                    coreBusy = false,
-                    coreVersion = system.getCoreVersion() ?: "Not installed",
-                    daemonRunning = coreManager.isDaemonRunning,
-                    toolStatus = toolBox.getAllTools().map { ToolStatus(it.name, it.isAvailable()) },
-                )
-            toolBox.reload()
+            // Release the busy flag immediately (as before), then probe off Main:
+            // version probe + 17 handler checks (JNI) + reload() all block.
+            _uiState.value = _uiState.value.copy(coreBusy = false)
+            viewModelScope.launch {
+                withContext(Dispatchers.IO) {
+                    _uiState.value =
+                        _uiState.value.copy(
+                            coreVersion = system.getCoreVersion() ?: "Not installed",
+                            daemonRunning = coreManager.isDaemonRunning,
+                            toolStatus = toolBox.getAllTools().map { ToolStatus(it.name, it.isAvailable()) },
+                        )
+                    toolBox.reload()
+                }
+            }
         }
     }

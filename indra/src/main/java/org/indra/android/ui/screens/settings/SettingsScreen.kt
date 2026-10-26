@@ -18,19 +18,30 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import org.indra.android.BuildConfig
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     onNavigateBack: () -> Unit,
+    onNavigateToLogs: () -> Unit,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
+
+    // This screen's values (daemon running/stopped, core version, log size, crash count,
+    // which workspace folders exist) were only read when the ViewModel was created, so
+    // everything on it could be a snapshot from minutes ago — the log card still said
+    // "empty" with 105 bytes on disk. Resuming matters too: the system "All files access"
+    // page is another activity, and coming back has to re-probe /sdcard/Indra.
+    ReloadOnResume { viewModel.loadSettings() }
     var editingPort by remember { mutableStateOf<PortField?>(null) }
 
     editingPort?.let { field ->
@@ -226,6 +237,16 @@ fun SettingsScreen(
             }
             item { AppUpdateCard(uiState, viewModel) }
 
+            // ── Storage ──────────────────────────────────────────────────
+            item {
+                SettingsSection(
+                    title = "Storage",
+                    icon = Icons.Default.Folder,
+                    accent = SettingsPalette.Core,
+                )
+            }
+            item { WorkspaceCard(uiState, viewModel) }
+
             // ── Logs & Reports ───────────────────────────────────────────
             item {
                 SettingsSection(
@@ -234,7 +255,7 @@ fun SettingsScreen(
                     accent = SettingsPalette.About,
                 )
             }
-            item { LogsCard(uiState, viewModel) }
+            item { LogsCard(uiState, viewModel, onNavigateToLogs) }
 
             if (BuildConfig.DEBUG) {
                 item {
@@ -357,7 +378,7 @@ private fun StatusHeroCard(uiState: SettingsUiState) {
                         fontWeight = FontWeight.Bold,
                     )
                     Text(
-                        text = "Core ${uiState.coreVersion} · App ${uiState.version} · Magisk root",
+                        text = "Core ${uiState.coreVersion} · App ${uiState.version} · ${uiState.rootType}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -609,3 +630,21 @@ private fun PortEditDialog(
     )
 }
 
+
+/**
+ * Runs [reload] whenever the hosting activity resumes, including the first entry.
+ * `LaunchedEffect(Unit)` alone never fires again after the system settings page (e.g.
+ * "All files access") takes over and returns, so the screen would keep showing stale state.
+ */
+@Composable
+private fun ReloadOnResume(reload: () -> Unit) {
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer =
+            LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_RESUME) reload()
+            }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+}

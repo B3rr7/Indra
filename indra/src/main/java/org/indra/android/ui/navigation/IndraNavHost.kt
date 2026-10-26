@@ -9,6 +9,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import org.indra.android.ui.screens.home.HomeScreen
+import org.indra.android.ui.screens.settings.LogsScreen
 import org.indra.android.ui.screens.plugins.ArsenalScreen
 import org.indra.android.ui.screens.plugins.HidScreen
 import org.indra.android.ui.screens.plugins.DuckyScriptScreen
@@ -128,6 +129,8 @@ sealed class Screen(
     object Topology : Screen("topology")
 
     object Settings : Screen("settings")
+
+    object Logs : Screen("logs")
 }
 
 @Composable
@@ -336,7 +339,14 @@ fun IndraNavHost(
         }
 
         composable(Screen.Settings.route) {
-            SettingsScreen(onNavigateBack = { navController.popBackStack() })
+            SettingsScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToLogs = { navController.navigate(Screen.Logs.route) },
+            )
+        }
+
+        composable(Screen.Logs.route) {
+            LogsScreen(onNavigateBack = { navController.popBackStack() })
         }
     }
 }

@@ -394,9 +394,39 @@ class SmartToolBox
         /** Bundled directory list used by Gobuster when a screen does not supply one. */
         fun defaultDirWordlist(): String = File(context.filesDir, "wordlists/common-dirs.txt").absolutePath
 
-        /** Absolute path of the capture file Packet Capture saves to (and WiFi
-         *  Audit can be prefilled with). */
-        fun capturePath(): String = File(context.filesDir, CAPTURE_PATH).absolutePath
+        /**
+         * Absolute path of the capture file Packet Capture saves to (and WiFi Audit can be
+         * prefilled with). It lives in the user-visible workspace (`/sdcard/Indra/captures`)
+         * rather than the app's private directory, so a capture can be pulled off the phone
+         * or fed to aircrack-ng without root and without adb.
+         */
+        fun capturePath(): String = File(IndraWorkspace.dir(IndraWorkspace.CAPTURES), "last.cap").absolutePath
+
+        /**
+         * Creates the whole `/sdcard/Indra` tree through the daemon (root), because the app
+         * process cannot create directories there itself without "All files access".
+         */
+        suspend fun ensureWorkspaceDirs(): Boolean {
+            val paths = IndraWorkspace.allDirectories().joinToString(" ") { shellQuote(it.absolutePath) }
+            return runCatching {
+                val result = shell("mkdir -p $paths && echo created").last()
+                result.success && result.rawOutput.contains("created")
+            }.getOrElse { false }
+        }
+
+        /**
+         * Creates the capture directory through the daemon (root), because the app process
+         * cannot write to `/sdcard` itself without "All files access". Returns true when the
+         * directory exists afterwards.
+         */
+        suspend fun ensureCaptureDir(): Boolean {
+            val dir = IndraWorkspace.dir(IndraWorkspace.CAPTURES)
+            val quoted = shellQuote(dir.absolutePath)
+            return runCatching {
+                val result = shell("mkdir -p $quoted && [ -d $quoted ] && echo present").last()
+                result.success && result.rawOutput.contains("present")
+            }.getOrElse { false }
+        }
 
         /** Kills a running child started by [execute]. */
         fun stop(pid: Int) {

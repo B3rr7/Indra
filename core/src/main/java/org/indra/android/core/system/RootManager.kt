@@ -47,7 +47,7 @@ class RootManager
                     isMagiskInstalled() -> RootType.MAGISK
                     isKernelSUInstalled() -> RootType.KERNELSU
                     isSuperSUInstalled() -> RootType.SUPERSU
-                    isRooted -> RootType.UNKNOWN
+                    isRooted -> detectRootTypeFromSu(suPath)
                     else -> RootType.NONE
                 }
 
@@ -178,6 +178,35 @@ class RootManager
             }
 
         /**
+         * su works but no manager package is visible: Magisk hides its package on many
+         * devices (random package name after "Hide the Magisk app", DenyList), so a
+         * PackageManager lookup fails and the old code reported "Unknown root". Fall
+         * back to Magisk's on-disk layout and its own CLI before giving up.
+         */
+        // Guard-chains by design (most specific first); detekt's ReturnCount waived.
+        @Suppress("ReturnCount")
+        private fun detectRootTypeFromSu(suPath: String?): RootType {
+            if (suPath == null) return RootType.UNKNOWN
+            // Magisk 24+ keeps its daemon/binaries under /data/adb/magisk; KernelSU's
+            // directory is /data/adb/ksu (already checked via package, this covers KSU
+            // installed without its manager app).
+            if (File("/data/adb/magisk").exists() || File("/data/adb/magisk64").exists()) {
+                return RootType.MAGISK
+            }
+            if (File("/data/adb/ksu").exists()) return RootType.KERNELSU
+            if (File("/sbin/.magisk").exists()) return RootType.MAGISK
+            return try {
+                val process = Runtime.getRuntime().exec(arrayOf(suPath, "-c", "magisk -v"))
+                val stdout = process.inputStream.bufferedReader().use { it.readText() }
+                process.waitFor()
+                process.destroy()
+                if (stdout.contains("MAGISK", ignoreCase = true)) RootType.MAGISK else RootType.UNKNOWN
+            } catch (e: Exception) {
+                RootType.UNKNOWN
+            }
+        }
+
+        /**
          * Whether the app can run the native daemon as the app user (no root).
          * The daemon and bundled tools are native Android binaries, so they can
          * execute without root for TCP-connect scans, hydra, nuclei, etc.
@@ -190,10 +219,8 @@ class RootManager
          */
         fun hasRawSocketCapability(): Boolean =
             try {
-                val socket = java.net.Socket()
-                // Try to create a raw socket via the daemon's raw handler is not
-                // available here; fall back to a best-effort check: raw socket
-                // creation requires root on Android, so non-rooted => false.
+                // Raw socket creation requires root on Android, so non-rooted => false;
+                // there's no reliable in-process probe without opening a daemon socket.
                 detectRoot().isRooted
             } catch (e: Exception) {
                 false

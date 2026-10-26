@@ -11,7 +11,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.Memory
-import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.*
 import android.content.Intent
 import androidx.compose.runtime.*
@@ -166,60 +165,6 @@ internal fun ToolsStatusCard(uiState: SettingsUiState) {
     }
 }
 
-@Composable
-internal fun AlpineCard(
-    uiState: SettingsUiState,
-    viewModel: SettingsViewModel,
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors =
-            CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-            ),
-    ) {
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            if (uiState.otaChecking || uiState.otaUpdating) {
-                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-            }
-
-            uiState.otaMessage?.let { message ->
-                Text(
-                    text = message,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Button(
-                    onClick = viewModel::checkOtaUpdates,
-                    enabled = !uiState.otaChecking && !uiState.otaUpdating,
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Text("Check")
-                }
-                FilledTonalButton(
-                    onClick = viewModel::installOtaUpdates,
-                    enabled = !uiState.otaChecking && !uiState.otaUpdating && uiState.otaUpdateAvailable,
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Text("Update")
-                }
-            }
-        }
-    }
-}
 
 @Composable
 internal fun StatusPill(
@@ -319,8 +264,8 @@ internal fun OtaTestHostCard(
 internal fun LogsCard(
     uiState: SettingsUiState,
     viewModel: SettingsViewModel,
+    onViewLog: () -> Unit,
 ) {
-    val context = LocalContext.current
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -340,61 +285,77 @@ internal fun LogsCard(
             // "Logs & Reports" heading: nothing on it had anything to do with logs, and the
             // real (already implemented) log/crash plumbing in the ViewModel had no caller.
             LogsSummary(uiState)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Button(
-                    onClick = {
-                        shareFiles(
-                            context = context,
-                            files = listOfNotNull(viewModel.getDebugLogFile()),
-                            chooserTitle = "Share Indra log",
-                        )
-                    },
-                    enabled = uiState.debugLogSizeBytes > 0,
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Text("Share log")
-                }
-                FilledTonalButton(
-                    onClick = {
-                        shareFiles(
-                            context = context,
-                            files = viewModel.getCrashLogFiles(),
-                            chooserTitle = "Share Indra crash reports",
-                        )
-                    },
-                    enabled = uiState.crashLogCount > 0,
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Text("Share crashes")
-                }
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                TextButton(
-                    onClick = viewModel::clearDebugLog,
-                    enabled = uiState.debugLogSizeBytes > 0,
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Text("Clear log")
-                }
-                TextButton(
-                    onClick = viewModel::clearCrashLogs,
-                    enabled = uiState.crashLogCount > 0,
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Text("Clear crashes")
-                }
-            }
+            LogsActions(uiState = uiState, viewModel = viewModel, onViewLog = onViewLog)
             Text(
                 text = "Reports stay on this device until you share them.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+    }
+}
+
+@Composable
+private fun LogsActions(
+    uiState: SettingsUiState,
+    viewModel: SettingsViewModel,
+    onViewLog: () -> Unit,
+) {
+    val context = LocalContext.current
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Button(
+            onClick = onViewLog,
+            modifier = Modifier.weight(1f),
+        ) {
+            Text("View log")
+        }
+        FilledTonalButton(
+            onClick = {
+                shareFiles(
+                    context = context,
+                    files = listOfNotNull(viewModel.getDebugLogFile()),
+                    chooserTitle = "Share Indra log",
+                )
+            },
+            enabled = uiState.debugLogSizeBytes > 0,
+            modifier = Modifier.weight(1f),
+        ) {
+            Text("Share log")
+        }
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        TextButton(
+            onClick = {
+                shareFiles(
+                    context = context,
+                    files = viewModel.getCrashLogFiles(),
+                    chooserTitle = "Share Indra crash reports",
+                )
+            },
+            enabled = uiState.crashLogCount > 0,
+            modifier = Modifier.weight(1f),
+        ) {
+            Text("Share crashes")
+        }
+        TextButton(
+            onClick = viewModel::clearDebugLog,
+            enabled = uiState.debugLogSizeBytes > 0,
+            modifier = Modifier.weight(1f),
+        ) {
+            Text("Clear log")
+        }
+        TextButton(
+            onClick = viewModel::clearCrashLogs,
+            enabled = uiState.crashLogCount > 0,
+            modifier = Modifier.weight(1f),
+        ) {
+            Text("Clear crashes")
         }
     }
 }
@@ -426,7 +387,7 @@ private fun LogsSummary(uiState: SettingsUiState) {
 private const val BYTES_PER_KB = 1024.0
 private const val BYTES_PER_MB = BYTES_PER_KB * BYTES_PER_KB
 
-private fun formatBytes(bytes: Long): String =
+internal fun formatBytes(bytes: Long): String =
     when {
         bytes <= 0 -> "empty"
         bytes < BYTES_PER_KB -> "$bytes B"
@@ -439,7 +400,7 @@ private fun formatBytes(bytes: Long): String =
  * (`res/xml/file_paths.xml` exposes `logs/` and `crashes/`). Failures are swallowed on
  * purpose: a device with no app able to receive the intent should not crash Settings.
  */
-private fun shareFiles(
+internal fun shareFiles(
     context: android.content.Context,
     files: List<java.io.File>,
     chooserTitle: String,
@@ -466,116 +427,6 @@ private fun shareFiles(
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
     runCatching { context.startActivity(Intent.createChooser(intent, chooserTitle)) }
-}
-
-@Composable
-internal fun AppUpdateCard(
-    uiState: SettingsUiState,
-    viewModel: SettingsViewModel,
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors =
-            CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-            ),
-    ) {
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            if (uiState.otaChecking || uiState.otaUpdating) {
-                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-            }
-
-            uiState.otaMessage?.let { message ->
-                Text(
-                    text = message,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Button(
-                    onClick = viewModel::checkOtaUpdates,
-                    enabled = !uiState.otaChecking && !uiState.otaUpdating,
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Text("Check")
-                }
-                FilledTonalButton(
-                    onClick = viewModel::installOtaUpdates,
-                    enabled = !uiState.otaChecking && !uiState.otaUpdating && uiState.otaUpdateAvailable,
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Text("Update")
-                }
-            }
-        }
-    }
-}
-
-@Composable
-internal fun OtaCard(
-    uiState: SettingsUiState,
-    viewModel: SettingsViewModel,
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors =
-            CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-            ),
-    ) {
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            if (uiState.otaChecking || uiState.otaUpdating) {
-                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-            }
-
-            uiState.otaMessage?.let { message ->
-                Text(
-                    text = message,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Button(
-                    onClick = viewModel::checkOtaUpdates,
-                    enabled = !uiState.otaChecking && !uiState.otaUpdating,
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Text("Check")
-                }
-                FilledTonalButton(
-                    onClick = viewModel::installOtaUpdates,
-                    enabled = !uiState.otaChecking && !uiState.otaUpdating && uiState.otaUpdateAvailable,
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Text("Update")
-                }
-            }
-        }
-    }
 }
 
 @Composable
@@ -686,4 +537,3 @@ internal fun NativeCoreCard(
         }
     }
 }
-

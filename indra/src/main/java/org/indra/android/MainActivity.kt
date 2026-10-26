@@ -104,9 +104,15 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun requestRootIfNeeded() {
-        val rootStatus = rootManager.detectRoot()
-        if (!rootStatus.isRooted) {
-            rootManager.requestRootAccess()
+        // detectRoot() shells out (`which su`, `su -c echo test`) with blocking waitFor().
+        // On a fresh Magisk install it parks the Main thread on the grant dialog — a
+        // guaranteed ANR at cold start. Detect off Main; requestRootAccess() only fires
+        // a system intent (safe from any thread thanks to FLAG_ACTIVITY_NEW_TASK).
+        lifecycleScope.launch(Dispatchers.IO) {
+            val rootStatus = rootManager.detectRoot()
+            if (!rootStatus.isRooted) {
+                rootManager.requestRootAccess()
+            }
         }
     }
 }
