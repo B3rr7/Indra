@@ -46,14 +46,20 @@ fun BottomNavBar(navController: NavController) {
                 },
                 selected = selected,
                 onClick = {
-                    // Top-level destinations: same options for every tab so the
-                    // stack never accumulates duplicates of the tab screens.
-                    navController.navigate(item.route) {
-                        popUpTo(navController.graph.findStartDestination().id) {
-                            saveState = true
+                    // Terminal-within-Tools dead-tap fix: poking the save/
+                    // restore options re-restored the *whole* saved chain, so
+                    // a plugin screen restored on top of its tab and a tap
+                    // looked dead. Instead, pop to the tab's own screen when
+                    // it is already in the stack (root comes to the front with
+                    // its state kept), otherwise navigate fresh without saved
+                    // state so no buried screen can come back.
+                    if (!navController.popBackStack(item.route, inclusive = false)) {
+                        navController.navigate(item.route) {
+                            popUpTo(navController.graph.findStartDestination().id) {
+                                saveState = false
+                            }
+                            launchSingleTop = true
                         }
-                        launchSingleTop = true
-                        restoreState = true
                     }
                 },
                 colors =

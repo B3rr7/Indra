@@ -21,6 +21,7 @@ import javax.inject.Inject
 
 data class ToolsUiState(
     val plugins: List<PluginInfo> = emptyList(),
+    val query: String = "",
     val isLoading: Boolean = false,
     val updatingToolId: String? = null,
     val otaMessage: String? = null,
@@ -40,6 +41,11 @@ class ToolsViewModel
 
         init {
             loadPlugins()
+        }
+
+        /** Filters the visible tool cards as the user types. */
+        fun setQuery(query: String) {
+            _uiState.value = _uiState.value.copy(query = query)
         }
 
         /**
