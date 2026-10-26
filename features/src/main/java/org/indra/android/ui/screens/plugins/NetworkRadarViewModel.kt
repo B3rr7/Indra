@@ -3,11 +3,15 @@ package org.indra.android.ui.screens.plugins
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.indra.android.core.system.NeighborTable
 import org.indra.android.core.system.SmartToolBox
 import org.indra.android.core.system.isStreaming
 import org.indra.android.core.system.streamedLine
@@ -24,6 +28,12 @@ data class NetworkRadarUiState(
     val iface: String = "wlan0",
     val isActive: Boolean = false,
     val hosts: List<RadarHost> = emptyList(),
+    /**
+     * Informational, not an error: the active sweep could not run and [hosts] came from
+     * the kernel's ARP table instead. Kept apart from [error] so a screen showing real,
+     * discovered hosts does not also shout in red.
+     */
+    val note: String? = null,
     val error: String? = null,
 )
 
@@ -80,6 +90,13 @@ class NetworkRadarViewModel
                 _uiState.value = _uiState.value.copy(error = "Interface is required")
                 return
             }
+            if (!NeighborTable.isValidIface(iface)) {
+                _uiState.value =
+                    _uiState.value.copy(
+                        error = "Interface name may only contain letters, digits and . _ : @ -",
+                    )
+                return
+            }
 
             val runner = toolBox.getTool("raw")
             if (runner == null || !runner.isAvailable()) {
@@ -87,24 +104,88 @@ class NetworkRadarViewModel
                 return
             }
 
-            _uiState.value = _uiState.value.copy(isActive = true, error = null, hosts = emptyList())
+            _uiState.value =
+                _uiState.value.copy(isActive = true, error = null, note = null, hosts = emptyList())
 
             job =
                 viewModelScope.launch {
+                    // Seed before the sweep: the kernel already knows who answered on the
+                    // link, so hosts show up immediately instead of after a sweep that may
+                    // not even be able to run.
+                    seedFromNeighborTable(iface)
                     toolBox.networkRadar(iface).collect { result ->
                         if (result.pid > 0) pid = result.pid
                         result.streamedLine?.let { applyLine(it) }
-                        if (!result.isStreaming) {
-                            _uiState.value =
-                                _uiState.value.copy(
-                                    isActive = false,
-                                    error = if (result.success) null else result.error,
-                                )
-                        }
+                        if (!result.isStreaming) finishRun(result.success, result.error, iface)
                     }
                     _uiState.value = _uiState.value.copy(isActive = false)
                 }
         }
+
+        /**
+         * The sweep failed: `network-radar` dies (SIGSEGV) on some vendor Wi-Fi drivers,
+         * which used to render as "timed out or stopped" over an empty host list while the
+         * ARP table already listed the hosts. Re-read the table and report what really
+         * happened; only call it an error when the table probe failed too.
+         */
+        private suspend fun finishRun(
+            success: Boolean,
+            reason: String?,
+            iface: String,
+        ) {
+            if (success) {
+                _uiState.value = _uiState.value.copy(isActive = false, note = null)
+                return
+            }
+            val seeded = seedFromNeighborTable(iface)
+            _uiState.value =
+                _uiState.value.copy(
+                    isActive = false,
+                    error = if (seeded == null) reason else null,
+                    note =
+                        if (seeded == null) {
+                            null
+                        } else {
+                            "Hosts from the kernel ARP table — active sweep failed: ${reason ?: "unknown reason"}"
+                        },
+                )
+        }
+
+        /**
+         * Merges the kernel neighbour table into [NetworkRadarUiState.hosts], keeping any
+         * hosts the sweep already reported and filling in a MAC it did not have. Returns
+         * the table (`null` = probe unavailable, distinct from an empty table).
+         */
+        private suspend fun seedFromNeighborTable(iface: String): List<NeighborTable.Entry>? {
+            val entries = toolBox.neighborEntries(iface, exclude = ownAddresses())
+            if (entries == null) return null
+            val current = _uiState.value.hosts.associateBy { it.ip }
+            val merged =
+                current.toMutableMap().apply {
+                    entries.forEach { entry ->
+                        val existing = this[entry.ip]
+                        this[entry.ip] =
+                            if (existing == null) {
+                                RadarHost(ip = entry.ip, mac = entry.mac)
+                            } else {
+                                existing.copy(mac = existing.mac.ifEmpty { entry.mac })
+                            }
+                    }
+                }
+            _uiState.value =
+                _uiState.value.copy(hosts = merged.values.sortedBy { it.ip })
+            merged.keys.forEach { networkRepository.addDiscoveredHost(it) }
+            return entries
+        }
+
+        /** Our own address is not a target; the gateway is (the router is a real host). */
+        private suspend fun ownAddresses(): Set<String> =
+            withContext(Dispatchers.IO) {
+                networkRepository.refreshNetworkStatus()
+                networkRepository.networkStatus.first()
+            }?.let { status ->
+                setOfNotNull(status.localAddress.takeIf { it.isNotBlank() })
+            }.orEmpty()
 
         private fun applyLine(line: String) {
             val (action, fields) = parseHostLine(line.trim()) ?: return

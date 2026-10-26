@@ -446,6 +446,24 @@ class SmartToolBox
                 if (result.success) NeighborTable.parse(result.rawOutput, exclude) else null
             }.getOrElse { null }
 
+        /**
+         * Same probe as [neighborHosts], but keeps the link-layer address and can be
+         * narrowed to one interface.
+         *
+         * Network Radar falls back to this when its active sweep cannot run: the kernel
+         * already knows which hosts answered on the link, so "the sweep crashed" does
+         * not have to mean "no hosts". `null` still means the probe itself failed.
+         */
+        suspend fun neighborEntries(
+            iface: String? = null,
+            exclude: Set<String> = emptySet(),
+        ): List<NeighborTable.Entry>? =
+            runCatching {
+                val dev = iface?.takeIf { NeighborTable.isValidIface(it) }?.let { " dev $it" }.orEmpty()
+                val probe = command("ip neigh", "ip neigh show$dev", NEIGHBOR_PROBE_TIMEOUT_MS).last()
+                if (probe.success) NeighborTable.parseEntries(probe.rawOutput, exclude) else null
+            }.getOrElse { null }
+
         private fun rawCommand(
             label: String,
             command: String,
@@ -604,6 +622,7 @@ class SmartToolBox
                 val osMatches = mutableListOf<ToolOs>()
 
                 var finished: Boolean? = null
+                var crashed = false
                 var exitValue: Int? = null
                 try {
                     finished =
@@ -672,7 +691,13 @@ class SmartToolBox
                                             done = true
                                         }
 
-                                    is ProcessEvent.Crashed -> if (event.processId == pid) done = false
+                                    is ProcessEvent.Crashed ->
+                                        if (event.processId == pid) {
+                                            // Died on a signal (SIGSEGV in a bundled tool says
+                                            // nothing about a timeout — report it as a crash).
+                                            crashed = true
+                                            done = false
+                                        }
                                 }
                             }
                             done
@@ -716,6 +741,7 @@ class SmartToolBox
                         exitValue = exitCode,
                         error =
                             when {
+                                crashed -> "$label crashed (killed by a signal)"
                                 finished != true -> "$label timed out or stopped"
                                 succeeded -> null
                                 // "shell exited with code 255" alone told the user a step failed

@@ -112,6 +112,14 @@ fun NetworkRadarScreen(
                 }
             }
 
+            if (uiState.note != null) {
+                Text(
+                    text = uiState.note!!,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+
             if (uiState.error != null) {
                 Text(
                     text = uiState.error!!,
