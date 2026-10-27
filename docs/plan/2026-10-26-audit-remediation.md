@@ -339,14 +339,25 @@ Device-pass findings (Sprint 2):
   included — so `chroot` cannot exec anything. `installAlpine` only sets `bin/sh` executable and
   that symlink target did not survive either; the extractor needs to restore tar modes (or a
   recursive `chmod` post-pass). Not fixed in Sprint 2 (it belongs with the Alpine/WS-7 work).
-- **WiFi Scanner cannot run on the tested device** (`2.5` sweep, still open): the screen runs
+- **WiFi Scanner could not run on the tested device** (`2.5` sweep) — **fixed**: the screen ran
   `iw dev <iface> scan` through `shell`, but neither the native core (tools list: aircrack-ng,
   arpspoof, ettercap, fusemounts, gobuster, hping3, hydra, masscan, network-radar, nmap, reaver,
-  tcpdump) nor the ROM ships `iw` — every scan dies with
-  `shell exited with code 127: /system/bin/sh: iw: inaccessible or not found`, while the plugin
-  card stays openable because `requires = "shell"` is satisfied. The empty state now says
-  "The scan did not complete" with that error, which is honest, but the feature needs `iw`
-  bundled (Phase 2 rule: ship the binary) or a different scanner. Not fixed in `2.5`.
+  tcpdump) nor the ROM ships `iw`, so every scan died with
+  `shell exited with code 127: /system/bin/sh: iw: inaccessible or not found` while the card
+  stayed openable because `requires = "shell"` is satisfied.
+  The scanner now reads Android's own Wi-Fi service instead of a bundled binary:
+  `cmd wifi status; cmd wifi start-scan; sleep 3; cmd wifi list-scan-results` through `shell`
+  (root). No binary to ship, and it lists exactly the access points the system Wi-Fi picker
+  shows. `WifiScan.parse` (pure, `core/system`, 12 tests in `WifiScanTest`) reads the table —
+  the SSID column is not fixed-width (names contain spaces), so the numeric prefix is read
+  positionally and the trailing `[...]` flag list is split off the end, and the flags are
+  reduced to a readable label (`WPA2/WPA3`, `Open`, `OWE`, …). Results are sorted strongest
+  first and rendered as two console lines (name, then
+  `bssid · chN · −N dBm · security`). The interface field is gone — `cmd wifi` takes no
+  interface. A radio that is off is a real `error` ("Wi-Fi is turned off — enable Wi-Fi to scan
+  for networks"), not a silent empty list.
+  Device-verified (moto g60): two live access points with SSID/BSSID/channel/signal/security,
+  and the Wi-Fi-off path after `svc wifi disable`. 0 StrictMode violations.
 
 ### Sprint 3 — consolidation
 - [ ] 3.2 Migrate remaining 33 screens to `PluginScaffold` — L

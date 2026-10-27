@@ -47,7 +47,7 @@ its state-aware placeholder.
 | 32 | Web Tester | same as 31 | **fixed** (2.1/2.2) | same |
 | 33 | Whisper Pair | `status: String` ("Idle" → scan status) + device list | OK | BLE scan callback; a permission denial is an `error` |
 | 34 | WiFi Audit | `Cracking (N lines)` only when lines exist; `keyFound` header | OK | aircrack output (`KEY FOUND`) |
-| 35 | WiFi Scanner | zero-result scan rendered nothing | **fixed** | `finished` + `BSS` line parse |
+| 35 | WiFi Scanner | zero-result scan rendered nothing | **fixed** | `finished` + `WifiScan.parse` over `cmd wifi list-scan-results` |
 | 36 | Wifite | `stage` machine (`idle → monitor → capture → crack → done`) + output | OK | stage transitions; a failed stage sets `error` |
 
 ## Notes
@@ -78,10 +78,12 @@ its state-aware placeholder.
   10.140.58.1), Session Hijack (`Not capturing yet — press Start.`), Packet Capture
   (`Not capturing yet` + `Press Start to begin capturing`). WiFi Scanner rendered
   `The scan did not complete` + `sh: iw: inaccessible or not found` — see the tool finding
-  below; its zero branch (`No networks found`) is unreachable on this device.
-- **New finding: WiFi Scanner depends on a binary nobody ships.** It runs
+  below; its zero branch (`No networks found`) was unreachable on this device.
+- **Finding: WiFi Scanner depended on a binary nobody ships** — fixed after the sweep. It ran
   `iw dev <iface> scan` through `shell`, but `iw` is in neither the native core
   (`aircrack-ng arpspoof ettercap fusemounts gobuster hping3 hydra masscan network-radar nmap
-  reaver tcpdump`) nor the ROM, so every scan fails with exit 127 while the card stays openable
-  (`requires = "shell"` is satisfied). Recorded in the plan's Sprint 2 findings; it is a
-  Phase 2 "ship the binary" item, not an empty-state one.
+  reaver tcpdump`) nor the ROM, so every scan failed with exit 127 while the card stayed openable
+  (`requires = "shell"` is satisfied). The screen now reads Android's own
+  `cmd wifi list-scan-results` (no binary to ship), so all three branches are reachable:
+  not-started, "ran and saw nothing", and "Wi-Fi is turned off" (a real `error`, because that is
+  a condition the user can fix).
