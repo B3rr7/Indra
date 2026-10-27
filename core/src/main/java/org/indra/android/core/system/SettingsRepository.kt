@@ -92,6 +92,14 @@ class SettingsRepository
         get() = prefs.getBoolean("ROOTLESS_MODE", false)
         set(value) = prefs.edit().putBoolean("ROOTLESS_MODE", value).apply()
 
+        /**
+         * Whether the floating terminal bubble is on. Persisted so it survives a restart:
+         * a bubble the user opened and then backgrounded should still be there.
+         */
+        var terminalBubbleEnabled: Boolean
+            get() = prefs.getBoolean("TERMINAL_BUBBLE", false)
+            set(value) = prefs.edit().putBoolean("TERMINAL_BUBBLE", value).apply()
+
     var bettercapUrl: String
         get() = prefs.getString("BETTERCAP_URL", "") ?: ""
         set(value) = prefs.edit().putString("BETTERCAP_URL", value).apply()

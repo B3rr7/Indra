@@ -3,13 +3,12 @@
   <ManuallySuppressedIssues/>
   <CurrentIssues>
     <ID>CyclomaticComplexMethod:HomeScreen.kt$@Composable fun getToolIcon(id: String): ImageVector</ID>
-    <ID>CyclomaticComplexMethod:IndraNavHost.kt$@Composable fun IndraNavHost( navController: NavHostController = rememberNavController(), modifier: Modifier = Modifier, )</ID>
+    <ID>CyclomaticComplexMethod:IndraNavHost.kt$@Composable fun IndraNavHost( navController: NavHostController = rememberNavController(), modifier: Modifier = Modifier, terminalSession: TerminalSession? = null, )</ID>
     <ID>LongMethod:HomeScreen.kt$@Composable fun ModernToolCard( plugin: PluginInfo, onClick: () -&gt; Unit, modifier: Modifier = Modifier, onUpdate: (() -&gt; Unit)? = null, updating: Boolean = false, updateEnabled: Boolean = true, )</ID>
     <ID>LongMethod:HomeScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun HomeScreen( onNavigateToPlugin: (String) -&gt; Unit, onNavigateToNetworkRadar: () -&gt; Unit, onNavigateToSettings: () -&gt; Unit, viewModel: HomeViewModel = hiltViewModel(), )</ID>
-    <ID>LongMethod:IndraNavHost.kt$@Composable fun IndraNavHost( navController: NavHostController = rememberNavController(), modifier: Modifier = Modifier, )</ID>
+    <ID>LongMethod:IndraNavHost.kt$@Composable fun IndraNavHost( navController: NavHostController = rememberNavController(), modifier: Modifier = Modifier, terminalSession: TerminalSession? = null, )</ID>
     <ID>LongMethod:SettingsCards.kt$@Composable internal fun NativeCoreCard( uiState: SettingsUiState, viewModel: SettingsViewModel, )</ID>
     <ID>LongMethod:SettingsScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun SettingsScreen( onNavigateBack: () -&gt; Unit, onNavigateToLogs: () -&gt; Unit, viewModel: SettingsViewModel = hiltViewModel(), )</ID>
-    <ID>LongMethod:TerminalScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun TerminalScreen( onNavigateBack: () -&gt; Unit, viewModel: TerminalViewModel = hiltViewModel(), )</ID>
     <ID>MagicNumber:HomeScreen.kt$600</ID>
     <ID>MagicNumber:SettingsCards.kt$SettingsPalette$0xFF00B0FF</ID>
     <ID>MagicNumber:SettingsCards.kt$SettingsPalette$0xFF00E5FF</ID>
@@ -28,14 +27,8 @@
     <ID>MagicNumber:SettingsScreen.kt$5</ID>
     <ID>MagicNumber:SettingsScreen.kt$65535</ID>
     <ID>MagicNumber:SettingsViewModel.kt$SettingsViewModel$65535</ID>
-    <ID>MagicNumber:TerminalScreen.kt$0xFF0D1117</ID>
-    <ID>MagicNumber:TerminalScreen.kt$0xFF8B949E</ID>
-    <ID>MagicNumber:TerminalScreen.kt$0xFFE6EDF3</ID>
     <ID>MatchingDeclarationName:IndraNavHost.kt$Screen</ID>
     <ID>MatchingDeclarationName:SettingsCards.kt$SettingsPalette</ID>
-    <ID>MaxLineLength:TerminalScreen.kt$(if (uiState.chrootMode) listOf("apk update", "apk add python3", "python3 --version") else listOf("ip addr", "iw dev", "ps", "ls"))</ID>
-    <ID>ReturnCount:HomeViewModel.kt$HomeViewModel$private fun isPluginAvailable(plugin: org.indra.android.core.system.Plugin): Boolean</ID>
-    <ID>ReturnCount:TerminalViewModel.kt$TerminalViewModel$fun run()</ID>
     <ID>SwallowedException:IndraApplication.kt$IndraApplication$e: Exception</ID>
     <ID>SwallowedException:ToolsViewModel.kt$ToolsViewModel$e: Exception</ID>
     <ID>TooGenericExceptionCaught:IndraApplication.kt$IndraApplication$e: Exception</ID>
@@ -57,9 +50,6 @@
     <ID>WildcardImport:SettingsScreen.kt$import androidx.compose.material.icons.filled.*</ID>
     <ID>WildcardImport:SettingsScreen.kt$import androidx.compose.material3.*</ID>
     <ID>WildcardImport:SettingsScreen.kt$import androidx.compose.runtime.*</ID>
-    <ID>WildcardImport:TerminalScreen.kt$import androidx.compose.foundation.layout.*</ID>
-    <ID>WildcardImport:TerminalScreen.kt$import androidx.compose.material3.*</ID>
-    <ID>WildcardImport:TerminalScreen.kt$import androidx.compose.runtime.*</ID>
     <ID>WildcardImport:ToolsScreen.kt$import androidx.compose.foundation.layout.*</ID>
     <ID>WildcardImport:ToolsScreen.kt$import androidx.compose.material3.*</ID>
     <ID>WildcardImport:ToolsScreen.kt$import androidx.compose.runtime.*</ID>

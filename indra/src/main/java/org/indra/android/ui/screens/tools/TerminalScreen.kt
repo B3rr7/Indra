@@ -1,187 +1,225 @@
 package org.indra.android.ui.screens.tools
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
+import android.provider.Settings
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.outlined.Terminal
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import org.indra.android.ui.components.AutoFollowScrollEffect
-import org.indra.android.ui.components.rememberAutoFollowState
+import org.indra.android.core.system.terminal.TerminalSession
+import org.indra.android.terminal.TerminalOverlayService
+import org.indra.android.ui.screens.terminal.TerminalConsole
+import org.indra.android.ui.screens.terminal.TerminalPalette
 
+/**
+ * The full-screen terminal.
+ *
+ * The screen is only a surface: the command runs in [TerminalSession], which outlives it, so
+ * leaving for another tool (or backgrounding the app with the bubble on) does not kill the
+ * shell. Re-entering re-renders the same transcript.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TerminalScreen(
     onNavigateBack: () -> Unit,
-    viewModel: TerminalViewModel = hiltViewModel(),
+    session: TerminalSession,
 ) {
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val listState = rememberLazyListState()
+    val state by session.state.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    var canOverlay by remember { mutableStateOf(Settings.canDrawOverlays(context)) }
 
-    val listFollow = rememberAutoFollowState(listState)
-    // headTrimmed = lines evicted from the list head by the rolling cap — pass
-    // it so a paused history view does not drift as the transcript rolls by.
-    val headTrimmed = (uiState.lineCount - uiState.output.size).toInt()
-    AutoFollowScrollEffect(listState, uiState.lineCount.toInt(), { uiState.output.size - 1 }, listFollow, headTrimmed)
-    // A newly submitted command must be visible even if the user had scrolled up
-    // to read history — jump to its prompt once, then normal follow resumes.
-    LaunchedEffect(uiState.isRunning) {
-        if (uiState.isRunning) listFollow.resumeFollowing()
+    // The user may grant "display over other apps" while we are paused; the offer to grant
+    // must disappear when they come back, otherwise the screen keeps nagging after the fix.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        canOverlay = Settings.canDrawOverlays(context)
+        session.refresh()
     }
+    LaunchedEffect(Unit) { session.refresh() }
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Terminal") },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                actions = {
-                    TextButton(onClick = viewModel::clear, enabled = !uiState.isRunning) {
-                        Text("Clear")
-                    }
-                    if (uiState.isRunning) {
-                        TextButton(onClick = viewModel::stop) {
-                            Text("Stop")
-                        }
-                    }
-                },
+            TerminalTopBar(
+                state = state,
+                canOverlay = canOverlay,
+                onNavigateBack = onNavigateBack,
+                onToggleBubble = { session.setBubbleVisible(!state.bubbleVisible) },
+                onClear = session::clear,
+                onToggleChroot = { session.setChroot(!state.chroot) },
+                onAllowOverlay = { context.startActivity(TerminalOverlayService.permissionIntent(context)) },
             )
         },
     ) { padding ->
-        Column(
+        TerminalContent(
+            state = state,
+            canOverlay = canOverlay,
             modifier =
                 Modifier
                     .fillMaxSize()
-                    .padding(padding),
-        ) {
-            LazyColumn(
-                state = listState,
-                modifier =
-                    Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                        .background(Color(0xFF0D1117))
-                        .padding(8.dp),
-                verticalArrangement = Arrangement.spacedBy(2.dp),
-            ) {
-                items(uiState.output) { line ->
-                    Text(
-                        text = line,
-                        color = Color(0xFFE6EDF3),
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 12.sp,
-                    )
-                }
-                if (uiState.isRunning) {
-                    item {
-                        Text(
-                            text = "...",
-                            color = Color(0xFF8B949E),
-                            fontFamily = FontFamily.Monospace,
-                            fontSize = 12.sp,
-                        )
-                    }
-                }
-            }
+                    .padding(padding)
+                    // The window is edge-to-edge (enableEdgeToEdge), so the platform does not
+                    // shrink it for the IME: without this the prompt line and the send button
+                    // sit *under* the keyboard and the terminal cannot be typed into.
+                    .imePadding(),
+            onRun = session::run,
+            onStop = session::stop,
+            onAllowOverlay = { context.startActivity(TerminalOverlayService.permissionIntent(context)) },
+        )
+    }
+}
 
-            uiState.error?.let { err ->
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TerminalTopBar(
+    state: TerminalSession.State,
+    canOverlay: Boolean,
+    onNavigateBack: () -> Unit,
+    onToggleBubble: () -> Unit,
+    onClear: () -> Unit,
+    onToggleChroot: () -> Unit,
+    onAllowOverlay: () -> Unit,
+) {
+    var menuOpen by remember { mutableStateOf(false) }
+    TopAppBar(
+        title = {
+            Column {
+                Text("Terminal")
                 Text(
-                    text = err,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                    style = MaterialTheme.typography.bodySmall,
+                    text = state.cwd.ifBlank { "no working directory yet" },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
+        },
+        navigationIcon = {
+            IconButton(onClick = onNavigateBack) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+            }
+        },
+        actions = {
+            IconButton(onClick = onToggleBubble) {
+                Icon(
+                    Icons.Outlined.Terminal,
+                    contentDescription = if (state.bubbleVisible) "Hide bubble" else "Show bubble",
+                    tint =
+                        if (state.bubbleVisible) {
+                            TerminalPalette.accent
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                )
+            }
+            TextButton(onClick = onClear, enabled = !state.running) {
+                Text("Clear")
+            }
+            IconButton(onClick = { menuOpen = true }) {
+                Icon(Icons.Default.Menu, contentDescription = "More")
+            }
+            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                DropdownMenuItem(
+                    text = { Text(if (state.chroot) "Run in Alpine chroot: on" else "Run in Alpine chroot: off") },
+                    enabled = state.alpineInstalled && !state.running,
+                    onClick = {
+                        menuOpen = false
+                        onToggleChroot()
+                    },
+                )
+                if (!state.alpineInstalled) {
+                    DropdownMenuItem(
+                        text = { Text("Install Alpine in Settings → optional artifacts") },
+                        enabled = false,
+                        onClick = {},
+                    )
+                }
+                if (!canOverlay) {
+                    DropdownMenuItem(
+                        text = { Text("Allow floating over other apps…") },
+                        onClick = {
+                            menuOpen = false
+                            onAllowOverlay()
+                        },
+                    )
+                }
+            }
+        },
+    )
+}
 
+@Composable
+private fun TerminalContent(
+    state: TerminalSession.State,
+    canOverlay: Boolean,
+    modifier: Modifier = Modifier,
+    onRun: (String) -> Unit,
+    onStop: () -> Unit,
+    onAllowOverlay: () -> Unit,
+) {
+    Column(modifier = modifier) {
+        if (state.bubbleVisible && !canOverlay) {
             Row(
                 modifier =
                     Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                        .padding(horizontal = 12.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text(
-                    text = "Alpine chroot",
+                    text = "The bubble stays inside Indra until it may draw over other apps.",
                     style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
                 )
-                Switch(
-                    checked = uiState.chrootMode,
-                    onCheckedChange = viewModel::toggleChroot,
-                    enabled = !uiState.isRunning && uiState.alpineInstalled,
-                )
-                if (!uiState.alpineInstalled) {
-                    Text(
-                        text = "(install Alpine in Settings)",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                TextButton(onClick = onAllowOverlay) {
+                    Text("Allow", fontSize = 12.sp)
                 }
             }
-
-            // Chips on their own line: with everything in one Row the fillMaxWidth() chips
-            // took the whole width, the text field's weight(1f) collapsed to a sliver and
-            // the send button was pushed off-screen (the terminal could not be typed into).
-            Column(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    (if (uiState.chrootMode) listOf("apk update", "apk add python3", "python3 --version") else listOf("ip addr", "iw dev", "ps", "ls")).forEach { cmd ->
-                        AssistChip(
-                            onClick = { viewModel.updateInput(cmd) },
-                            label = { Text(cmd, fontSize = 11.sp) },
-                            enabled = !uiState.isRunning,
-                        )
-                    }
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    OutlinedTextField(
-                        value = uiState.input,
-                        onValueChange = viewModel::updateInput,
-                        modifier = Modifier.weight(1f),
-                        placeholder = { Text("command…") },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                        keyboardActions = KeyboardActions(onSend = { viewModel.run() }),
-                        textStyle = LocalTextStyle.current.copy(fontFamily = FontFamily.Monospace),
-                    )
-                    IconButton(
-                        onClick = viewModel::run,
-                        enabled = !uiState.isRunning && uiState.input.isNotBlank(),
-                    ) {
-                        Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Run")
-                    }
-                }
-            }
+        }
+        TerminalConsole(
+            state = state,
+            modifier = Modifier.weight(1f),
+            onRun = onRun,
+            onStop = onStop,
+        )
+        if (state.chroot) {
+            Text(
+                text = "chroot: Alpine /bin/sh — Android's own binaries are not visible inside",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+            )
         }
     }
 }

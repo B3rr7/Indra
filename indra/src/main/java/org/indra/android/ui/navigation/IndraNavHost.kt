@@ -48,6 +48,7 @@ import org.indra.android.ui.screens.plugins.WifiAuditScreen
 import org.indra.android.ui.screens.plugins.WifiScannerScreen
 import org.indra.android.ui.screens.plugins.WifiteScreen
 import org.indra.android.ui.screens.settings.SettingsScreen
+import org.indra.android.core.system.terminal.TerminalSession
 import org.indra.android.ui.screens.tools.TerminalScreen
 import org.indra.android.ui.screens.tools.ToolsScreen
 
@@ -137,6 +138,7 @@ sealed class Screen(
 fun IndraNavHost(
     navController: NavHostController = rememberNavController(),
     modifier: Modifier = Modifier,
+    terminalSession: TerminalSession? = null,
 ) {
     NavHost(
         navController = navController,
@@ -251,7 +253,13 @@ fun IndraNavHost(
         }
 
         composable(Screen.Terminal.route) {
-            TerminalScreen(onNavigateBack = { navController.popBackStack() })
+            val session = terminalSession
+            if (session != null) {
+                TerminalScreen(
+                    onNavigateBack = { navController.popBackStack() },
+                    session = session,
+                )
+            }
         }
 
         composable(Screen.MacChanger.route) {

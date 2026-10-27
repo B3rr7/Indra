@@ -36,6 +36,9 @@
         android:usesPermissionFlags="neverForLocation" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- The floating terminal bubble draws over other apps (Android 8+ requires this
+         permission to be granted from the per-app settings screen, not a dialog). -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
     <application
         android:name=".IndraApplication"
@@ -59,6 +62,17 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
+
+        <!-- Keeps the floating terminal alive (and the shell running) once the activity is
+             gone; the bubble is a TYPE_APPLICATION_OVERLAY window inside it. -->
+        <service
+            android:name=".terminal.TerminalOverlayService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Floating terminal bubble kept above other apps at the user's request" />
+        </service>
 
         <activity
             android:name=".MainActivity"

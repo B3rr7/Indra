@@ -8,6 +8,7 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
@@ -33,6 +34,8 @@ import org.indra.android.core.system.CoreManager
 import org.indra.android.core.system.IndraSystem
 import org.indra.android.core.system.PermissionManager
 import org.indra.android.core.system.RootManager
+import org.indra.android.core.system.terminal.TerminalSession
+import org.indra.android.terminal.TerminalBubbleHost
 import org.indra.android.ui.navigation.BottomNavBar
 import org.indra.android.ui.navigation.IndraNavHost
 import org.indra.android.ui.theme.IndraTheme
@@ -51,6 +54,9 @@ class MainActivity : ComponentActivity() {
 
     @Inject
     lateinit var indraSystem: IndraSystem
+
+    @Inject
+    lateinit var terminalSession: TerminalSession
 
     // Counts denied attempts, not just "denied": a boolean key could not re-fire
     // the snackbar when the user taps Grant and denies again (silent dead end).
@@ -101,6 +107,7 @@ class MainActivity : ComponentActivity() {
                     MainScaffold(
                         permissionDenials = permissionDenials,
                         onRequestPermissions = ::requestPermissionsIfNeeded,
+                        terminalSession = terminalSession,
                     )
                 }
             }
@@ -143,6 +150,7 @@ class MainActivity : ComponentActivity() {
 fun MainScaffold(
     permissionDenials: Int = 0,
     onRequestPermissions: () -> Unit = {},
+    terminalSession: TerminalSession? = null,
 ) {
     val navController = androidx.navigation.compose.rememberNavController()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -168,9 +176,20 @@ fun MainScaffold(
         bottomBar = { BottomNavBar(navController) },
         snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { paddingValues ->
-        IndraNavHost(
-            navController = navController,
-            modifier = Modifier.padding(paddingValues),
-        )
+        Box(modifier = Modifier.fillMaxSize()) {
+            IndraNavHost(
+                navController = navController,
+                modifier = Modifier.padding(paddingValues),
+                terminalSession = terminalSession,
+            )
+            // The floating terminal sits above the navigation host but inside the bottom bar,
+            // so it never covers the tabs it is meant to let you use.
+            if (terminalSession != null) {
+                TerminalBubbleHost(
+                    session = terminalSession,
+                    modifier = Modifier.padding(paddingValues),
+                )
+            }
+        }
     }
 }
