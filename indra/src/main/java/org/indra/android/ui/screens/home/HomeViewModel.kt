@@ -30,9 +30,21 @@ data class PluginInfo(
     val id: String,
     val name: String,
     val description: String,
-    val available: Boolean = true,
+    val status: PluginAvailability.PluginStatus = PluginAvailability.PluginStatus.AVAILABLE,
     val version: String? = null,
-)
+) {
+    /** Runnable now — drives the per-card "Update binary" entry point. */
+    val available: Boolean get() = status == PluginAvailability.PluginStatus.AVAILABLE
+
+    /**
+     * Whether tapping the card opens the screen. A stopped daemon still opens: the screen's
+     * own gate says what is wrong, and that message is the fix instruction.
+     */
+    val openable: Boolean get() = status.openable
+
+    /** Suffix shown after the description, or null when there is nothing to explain. */
+    val statusLabel: String? get() = status.label
+}
 
 @HiltViewModel
 class HomeViewModel
@@ -57,11 +69,6 @@ class HomeViewModel
         fun refresh() {
             loadData()
         }
-
-        private fun isPluginAvailable(plugin: org.indra.android.core.system.Plugin): Boolean =
-            // Shared with the Tools screen — the two screens' copies had already
-            // drifted (Home dimmed Responder, Tools offered it).
-            pluginAvailability.isPluginAvailable(plugin)
 
         private fun loadData() {
             // Blocking inside: daemon handler probes (JNI) per plugin, file checks, the
@@ -125,7 +132,7 @@ class HomeViewModel
                             id = plugin.id,
                             name = plugin.name,
                             description = plugin.description,
-                            available = isPluginAvailable(plugin),
+                            status = pluginAvailability.pluginStatus(plugin),
                         )
                     }
 

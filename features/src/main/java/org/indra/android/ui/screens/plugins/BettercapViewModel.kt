@@ -11,6 +11,7 @@ import kotlinx.coroutines.launch
 import org.indra.android.core.system.CoreManager
 import org.indra.android.core.system.SettingsRepository
 import org.indra.android.core.system.SmartToolBox
+import org.indra.android.core.system.ToolHandle
 import org.indra.android.core.system.isStreaming
 import org.indra.android.core.system.streamedLine
 import javax.inject.Inject
@@ -49,14 +50,14 @@ class BettercapViewModel @Inject constructor(
             _uiState.value = st.copy(error = "Bettercap is not installed. Configure a tarball URL and install first.")
             return
         }
-        val runner = toolBox.getTool("bettercap")
-        if (runner == null || !runner.isAvailable()) {
-            _uiState.value = st.copy(error = "Native daemon not available")
-            return
-        }
-        _uiState.value = st.copy(isRunning = true, error = null, output = emptyList())
         val args = st.args.trim().ifEmpty { "-h" }
         job = viewModelScope.launch {
+            val gate = toolBox.requireTool("bettercap")
+            if (gate !is ToolHandle.Ready) {
+                _uiState.value = _uiState.value.copy(error = gate.message)
+                return@launch
+            }
+            _uiState.value = _uiState.value.copy(isRunning = true, error = null, output = emptyList())
             toolBox.bettercap(args).collect { result ->
                 if (result.pid > 0) pid = result.pid
                 result.streamedLine?.let { line ->

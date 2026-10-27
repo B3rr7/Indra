@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.indra.android.core.system.NetworkHelper
 import org.indra.android.core.system.SmartToolBox
+import org.indra.android.core.system.ToolHandle
 import org.indra.android.core.system.isStreaming
 import org.indra.android.data.repository.NetworkRepository
 import javax.inject.Inject
@@ -55,18 +56,19 @@ class TracerouteViewModel
         fun trace() {
             viewModelScope.launch {
                 val target = _uiState.value.target.trim()
-                _uiState.value = _uiState.value.copy(isLoading = true, error = null, hops = emptyList())
 
                 // The core ships no traceroute binary: nmap's --traceroute is the only one.
-                val runner = toolBox.getTool("raw")
-                if (runner == null || !runner.isAvailable()) {
+                val gate = toolBox.requireTool("raw")
+                if (gate !is ToolHandle.Ready) {
                     _uiState.value =
                         _uiState.value.copy(
                             isLoading = false,
-                            error = "Native daemon not available",
+                            error = gate.message,
                         )
                     return@launch
                 }
+
+                _uiState.value = _uiState.value.copy(isLoading = true, error = null, hops = emptyList())
 
                 // Hops arrive line by line while the tool runs; the final result repeats
                 // the whole capture, so only live lines are parsed (keyed by hop number

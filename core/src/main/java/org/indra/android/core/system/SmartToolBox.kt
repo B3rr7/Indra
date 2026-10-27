@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.last
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import org.indra.android.core.child.ChildProcessManager
 import org.indra.android.core.child.ProcessEvent
@@ -18,6 +19,14 @@ import org.indra.android.core.client.IndraClient
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
+
+/**
+ * How long a daemon-handler probe answer is trusted before it is re-read from the daemon.
+ *
+ * Long enough that a screen cannot hammer the socket (one probe per press at worst), short
+ * enough that starting the core while a screen is open is noticed on the next action.
+ */
+private const val PROBE_TTL_NANOS = 1_000_000_000L
 
 @Singleton
 class SmartToolBox
@@ -185,6 +194,53 @@ class SmartToolBox
         }
 
         fun getTool(name: String): SmartTool? = tools[name]
+
+        /**
+         * Asks for a runnable tool **off the main thread**, with the reason attached when it
+         * is not runnable.
+         *
+         * Every plugin screen used to write its own
+         * `val t = toolBox.getTool(x); if (t == null || !t.isAvailable()) …`, which (a) ran
+         * the JNI handler probe on Main — viewModelScope launches there — and (b) invented
+         * its own failure copy, so "daemon down" and "handler missing" were reported with
+         * six different sentences. Use this instead:
+         *
+         * ```
+         * val gate = toolBox.requireTool("raw")
+         * if (gate !is ToolHandle.Ready) return fail(gate.message)
+         * val runner = gate.tool
+         * ```
+         */
+        suspend fun requireTool(name: String): ToolHandle =
+            withContext(Dispatchers.IO) {
+                val instance = getTool(name)
+                when {
+                    // Liveness is checked first and separately: when the daemon dies, the
+                    // handler list stays cached inside the native client, so the capability
+                    // probe below would report "available" and the run would fail with a bare
+                    // "Failed to start nmap" instead of the daemon-down explanation.
+                    !isDaemonConnected() -> ToolHandle.DaemonDown
+                    instance == null -> ToolHandle.Missing(name)
+                    instance.isAvailable() -> ToolHandle.Ready(instance)
+                    // The daemon answered but does not know this handler: the core is old or
+                    // incomplete. (This is a capability answer, so the 1 s probe cache is fine.)
+                    else -> ToolHandle.Missing(name)
+                }
+            }
+
+        /**
+         * True when the daemon is connected, authenticated **and has not just refused a
+         * command** — not merely when the JNI libraries loaded. This is what separates
+         * "start the daemon" from "the core has no such handler"; reporting one as the other
+         * sends the user to the wrong fix.
+         */
+        fun isDaemonConnected(): Boolean =
+            runCatching {
+                IndraClient.isAvailable() &&
+                    !client.hasStartFailed() &&
+                    client.isConnected() &&
+                    client.isAuthenticated()
+            }.getOrDefault(false)
 
         fun getAvailableTools(): List<SmartTool> = tools.values.filter { it.isAvailable() }
 
@@ -608,7 +664,10 @@ class SmartToolBox
                             tool = label,
                             success = false,
                             status = STATUS_FAILED,
-                            error = "Failed to start $label",
+                            // A refused start almost always means the daemon died underneath us
+                            // (its native `connected` flag cannot see that), so name the fix
+                            // instead of only the symptom.
+                            error = "Failed to start $label — the daemon is not answering; start it in Settings → Native Core",
                             rawOutput = "",
                         ),
                     )
@@ -775,37 +834,48 @@ class SmartTool(
     private val client: IndraClient,
     private val gson: Gson,
 ) {
+    /** Last probe result; only [toJson] reads it directly. */
     @Volatile
     private var available = false
 
-    @Volatile
-    private var refreshed = false
+    /**
+     * Rate-limits the daemon probe: a cached answer is trusted for [PROBE_TTL_NANOS].
+     *
+     * This used to be a plain "refreshed" flag, and [isAvailable] re-probed on every call
+     * whenever the answer was `false` — so a screen with a stopped daemon hammered the
+     * socket on each Run press. [refresh] still forces a real probe.
+     */
+    private val availability = TtlProbe(PROBE_TTL_NANOS, probe = ::probeAvailability)
 
-    fun isAvailable(): Boolean {
-        if (!refreshed || !available) refresh()
-        return available
-    }
+    fun isAvailable(): Boolean = availability.get().also { available = it }
 
+    /** Forces a probe, ignoring the TTL. Used by [SmartToolBox.reload] after a core install. */
     fun refresh() {
-        available =
-            try {
-                if (!IndraClient.isAvailable()) {
-                    false
-                } else {
-                    client.getHandlers()?.contains(handler) ?: false
-                }
-            } catch (e: Throwable) {
-                Logger.w("refresh '$handler' failed: ${e.message}")
-                false
-            }
-        refreshed = true
+        available = availability.refresh()
     }
+
+    private fun probeAvailability(): Boolean =
+        try {
+            if (!IndraClient.isAvailable()) {
+                false
+            } else {
+                client.getHandlers()?.contains(handler) ?: false
+            }
+        } catch (e: Throwable) {
+            Logger.w("refresh '$handler' failed: ${e.message}")
+            false
+        }
 
     /** Starts the handler and returns the child pid, or -1 on failure. */
     fun start(args: String): Int =
         try {
-            client.startCommand(handler, args, null)
+            val pid = client.startCommand(handler, args, null)
+            // The native `connected` flag cannot see a dead daemon, so a refused start is
+            // what tells the rest of the app (cards, gates) to say "daemon not running".
+            client.noteStartResult(pid != -1)
+            pid
         } catch (e: Exception) {
+            client.noteStartResult(false)
             Logger.e("Failed to start $name", e)
             -1
         }
@@ -813,7 +883,7 @@ class SmartTool(
     fun execute(args: String): ProcessResult {
         val pid = start(args)
         return if (pid == -1) {
-            ProcessResult(pid = -1, error = "Failed to start $name")
+            ProcessResult(pid = -1, error = "Failed to start $name — the daemon is not answering; start it in Settings → Native Core")
         } else {
             ProcessResult(pid = pid, output = "Process started (PID: $pid)")
         }
@@ -900,3 +970,35 @@ val ToolResult.streamedLine: String?
         if (!isStreaming) return null
         return rawOutput.takeIf { it.isNotBlank() && !it.startsWith("Executing:") }
     }
+
+/**
+ * Outcome of [SmartToolBox.requireTool].
+ *
+ * [Ready] carries a tool that can be started; the failure states carry user-facing copy so
+ * the plugin screens stop inventing their own (they had six different sentences for the
+ * same two conditions). `message` is empty only for [Ready].
+ */
+sealed interface ToolHandle {
+    val message: String
+
+    data class Ready(
+        val tool: SmartTool,
+    ) : ToolHandle {
+        override val message: String get() = ""
+    }
+
+    /** Native libraries failed to load, or the daemon is not connected/authenticated. */
+    data object DaemonDown : ToolHandle {
+        override val message: String
+            get() = "Native daemon is not running — install the core and start it in Settings → Native Core."
+    }
+
+    /** Daemon is reachable, but this handler/binary is not part of the installed core. */
+    data class Missing(
+        val name: String,
+    ) : ToolHandle {
+        override val message: String
+            get() = "'$name' is not available — install or update the native core in Settings."
+    }
+}
+

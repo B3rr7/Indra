@@ -1,8 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.Indra" parent="android:Theme.Material.Light.NoActionBar">
+    <!--
+      Indra is always dark (see IndraTheme in ui/theme/Theme.kt). This window theme must stay
+      dark too, in every system mode: a light window theme paints light system-bar icons
+      (windowLightStatusBar=true) over the dark app surface, which made the clock/battery
+      invisible on a device set to light mode. Do not add a values-night override that
+      disagrees with this file — MainActivity also pins the bars via
+      enableEdgeToEdge(SystemBarStyle.dark(...)).
+    -->
+    <style name="Theme.Indra" parent="android:Theme.Material.NoActionBar">
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
-        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowBackground">@android:color/black</item>
     </style>
 </resources>

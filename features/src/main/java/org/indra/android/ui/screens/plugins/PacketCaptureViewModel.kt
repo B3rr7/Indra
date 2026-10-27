@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.indra.android.core.system.SmartToolBox
+import org.indra.android.core.system.ToolHandle
 import org.indra.android.core.system.streamedLine
 import org.indra.android.core.system.isStreaming
 import javax.inject.Inject
@@ -126,18 +127,16 @@ class PacketCaptureViewModel
                 return
             }
 
-            val runner = toolBox.getTool("raw")
-            if (runner == null || !runner.isAvailable()) {
-                _uiState.value = state.copy(error = "Native daemon not available")
-                return
-            }
-
             val count = state.count.trim().toIntOrNull() ?: 0
-
-            _uiState.value = state.copy(isActive = true, error = null, packets = emptyList(), packetCount = 0)
 
             job =
                 viewModelScope.launch {
+                    val gate = toolBox.requireTool("raw")
+                    if (gate !is ToolHandle.Ready) {
+                        _uiState.value = _uiState.value.copy(error = gate.message)
+                        return@launch
+                    }
+                    _uiState.value = _uiState.value.copy(isActive = true, error = null, packets = emptyList(), packetCount = 0)
                     val outFile =
                         if (state.saveToFile) {
                             // The capture goes to the user-visible workspace

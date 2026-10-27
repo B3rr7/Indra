@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.indra.android.core.system.CoreManager
 import org.indra.android.core.system.SmartToolBox
+import org.indra.android.core.system.ToolHandle
 import org.indra.android.core.system.isStreaming
 import org.indra.android.core.system.streamedLine
 import javax.inject.Inject
@@ -74,30 +75,30 @@ class TerminalViewModel
                 return
             }
 
-            val runner = toolBox.getTool("shell")
-            if (runner == null || !runner.isAvailable()) {
-                _uiState.value = _uiState.value.copy(error = "Native daemon not available")
-                return
-            }
-
             val chrootMode = _uiState.value.chrootMode
             if (chrootMode && !coreManager.isAlpineInstalled()) {
                 _uiState.value = _uiState.value.copy(error = "Alpine not installed. Install it in Settings first.")
                 return
             }
 
-            // Echo the command as a prompt line.
-            val prompt = if (chrootMode) "[alpine] $ $cmd" else "$ $cmd"
-            _uiState.value =
-                _uiState.value.copy(
-                    isRunning = true,
-                    error = null,
-                    input = "",
-                )
-            appendOutput(prompt)
-
             job =
                 viewModelScope.launch {
+                    val gate = toolBox.requireTool("shell")
+                    if (gate !is ToolHandle.Ready) {
+                        _uiState.value = _uiState.value.copy(error = gate.message)
+                        return@launch
+                    }
+
+                    // Echo the command as a prompt line.
+                    val prompt = if (chrootMode) "[alpine] $ $cmd" else "$ $cmd"
+                    _uiState.value =
+                        _uiState.value.copy(
+                            isRunning = true,
+                            error = null,
+                            input = "",
+                        )
+                    appendOutput(prompt)
+
                     val flow = if (chrootMode) toolBox.chroot(cmd) else toolBox.shell(cmd)
                     flow.collect { result ->
                         if (result.pid > 0) pid = result.pid

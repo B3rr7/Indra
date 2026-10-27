@@ -120,12 +120,9 @@ class ToolsViewModel
                         id = plugin.id,
                         name = plugin.name,
                         description = plugin.description,
-                        available = isPluginAvailable(plugin),
+                        status = pluginAvailability.pluginStatus(plugin),
                     )
                 }
             return plugins to requiresById
         }
-
-        /** The shared rule set — Home's copy and this one used to disagree on Responder. */
-        private fun isPluginAvailable(plugin: Plugin): Boolean = pluginAvailability.isPluginAvailable(plugin)
     }

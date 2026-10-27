@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.lastOrNull
 import kotlinx.coroutines.launch
 import org.indra.android.core.system.HidCapability
 import org.indra.android.core.system.SmartToolBox
+import org.indra.android.core.system.ToolHandle
 import org.indra.android.core.system.isStreaming
 import org.indra.android.core.system.streamedLine
 import javax.inject.Inject
@@ -75,12 +76,12 @@ class GadgetProfilesViewModel @Inject constructor(
 
     fun apply(p: GadgetProfile) {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(status = "Applying…", error = null)
-            val runner = toolBox.getTool("shell")
-            if (runner == null || !runner.isAvailable()) {
-                _uiState.value = _uiState.value.copy(status = "Idle", error = "Native daemon not available")
+            val gate = toolBox.requireTool("shell")
+            if (gate !is ToolHandle.Ready) {
+                _uiState.value = _uiState.value.copy(status = "Idle", error = gate.message)
                 return@launch
             }
+            _uiState.value = _uiState.value.copy(status = "Applying…", error = null)
             // configfs is root-only, so HidCapability (app process) cannot see it; ask the
             // daemon instead of refusing on a value that cannot be read.
             if (toolBox.shell("[ -d /config/usb_gadget ]").lastOrNull()?.success != true) {

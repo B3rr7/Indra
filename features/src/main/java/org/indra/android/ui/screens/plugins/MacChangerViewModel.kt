@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.indra.android.core.system.MacAddress
 import org.indra.android.core.system.SmartToolBox
+import org.indra.android.core.system.ToolHandle
 import org.indra.android.core.system.isStreaming
 import org.indra.android.core.system.streamedLine
 import javax.inject.Inject
@@ -122,12 +123,6 @@ class MacChangerViewModel
                 _uiState.value = st.copy(error = "MAC must look like aa:bb:cc:dd:ee:ff")
                 return
             }
-            val runner = toolBox.getTool("shell")
-            if (runner == null || !runner.isAvailable()) {
-                _uiState.value = st.copy(error = "Native daemon not available")
-                return
-            }
-            _uiState.value = st.copy(isRunning = true, error = null, output = emptyList())
             // The script runs through /system/bin/sh as root, so both fields are quoted.
             val qu = SmartToolBox.shellQuote(iface)
             val cmd =
@@ -135,6 +130,12 @@ class MacChangerViewModel
                     "ip link set $qu up"
             job =
                 viewModelScope.launch {
+                    val gate = toolBox.requireTool("shell")
+                    if (gate !is ToolHandle.Ready) {
+                        _uiState.value = _uiState.value.copy(error = gate.message)
+                        return@launch
+                    }
+                    _uiState.value = _uiState.value.copy(isRunning = true, error = null, output = emptyList())
                     toolBox.shell(cmd).collect { result ->
                         if (result.pid > 0) pid = result.pid
                         result.streamedLine?.let { line ->

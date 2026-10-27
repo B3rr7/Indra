@@ -12,7 +12,15 @@ class SettingsRepository
     constructor(
         @ApplicationContext private val context: Context,
     ) {
-        private val prefs: SharedPreferences = context.getSharedPreferences("indra_prefs", Context.MODE_PRIVATE)
+        companion object {
+            /** Shared-preferences file holding every setting in this class. */
+            const val PREFS_NAME = "indra_prefs"
+
+            /** File-logging toggle; `IndraApplication` reads it off the main thread at startup. */
+            const val KEY_FILE_LOGGING = "PREF_DEBUG_ERROR_LOGGING"
+        }
+
+        private val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
         var httpProxyPort: Int
             get() = prefs.getString("PREF_HTTP_PROXY_PORT", "8080")?.toIntOrNull() ?: 8080
@@ -53,8 +61,8 @@ class SettingsRepository
             set(value) = prefs.edit().putBoolean("PREF_WAKE_LOCK", value).apply()
 
         var debugErrorLogging: Boolean
-            get() = prefs.getBoolean("PREF_DEBUG_ERROR_LOGGING", false)
-            set(value) = prefs.edit().putBoolean("PREF_DEBUG_ERROR_LOGGING", value).apply()
+            get() = prefs.getBoolean(KEY_FILE_LOGGING, false)
+            set(value) = prefs.edit().putBoolean(KEY_FILE_LOGGING, value).apply()
 
         /** Endpoint of the signed OTA manifest (production default; overridable for LAN testing). */
         var otaManifestUrl: String
@@ -88,6 +96,10 @@ class SettingsRepository
         get() = prefs.getString("BETTERCAP_URL", "") ?: ""
         set(value) = prefs.edit().putString("BETTERCAP_URL", value).apply()
 
-    val corePath: String = context.filesDir.absolutePath
+    // Deferred: `context.filesDir` creates the app's files directory (`ensurePrivateDirExists`),
+    // which StrictMode reports as a DiskReadViolation. Constructing this repository happens on
+    // Main whenever a screen's ViewModel injects it, so resolving the path here must not touch
+    // disk; the first real use is a daemon/file operation on Dispatchers.IO.
+    val corePath: String by lazy { context.filesDir.absolutePath }
         val sessionName: String = "indra-session-${System.currentTimeMillis()}"
     }

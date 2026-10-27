@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import org.indra.android.core.system.NetworkHelper
 import org.indra.android.core.system.SmartToolBox
+import org.indra.android.core.system.ToolHandle
 import org.indra.android.core.system.ToolResult
 import org.indra.android.core.system.streamedLine
 import org.indra.android.data.repository.NetworkRepository
@@ -64,15 +65,13 @@ class PortScannerViewModel
 
         fun scan() {
             viewModelScope.launch {
-                _uiState.value = _uiState.value.copy(isLoading = true, error = null, results = emptyList(), liveLines = emptyList())
-
                 try {
-                    val nmapTool = toolBox.getTool("nmap")
-                    if (nmapTool == null || !nmapTool.isAvailable()) {
+                    val gate = toolBox.requireTool("nmap")
+                    if (gate !is ToolHandle.Ready) {
                         _uiState.value =
                             _uiState.value.copy(
                                 isLoading = false,
-                                error = "NMap handler is not available. Install the core and start the daemon in Settings.",
+                                error = gate.message,
                             )
                         return@launch
                     }
@@ -81,6 +80,8 @@ class PortScannerViewModel
                         _uiState.value = _uiState.value.copy(isLoading = false, error = "Enter a target host")
                         return@launch
                     }
+
+                    _uiState.value = _uiState.value.copy(isLoading = true, error = null, results = emptyList(), liveLines = emptyList())
 
                     toolBox.nmap(_uiState.value.target, _uiState.value.portRange).collect { toolResult ->
                         if (toolResult.status == "running") {

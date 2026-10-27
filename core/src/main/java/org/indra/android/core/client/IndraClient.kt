@@ -7,6 +7,26 @@ import javax.inject.Singleton
 class IndraClient
     @Inject
     constructor() {
+        /**
+         * True after [startCommand] was rejected.
+         *
+         * The native `connected` flag is only cleared by an explicit [disconnect], never when
+         * the peer dies (the reader thread just exits), so `isConnected()` keeps answering
+         * true for a daemon that was killed or crashed. A command the daemon refused to start
+         * is the honest liveness signal available without a native rebuild; a successful
+         * reconnect clears it.
+         */
+        @Volatile
+        private var startFailed = false
+
+        /** Records the outcome of a start attempt: `false` means nothing ran. */
+        fun noteStartResult(started: Boolean) {
+            startFailed = !started
+        }
+
+        /** True when the last start attempt failed, i.e. the daemon no longer answers. */
+        fun hasStartFailed(): Boolean = startFailed
+
         companion object {
             private var librariesLoaded = false
 

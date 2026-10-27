@@ -15,6 +15,25 @@ Follow-up to the full-codebase analysis (`develop`, graph gen `2026-10-24`). Ord
 - [x] **T9 — `AGENTS.md` refresh** (5-module layout, SDK 35, real tool list, detekt, new gotchas).
 - [x] **T10 — Extend detekt to all five modules.** Shared root `detekt.yml` (moved from `indra/`); `io.gitlab.arturbosch.detekt` applied in `core`, `data`, `ui`, `features`, `indra`; per-module `detekt-baseline.xml` generated (`./gradlew detektBaseline`); `./gradlew detekt` is green across the repo. Note: pre-existing state had `:indra:detekt` failing with 24 unsuppressed issues (its baseline file was never wired in) — that is fixed. detekt is intentionally not attached to `assembleDebug`; run it (or `check`) in CI.
 
+## Phase 2.6 — Deep audit remediation (2026-10-26) 🔄 SPRINT 1 DONE + DEVICE-VERIFIED
+
+Full-tree audit (Kotlin 18.8k LOC + 8.4k LOC native C, graph gen `2026-10-26`). The
+execution plan — workstreams, acceptance criteria, verification steps, sprint order and
+the ordered TODO — lives in **[`docs/plan/2026-10-26-audit-remediation.md`](docs/plan/2026-10-26-audit-remediation.md)**.
+
+Headline items (do not duplicate detail here):
+
+- [x] **WS-1 (P0)** Done and **device-verified (2026-10-27, moto g60)**: `SmartToolBox.requireTool()` + sealed `ToolHandle` replaced all 27 Main-thread `isAvailable()` gates (26 plugin VMs + Terminal), `TtlProbe` rate-limits the JNI probe to 1 s, `startDaemon()`/`stopDaemon()` are bounded at 20 s with `destroyForcibly()`, `Logger` writes through a drop-oldest channel off the JNI thread, and debug builds install StrictMode. The sweep found 13 cold-start violations the code review missed (prefs, log-file probe, crash-log sweep, `System.loadLibrary`, `filesDir`) — all moved to an IO `startupScope`, re-measured at **0** across cold start, a tab sweep, the gate path, daemon start/stop and a 10 000-line Terminal run.
+- [x] **Honest card/gate states** (sweep finding): `PluginAvailability.PluginStatus` names the real blocker instead of one "not in native core" label; a down daemon keeps its card openable so the screen's gate can explain the fix; `SmartToolBox.isDaemonConnected()` + `IndraClient.startFailed` catch a daemon that died under a running app (the native `connected` flag never clears).
+- [ ] **WS-2 (P1)** `VulnScanner` / `WebTester` / `ExploitFinder` collapse a whole transcript into one 500-char "finding"; `Topology` has no data source at all.
+- [ ] **WS-3 (P1)** 36 hand-rolled `Scaffold`+`TopAppBar`s and 14 copy-pasted `refreshSuggestions()`; the 6 shared `ui` components have **0** call sites.
+- [x] **WS-4 (P0)** Done (`4.1`): the app is deliberately dark-only, and the window theme now agrees — dark `android:Theme.Material.NoActionBar` with `windowLightStatusBar=false`, `values-night` theme/splash deleted, `SystemBarStyle.dark(TRANSPARENT)` on both bars. Verified with the system in light mode.
+- [ ] **WS-5 (P1)** Suggestion chips in a non-scrollable `Row` ×14 over a never-shrinking singleton host list; zero `rememberSaveable`/`SavedStateHandle`.
+- [ ] **WS-6/9 (P2)** Dead API/DI scope/models, 5 unused Gradle deps, 5 unused permissions, 2 parallel plugin registries, 173 hardcoded strings (dead `strings.xml`).
+- [ ] **WS-7 (P1)** No foreground service for 30-minute tools; daemon auth is a static `DEADBEEF` compared in plaintext with a `0666` socket.
+- [ ] **WS-8 (P1)** Zero tests in `features` (4.5k LOC of ViewModels) and 389 detekt suppressions; no `testTag`s.
+- [ ] **WS-10 (P2)** No adaptive layout (no `WindowSizeClass`) despite `resizeableActivity`, targetSdk 35.
+
 Derived from the deep comparison with StrykerOSS (`/home/rana/strykerapp`).
 Goal: make Indra a **better, easier-to-use pentest tool than cSploit ever was**, and competitive with StrykerOSS, while keeping its modern architecture and lightweight core.
 

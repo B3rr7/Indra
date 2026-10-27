@@ -1,8 +1,10 @@
 package org.indra.android
 
+import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -66,8 +68,16 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        // Indra is dark-only (see IndraTheme), so the bars are pinned to dark in every system
+        // mode: SystemBarStyle.dark keeps the icons light regardless of the device theme.
+        // Without this, a light-mode device painted dark status-bar icons over our dark surface.
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
+        )
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            // BottomNavBar draws its own color to the bottom edge; stop the platform adding
+            // a translucent scrim behind the three-button navigation bar.
             window.isNavigationBarContrastEnforced = false
         }
 

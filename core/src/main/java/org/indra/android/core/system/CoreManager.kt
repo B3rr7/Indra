@@ -3,8 +3,10 @@ package org.indra.android.core.system
 import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
@@ -33,6 +35,16 @@ class CoreManager
 
             /** Core archive bundled in assets (produced by `indra/jni/build.sh cores`). */
             private const val CORE_ASSET_PREFIX = "core-"
+
+            /**
+             * How long [startDaemon] waits for the `su` handshake before giving up.
+             *
+             * `indrad` double-forks: the parent exits once the child has bound the socket,
+             * so a healthy start returns in well under a second. Without a bound, a `su`
+             * that never answers (root prompt denied, hung Magisk) blocked the daemon mutex
+             * — and therefore every later Start/Stop — forever.
+             */
+            private const val DAEMON_START_TIMEOUT_MS = 20_000L
 
             /** Picks the bundled core archive matching this device's primary ABI. */
             private fun coreAssetName(): String {
@@ -538,12 +550,30 @@ class CoreManager
                                     .redirectErrorStream(true)
                                     .start()
                             }
-                        val output =
-                            process.inputStream
-                                .bufferedReader()
-                                .use { it.readText() }
-                                .trim()
-                        val exitCode = process.waitFor()
+                        // Bounded handshake: read the child's output and wait for it with a
+                        // deadline instead of blocking the daemon mutex forever (see
+                        // DAEMON_START_TIMEOUT_MS). runInterruptible makes the blocking
+                        // stream read/`waitFor` cancellable by the timeout.
+                        val captured = StringBuilder()
+                        val exitCode =
+                            withTimeoutOrNull(DAEMON_START_TIMEOUT_MS) {
+                                runInterruptible(Dispatchers.IO) {
+                                    process.inputStream.bufferedReader().use { reader ->
+                                        reader.forEachLine { captured.appendLine(it) }
+                                    }
+                                }
+                                runInterruptible(Dispatchers.IO) { process.waitFor() }
+                            }
+
+                        if (exitCode == null) {
+                            process.destroyForcibly()
+                            val partial = captured.toString().trim()
+                            error(
+                                "Daemon did not start within ${DAEMON_START_TIMEOUT_MS}ms" +
+                                    (if (partial.isNotEmpty()) ": $partial" else ""),
+                            )
+                        }
+                        val output = captured.toString().trim()
 
                         if (exitCode != 0 || !File(socketPath).exists()) {
                             error("Daemon failed to start (exit=$exitCode)${if (output.isNotEmpty()) ": $output" else ""}")
@@ -597,7 +627,15 @@ class CoreManager
                                 "-c",
                                 "for p in \$(pidof $DAEMON_NAME); do kill \$p; done",
                             ).redirectErrorStream(true).start()
-                        process.waitFor()
+                        // Same hazard as startDaemon(): a `su` that never answers must not
+                        // hold the daemon mutex forever. The socket probe below is the
+                        // authority on whether the daemon actually stopped.
+                        process.inputStream.close()
+                        val finished =
+                            withTimeoutOrNull(DAEMON_START_TIMEOUT_MS) {
+                                runInterruptible(Dispatchers.IO) { process.waitFor() }
+                            }
+                        if (finished == null) process.destroyForcibly()
                     }
 
                     repeat(20) {
@@ -631,6 +669,8 @@ class CoreManager
             if (!client.isAuthenticated() && !client.login(DAEMON_USER, DAEMON_PASSWORD)) {
                 error("Daemon authentication failed")
             }
+            // Fresh socket + auth: whatever a previous start failure meant, the daemon answers now.
+            client.noteStartResult(true)
             if (!client.loadHandlers()) {
                 Logger.w("Daemon did not report any handlers")
             }

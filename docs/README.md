@@ -2,6 +2,12 @@
 
 Per-feature notes and gotchas. See `AGENTS.md` for the full project overview and `IMPROVEMENT_PLAN.md` for the roadmap.
 
+Dated execution plans live in `docs/plan/` — newest first:
+
+| Plan | Scope |
+|---|---|
+| [`plan/2026-10-26-audit-remediation.md`](plan/2026-10-26-audit-remediation.md) | Full-tree audit remediation: threading, honest results, UI consolidation, theming, tests, hygiene |
+
 ## Screens
 - **Home** — network status hero (tappable → Network Radar), tool grid.
 - **Tools** — plugin cards with availability badges + per-card OTA update.

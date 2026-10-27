@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.indra.android.core.system.NetworkHelper
 import org.indra.android.core.system.SmartToolBox
+import org.indra.android.core.system.ToolHandle
 import org.indra.android.core.system.isStreaming
 import org.indra.android.core.system.streamedLine
 import org.indra.android.data.repository.NetworkRepository
@@ -57,17 +58,18 @@ class LoginCrackerViewModel
         fun crack() {
             viewModelScope.launch {
                 val state = _uiState.value
-                _uiState.value = state.copy(isLoading = true, error = null, result = "")
 
-                val runner = toolBox.getTool("raw")
-                if (runner == null || !runner.isAvailable()) {
+                val gate = toolBox.requireTool("raw")
+                if (gate !is ToolHandle.Ready) {
                     _uiState.value =
                         _uiState.value.copy(
                             isLoading = false,
-                            error = "Native daemon not available",
+                            error = gate.message,
                         )
                     return@launch
                 }
+
+                _uiState.value = state.copy(isLoading = true, error = null, result = "")
 
                 val output = StringBuilder()
                 var failure: String? = null

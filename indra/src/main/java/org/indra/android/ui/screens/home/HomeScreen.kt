@@ -130,7 +130,7 @@ fun HomeScreen(
                             icon = Icons.Default.Radar,
                             label = "Network Scan",
                             onClick = { onNavigateToPlugin("port_scanner") },
-                            enabled = uiState.plugins.find { it.id == "port_scanner" }?.available ?: true,
+                            enabled = uiState.plugins.find { it.id == "port_scanner" }?.openable ?: true,
                         )
                     }
                     item {
@@ -138,7 +138,7 @@ fun HomeScreen(
                             icon = Icons.Default.DeviceHub,
                             label = "Inspect",
                             onClick = { onNavigateToPlugin("inspector") },
-                            enabled = uiState.plugins.find { it.id == "inspector" }?.available ?: true,
+                            enabled = uiState.plugins.find { it.id == "inspector" }?.openable ?: true,
                         )
                     }
                     item {
@@ -146,7 +146,7 @@ fun HomeScreen(
                             icon = Icons.Default.Timeline,
                             label = "Trace Route",
                             onClick = { onNavigateToPlugin("traceroute") },
-                            enabled = uiState.plugins.find { it.id == "traceroute" }?.available ?: true,
+                            enabled = uiState.plugins.find { it.id == "traceroute" }?.openable ?: true,
                         )
                     }
                     item {
@@ -155,7 +155,7 @@ fun HomeScreen(
                             label = "MITM Attack",
                             onClick = { onNavigateToPlugin("mitm") },
                             accentColor = StatusRed,
-                            enabled = uiState.plugins.find { it.id == "mitm" }?.available ?: true,
+                            enabled = uiState.plugins.find { it.id == "mitm" }?.openable ?: true,
                         )
                     }
                     item {
@@ -164,7 +164,7 @@ fun HomeScreen(
                             label = "Vuln Scan",
                             onClick = { onNavigateToPlugin("vuln_scanner") },
                             accentColor = StatusOrange,
-                            enabled = uiState.plugins.find { it.id == "vuln_scanner" }?.available ?: true,
+                            enabled = uiState.plugins.find { it.id == "vuln_scanner" }?.openable ?: true,
                         )
                     }
                 }
@@ -175,7 +175,9 @@ fun HomeScreen(
                 SectionTitle(
                     title = "Security Tools",
                     icon = Icons.Default.Build,
-                    subtitle = "${uiState.plugins.size} modules available",
+                    // Not "N modules available": with the daemon stopped that count is false.
+                    // Cards carry their own status label, so this only counts modules.
+                    subtitle = "${uiState.plugins.size} modules",
                 )
             }
 
@@ -436,7 +438,8 @@ fun ModernToolCard(
 
     Card(
         onClick = onClick,
-        enabled = plugin.available,
+        // A stopped daemon is still worth opening: the screen says how to start it.
+        enabled = plugin.openable,
         modifier =
             modifier
                 .fillMaxWidth()
@@ -473,7 +476,7 @@ fun ModernToolCard(
                         imageVector = getToolIcon(plugin.id),
                         contentDescription = null,
                         modifier = Modifier.size(22.dp),
-                        tint = if (plugin.available) toolColor else toolColor.copy(alpha = 0.4f),
+                        tint = if (plugin.openable) toolColor else toolColor.copy(alpha = 0.4f),
                     )
                 }
                 Row(
@@ -515,11 +518,8 @@ fun ModernToolCard(
                 )
                 Text(
                     text =
-                        if (plugin.available) {
-                            plugin.description
-                        } else {
-                            "${plugin.description} · not in native core"
-                        },
+                        plugin.statusLabel?.let { "${plugin.description} · $it" }
+                            ?: plugin.description,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,

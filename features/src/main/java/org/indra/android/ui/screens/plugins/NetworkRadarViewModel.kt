@@ -13,6 +13,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.indra.android.core.system.NeighborTable
 import org.indra.android.core.system.SmartToolBox
+import org.indra.android.core.system.ToolHandle
 import org.indra.android.core.system.isStreaming
 import org.indra.android.core.system.streamedLine
 import org.indra.android.data.repository.NetworkRepository
@@ -98,17 +99,15 @@ class NetworkRadarViewModel
                 return
             }
 
-            val runner = toolBox.getTool("raw")
-            if (runner == null || !runner.isAvailable()) {
-                _uiState.value = _uiState.value.copy(error = "Native daemon not available")
-                return
-            }
-
-            _uiState.value =
-                _uiState.value.copy(isActive = true, error = null, note = null, hosts = emptyList())
-
             job =
                 viewModelScope.launch {
+                    val gate = toolBox.requireTool("raw")
+                    if (gate !is ToolHandle.Ready) {
+                        _uiState.value = _uiState.value.copy(error = gate.message)
+                        return@launch
+                    }
+                    _uiState.value =
+                        _uiState.value.copy(isActive = true, error = null, note = null, hosts = emptyList())
                     // Seed before the sweep: the kernel already knows who answered on the
                     // link, so hosts show up immediately instead of after a sweep that may
                     // not even be able to run.

@@ -11,6 +11,7 @@ import kotlinx.coroutines.launch
 import org.indra.android.core.system.ArsenalRepository
 import org.indra.android.core.system.ArsenalTemplate
 import org.indra.android.core.system.SmartToolBox
+import org.indra.android.core.system.ToolHandle
 import org.indra.android.core.system.isStreaming
 import org.indra.android.core.system.streamedLine
 import java.util.UUID
@@ -104,14 +105,14 @@ class ArsenalViewModel
                     "MASK" to st.mask,
                 )
             val cmd = repo.substitute(t, vars)
-            val runner = toolBox.getTool("shell")
-            if (runner == null || !runner.isAvailable()) {
-                _uiState.value = st.copy(error = "Native daemon not available")
-                return
-            }
-            _uiState.value = st.copy(runningId = id, output = emptyList(), error = null)
             job =
                 viewModelScope.launch {
+                    val gate = toolBox.requireTool("shell")
+                    if (gate !is ToolHandle.Ready) {
+                        _uiState.value = _uiState.value.copy(error = gate.message)
+                        return@launch
+                    }
+                    _uiState.value = _uiState.value.copy(runningId = id, output = emptyList(), error = null)
                     toolBox.shell(cmd).collect { result ->
                         if (result.pid > 0) pid = result.pid
                         result.streamedLine?.let { line ->

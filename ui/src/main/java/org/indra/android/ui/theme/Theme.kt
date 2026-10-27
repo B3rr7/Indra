@@ -67,6 +67,16 @@ private val DarkColorScheme =
         scrim = IndraScrimDark,
     )
 
+/**
+ * Indra's Material 3 theme.
+ *
+ * The app is **dark-only** by product decision: [darkTheme] defaults to `true` and the window
+ * theme (`res/values/themes.xml`, parent `android:Theme.Material.NoActionBar`) plus
+ * `MainActivity.enableEdgeToEdge(SystemBarStyle.dark(...))` pin the system bars to match.
+ * Light colors exist only for a future appearance preference (see the audit plan, task 4.2) —
+ * do not default to `isSystemInDarkTheme()`, or the Compose surface and the window theme
+ * disagree on a light-mode device and the system-bar icons become unreadable.
+ */
 @Composable
 fun IndraTheme(
     darkTheme: Boolean = true,

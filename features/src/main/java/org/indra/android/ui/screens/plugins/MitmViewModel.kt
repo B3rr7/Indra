@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.indra.android.core.system.NetworkHelper
 import org.indra.android.core.system.SmartToolBox
+import org.indra.android.core.system.ToolHandle
 import org.indra.android.core.system.isStreaming
 import org.indra.android.core.system.streamedLine
 import org.indra.android.data.repository.NetworkRepository
@@ -114,22 +115,20 @@ class MitmViewModel
                 return
             }
 
-            val runner = toolBox.getTool("raw")
-            if (runner == null || !runner.isAvailable()) {
-                _uiState.value = state.copy(error = "Native daemon not available")
-                return
-            }
-
-            _uiState.value =
-                state.copy(
-                    isActive = true,
-                    error = null,
-                    log = listOf("arp spoof: $target via $gateway on $iface (root required)"),
-                    logCount = 1,
-                )
-
             job =
                 viewModelScope.launch {
+                    val gate = toolBox.requireTool("raw")
+                    if (gate !is ToolHandle.Ready) {
+                        _uiState.value = _uiState.value.copy(error = gate.message)
+                        return@launch
+                    }
+                    _uiState.value =
+                        _uiState.value.copy(
+                            isActive = true,
+                            error = null,
+                            log = listOf("arp spoof: $target via $gateway on $iface (root required)"),
+                            logCount = 1,
+                        )
                     toolBox.arpspoof(iface, target, gateway).collect { result ->
                         if (result.pid > 0) pid = result.pid
                         result.streamedLine?.let { raw ->

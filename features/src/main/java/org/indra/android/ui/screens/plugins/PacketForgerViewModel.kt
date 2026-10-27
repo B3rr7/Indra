@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import org.indra.android.core.system.NetworkHelper
 import org.indra.android.core.system.SmartToolBox
+import org.indra.android.core.system.ToolHandle
 import org.indra.android.core.system.isStreaming
 import org.indra.android.data.repository.NetworkRepository
 import java.io.File
@@ -83,18 +84,18 @@ class PacketForgerViewModel
 
         fun send() {
             viewModelScope.launch {
-                _uiState.value = _uiState.value.copy(isLoading = true, error = null, result = "")
-
                 try {
-                    val raw = toolBox.getTool("raw")
-                    if (raw == null || !raw.isAvailable()) {
+                    val gate = toolBox.requireTool("raw")
+                    if (gate !is ToolHandle.Ready) {
                         _uiState.value =
                             _uiState.value.copy(
                                 isLoading = false,
-                                error = "Native core is not running (raw handler unavailable)",
+                                error = gate.message,
                             )
                         return@launch
                     }
+
+                    _uiState.value = _uiState.value.copy(isLoading = true, error = null, result = "")
 
                     val state = _uiState.value
                     val args = StringBuilder()

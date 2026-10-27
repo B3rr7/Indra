@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.indra.android.core.system.SmartToolBox
+import org.indra.android.core.system.ToolHandle
 import org.indra.android.core.system.isStreaming
 import org.indra.android.core.system.streamedLine
 import javax.inject.Inject
@@ -50,14 +51,14 @@ class ReaverViewModel
                 _uiState.value = st.copy(error = "BSSID required")
                 return
             }
-            val runner = toolBox.getTool("reaver")
-            if (runner == null || !runner.isAvailable()) {
-                _uiState.value = st.copy(error = "reaver is not bundled")
-                return
-            }
-            _uiState.value = st.copy(isRunning = true, error = null, output = emptyList())
             job =
                 viewModelScope.launch {
+                    val gate = toolBox.requireTool("reaver")
+                    if (gate !is ToolHandle.Ready) {
+                        _uiState.value = _uiState.value.copy(error = gate.message)
+                        return@launch
+                    }
+                    _uiState.value = _uiState.value.copy(isRunning = true, error = null, output = emptyList())
                     toolBox.reaver(iface, bssid).collect { result ->
                         if (result.pid > 0) pid = result.pid
                         result.streamedLine?.let { line ->

@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.indra.android.core.system.SmartToolBox
+import org.indra.android.core.system.ToolHandle
 import org.indra.android.core.system.isStreaming
 import org.indra.android.core.system.streamedLine
 import javax.inject.Inject
@@ -42,14 +43,14 @@ class WifiScannerViewModel
                 _uiState.value.iface
                     .trim()
                     .ifEmpty { "wlan0" }
-            val runner = toolBox.getTool("shell")
-            if (runner == null || !runner.isAvailable()) {
-                _uiState.value = _uiState.value.copy(error = "Native daemon not available")
-                return
-            }
-            _uiState.value = _uiState.value.copy(isScanning = true, error = null, networks = emptyList())
             job =
                 viewModelScope.launch {
+                    val gate = toolBox.requireTool("shell")
+                    if (gate !is ToolHandle.Ready) {
+                        _uiState.value = _uiState.value.copy(error = gate.message)
+                        return@launch
+                    }
+                    _uiState.value = _uiState.value.copy(isScanning = true, error = null, networks = emptyList())
                     toolBox.shell("iw dev ${SmartToolBox.shellQuote(iface)} scan").collect { result ->
                         if (result.pid > 0) pid = result.pid
                         result.streamedLine?.let { line ->

@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.indra.android.core.system.SmartToolBox
+import org.indra.android.core.system.ToolHandle
 import org.indra.android.core.system.ToolResult
 import org.indra.android.core.system.isStreaming
 import org.indra.android.core.system.streamedLine
@@ -84,15 +85,14 @@ class WifiteViewModel
             if (job?.isActive == true) return
             val st = _uiState.value
             val iface = st.iface.trim().ifEmpty { "wlan0" }
-            val runner = toolBox.getTool("shell")
-            if (runner == null || !runner.isAvailable()) {
-                _uiState.value = st.copy(error = "Native daemon not available")
-                return
-            }
-            _uiState.value = st.copy(isRunning = true, error = null, output = emptyList(), stage = "monitor")
-
             job =
                 viewModelScope.launch {
+                    val gate = toolBox.requireTool("shell")
+                    if (gate !is ToolHandle.Ready) {
+                        _uiState.value = _uiState.value.copy(error = gate.message)
+                        return@launch
+                    }
+                    _uiState.value = _uiState.value.copy(isRunning = true, error = null, output = emptyList(), stage = "monitor")
                     val qu = SmartToolBox.shellQuote(iface)
 
                     // Each stage is reported from its child's exit status. The old code

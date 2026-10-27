@@ -10,6 +10,7 @@ import kotlinx.coroutines.launch
 import org.indra.android.core.system.CoreManager
 import org.indra.android.core.system.NetworkHelper
 import org.indra.android.core.system.SmartToolBox
+import org.indra.android.core.system.ToolHandle
 import org.indra.android.core.system.isStreaming
 import org.indra.android.core.system.streamedLine
 import org.indra.android.data.repository.NetworkRepository
@@ -94,12 +95,12 @@ class GobusterViewModel
                         st.copy(error = "Gobuster is not installed. Provide a binary URL and tap Install.")
                     return@launch
                 }
-                val runner = toolBox.getTool("gobuster")
-                if (runner == null || !runner.isAvailable()) {
-                    _uiState.value = st.copy(error = "Native daemon not available")
+                val gate = toolBox.requireTool("gobuster")
+                if (gate !is ToolHandle.Ready) {
+                    _uiState.value = _uiState.value.copy(error = gate.message)
                     return@launch
                 }
-                _uiState.value = st.copy(isLoading = true, error = null, output = emptyList())
+                _uiState.value = _uiState.value.copy(isLoading = true, error = null, output = emptyList())
                 val wl = st.wordlist.trim().ifBlank { toolBox.defaultDirWordlist() }
                 val ext = st.extensions.trim()
                 val args = buildString {

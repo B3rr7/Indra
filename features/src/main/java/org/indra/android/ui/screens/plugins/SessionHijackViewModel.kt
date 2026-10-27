@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.indra.android.core.system.SmartToolBox
+import org.indra.android.core.system.ToolHandle
 import org.indra.android.core.system.isStreaming
 import org.indra.android.core.system.streamedLine
 import javax.inject.Inject
@@ -48,13 +49,13 @@ class SessionHijackViewModel @Inject constructor(
         if (job?.isActive == true) return
         val iface = _uiState.value.iface.trim().ifEmpty { "wlan0" }
         val filter = _uiState.value.filter.trim().ifEmpty { DEFAULT_HTTP_FILTER }
-        val runner = toolBox.getTool("raw")
-        if (runner == null || !runner.isAvailable()) {
-            _uiState.value = _uiState.value.copy(error = "Native daemon not available")
-            return
-        }
-        _uiState.value = _uiState.value.copy(isRunning = true, error = null, sessions = emptyList(), output = emptyList())
         job = viewModelScope.launch {
+            val gate = toolBox.requireTool("raw")
+            if (gate !is ToolHandle.Ready) {
+                _uiState.value = _uiState.value.copy(error = gate.message)
+                return@launch
+            }
+            _uiState.value = _uiState.value.copy(isRunning = true, error = null, sessions = emptyList(), output = emptyList())
             // stderr is kept: tcpdump's "SIOCGIFHWADDR: No such device" and its capture
             // summary are the only explanation a failing run gives, and ToolResult.error
             // carries the last output line.

@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import org.indra.android.core.system.NetworkHelper
 import org.indra.android.core.system.SmartToolBox
+import org.indra.android.core.system.ToolHandle
 import org.indra.android.data.repository.NetworkRepository
 import javax.inject.Inject
 
@@ -43,18 +44,18 @@ class RouterPwnViewModel
 
         fun scan() {
             viewModelScope.launch {
-                _uiState.value = _uiState.value.copy(isLoading = true, error = null, vulnerabilities = emptyList(), result = "")
-
                 try {
-                    val tool = toolBox.getTool("nmap")
-                    if (tool == null || !tool.isAvailable()) {
+                    val gate = toolBox.requireTool("nmap")
+                    if (gate !is ToolHandle.Ready) {
                         _uiState.value =
                             _uiState.value.copy(
                                 isLoading = false,
-                                error = "Native daemon not available",
+                                error = gate.message,
                             )
                         return@launch
                     }
+
+                    _uiState.value = _uiState.value.copy(isLoading = true, error = null, vulnerabilities = emptyList(), result = "")
 
                     val findings = LinkedHashMap<Int, RouterVulnerability>()
 

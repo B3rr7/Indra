@@ -11,7 +11,7 @@ import javax.inject.Singleton
  * offered it as available). Any availability rule change happens here and both
  * screens agree again.
  *
- * Threading: [isPluginAvailable] does blocking work (JNI handler probe via
+ * Threading: [pluginStatus] does blocking work (JNI handler probe via
  * [SmartToolBox.getTool] and `File.canExecute` artifact checks) — call it off the
  * main thread, e.g. inside `withContext(Dispatchers.IO)`.
  */
@@ -24,21 +24,63 @@ class PluginAvailability
         private val settings: SettingsRepository,
     ) {
         /**
+         * Why a plugin card is dimmed, in the user's terms.
+         *
+         * Home and Tools used to have one boolean, so a stopped daemon told the user
+         * "not in native core" for every tool — the one message that makes you go reinstall a
+         * core that is already installed. Each blocker now names itself, and [openable] keeps
+         * the daemon-down case tappable: the screen's own gate explains how to start it.
+         */
+        enum class PluginStatus(
+            val label: String?,
+            val openable: Boolean,
+        ) {
+            /** Runnable now. */
+            AVAILABLE(null, true),
+
+            /** Native daemon not running / not connected — temporary, the screen can explain. */
+            DAEMON_DOWN("daemon not running", true),
+
+            /** The installed core has no handler for this plugin. */
+            TOOL_MISSING("not in native core", false),
+
+            /** nuclei / gobuster / msf / iptables artifact not installed. */
+            ARTIFACT_MISSING("component not installed", false),
+
+            /** Needs raw sockets or root, but the user enabled rootless mode. */
+            NEEDS_ROOT("needs root", false),
+
+            /** Cannot work on Android no matter what is installed (e.g. Responder). */
+            UNSUPPORTED("not supported on Android", false),
+        }
+
+        /**
          * A plugin is usable when there is no known platform blocker AND its daemon
          * handler exists AND every extra artifact it needs (nuclei templates, gobuster,
          * msf, iptables) is installed, unless the user runs rootless and the plugin
          * needs root/raw sockets. The daemon-updater's "requires" key still decides
          * which binary an OTA update fetches; this only gates the card.
          */
-        // Guard clauses over a booleans product: five clear rules, failing fast.
-        @Suppress("ReturnCount")
-        fun isPluginAvailable(plugin: Plugin): Boolean {
-            if (!isFeasibleOnAndroid(plugin.id)) return false
-            if (toolBox.getTool(plugin.requires)?.isAvailable() != true) return false
-            if (!artifactInstalled(plugin.id)) return false
-            if (plugin.requiresRoot && settings.rootlessMode) return false
-            return true
+        // Guard clauses over a booleans product: clear rules, failing fast.
+        fun pluginStatus(plugin: Plugin): PluginStatus {
+            val tool = toolBox.getTool(plugin.requires)
+            val handlerReady = tool?.isAvailable() == true
+            // Liveness first: when the daemon dies its handler list stays cached inside the
+            // native client, so `isAvailable()` keeps answering true and every card looked
+            // runnable (or, before this, "not in native core").
+            return when {
+                !isFeasibleOnAndroid(plugin.id) -> PluginStatus.UNSUPPORTED
+                !toolBox.isDaemonConnected() -> PluginStatus.DAEMON_DOWN
+                tool == null -> PluginStatus.TOOL_MISSING
+                !handlerReady -> PluginStatus.TOOL_MISSING
+                !artifactInstalled(plugin.id) -> PluginStatus.ARTIFACT_MISSING
+                plugin.requiresRoot && settings.rootlessMode -> PluginStatus.NEEDS_ROOT
+                else -> PluginStatus.AVAILABLE
+            }
         }
+
+        /** Runnable now. Kept for callers that only need the boolean. */
+        fun isPluginAvailable(plugin: Plugin): Boolean = pluginStatus(plugin) == PluginStatus.AVAILABLE
 
         /** Optional artifacts that must be installed separately (File checks). */
         private fun artifactInstalled(id: String): Boolean =

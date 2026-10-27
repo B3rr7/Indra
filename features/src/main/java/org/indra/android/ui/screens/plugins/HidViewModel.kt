@@ -11,6 +11,7 @@ import kotlinx.coroutines.launch
 import org.indra.android.core.system.HidCapability
 import org.indra.android.core.system.HidReports
 import org.indra.android.core.system.SmartToolBox
+import org.indra.android.core.system.ToolHandle
 import org.indra.android.core.system.isStreaming
 import org.indra.android.core.system.streamedLine
 import javax.inject.Inject
@@ -45,12 +46,12 @@ class HidViewModel @Inject constructor(
         // 8-byte reports. /dev/hidg0 itself only exists once a hid.* function is bound to a
         // UDC, so the outcome is reported from the child's exit status instead of assumed.
         viewModelScope.launch {
-            _uiState.value = st.copy(status = "Typing…", error = null)
-            val runner = toolBox.getTool("shell")
-            if (runner == null || !runner.isAvailable()) {
-                _uiState.value = _uiState.value.copy(status = "Idle", error = "Native daemon not available")
+            val gate = toolBox.requireTool("shell")
+            if (gate !is ToolHandle.Ready) {
+                _uiState.value = _uiState.value.copy(status = "Idle", error = gate.message)
                 return@launch
             }
+            _uiState.value = _uiState.value.copy(status = "Typing…", error = null)
             // A missing /dev/hidg0 (no gadget bound to a UDC) is the common case; report it
             // instead of letting the write silently go nowhere.
             if (toolBox.shell("[ -e ${HidReports.DEVICE} ]").lastOrNull()?.success != true) {

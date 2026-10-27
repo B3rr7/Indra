@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.indra.android.core.system.NetworkHelper
 import org.indra.android.core.system.SmartToolBox
+import org.indra.android.core.system.ToolHandle
 import org.indra.android.core.system.isStreaming
 import org.indra.android.data.repository.NetworkRepository
 import javax.inject.Inject
@@ -53,17 +54,18 @@ class InspectorViewModel
         fun inspect() {
             viewModelScope.launch {
                 val target = _uiState.value.target.trim()
-                _uiState.value = _uiState.value.copy(isLoading = true, error = null, osInfo = "", services = emptyList())
 
-                val tool = toolBox.getTool("nmap")
-                if (tool == null || !tool.isAvailable()) {
+                val gate = toolBox.requireTool("nmap")
+                if (gate !is ToolHandle.Ready) {
                     _uiState.value =
                         _uiState.value.copy(
                             isLoading = false,
-                            error = "Native daemon not available",
+                            error = gate.message,
                         )
                     return@launch
                 }
+
+                _uiState.value = _uiState.value.copy(isLoading = true, error = null, osInfo = "", services = emptyList())
 
                 val services = LinkedHashMap<Int, ServiceInfo>()
                 var failure: String? = null // XML output carries service/version for every open port, and the

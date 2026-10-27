@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.indra.android.core.system.NetworkHelper
 import org.indra.android.core.system.SmartToolBox
+import org.indra.android.core.system.ToolHandle
 import org.indra.android.core.system.isStreaming
 import org.indra.android.core.system.streamedLine
 import org.indra.android.data.repository.NetworkRepository
@@ -77,12 +78,12 @@ class CredentialTesterViewModel
                     return@launch
                 }
 
-                val runner = toolBox.getTool("raw")
-                if (runner == null || !runner.isAvailable()) {
+                val gate = toolBox.requireTool("raw")
+                if (gate !is ToolHandle.Ready) {
                     _uiState.value =
-                        state.copy(
+                        _uiState.value.copy(
                             isLoading = false,
-                            error = "Native daemon not available",
+                            error = gate.message,
                         )
                     return@launch
                 }

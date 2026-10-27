@@ -10,6 +10,7 @@ import kotlinx.coroutines.launch
 import org.indra.android.core.system.CoreManager
 import org.indra.android.core.system.SettingsRepository
 import org.indra.android.core.system.SmartToolBox
+import org.indra.android.core.system.ToolHandle
 import org.indra.android.core.system.isStreaming
 import org.indra.android.core.system.streamedLine
 import javax.inject.Inject
@@ -67,9 +68,9 @@ class SearchSploitViewModel
                     _uiState.value = _uiState.value.copy(error = "ExploitDB is not installed. Configure a tarball URL and install first.")
                     return@launch
                 }
-                val runner = toolBox.getTool("shell")
-                if (runner == null || !runner.isAvailable()) {
-                    _uiState.value = _uiState.value.copy(error = "Native daemon not available")
+                val gate = toolBox.requireTool("shell")
+                if (gate !is ToolHandle.Ready) {
+                    _uiState.value = _uiState.value.copy(error = gate.message)
                     return@launch
                 }
                 _uiState.value = _uiState.value.copy(isLoading = true, error = null, results = emptyList())
