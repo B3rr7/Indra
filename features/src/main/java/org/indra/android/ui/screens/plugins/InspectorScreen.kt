@@ -8,12 +8,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.indra.android.ui.components.EmptyState
-import org.indra.android.ui.components.PluginScaffold
 import org.indra.android.ui.components.FormError
+import org.indra.android.ui.components.HostSuggestions
+import org.indra.android.ui.components.PluginScaffold
 
 @Composable
 fun InspectorScreen(
@@ -40,13 +40,10 @@ fun InspectorScreen(
                 singleLine = true,
             )
 
-            if (uiState.suggestions.isNotEmpty()) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    uiState.suggestions.forEach { s ->
-                        AssistChip(onClick = { viewModel.updateTarget(s) }, label = { Text(s, fontSize = 12.sp) })
-                    }
-                }
-            }
+            HostSuggestions(
+                hosts = uiState.suggestions,
+                onSelect = viewModel::updateTarget,
+            )
 
             Button(
                 onClick = { viewModel.inspect() },

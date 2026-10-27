@@ -7,13 +7,13 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.indra.android.core.system.Nuclei
 import org.indra.android.core.system.NucleiFinding
 import org.indra.android.core.system.NucleiSeverity
 import org.indra.android.ui.components.FormError
+import org.indra.android.ui.components.HostSuggestions
 import org.indra.android.ui.components.LiveOutputCard
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -52,13 +52,10 @@ fun VulnScannerScreen(
                 singleLine = true,
             )
 
-            if (uiState.suggestions.isNotEmpty()) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    uiState.suggestions.forEach { s ->
-                        AssistChip(onClick = { viewModel.updateTarget(s) }, label = { Text(s, fontSize = 12.sp) })
-                    }
-                }
-            }
+            HostSuggestions(
+                hosts = uiState.suggestions,
+                onSelect = viewModel::updateTarget,
+            )
 
             Button(
                 onClick = { viewModel.scan() },

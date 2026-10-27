@@ -303,7 +303,27 @@ baseline shrunk; CI produces a debug artifact.
     (`Packets · running` while streaming, auto-followed, `Captured (500 lines)` after Stop at the
     cap), WiFi Scanner (placeholder `The scan did not complete` + the `iw` error line), Port
     Scanner (160 dp live console + neutral `No open ports in 1-9000`), 0 StrictMode violations.
-- [ ] 5.1 `HostSuggestions` (FlowRow, capped) on 14 screens — M
+- [x] 5.1 `HostSuggestions` (FlowRow, capped) on 14 screens — M. `ui/components/HostSuggestions.kt`
+  replaces the identical non-scrollable `Row { AssistChip }` block on Credential Tester, Exploit
+  Finder, Gobuster, Inspector, Login Cracker, Masscan, MITM, One-Tap MITM, Packet Forger, Port
+  Scanner, RouterPwn, Traceroute, Vulnerability Scanner and Web Tester:
+  - `FlowRow` wraps instead of clipping, so a long host list no longer runs off the right edge
+    (the 5.1 bug: chips past the screen width were unreachable).
+  - At most `MAX_VISIBLE_HOST_SUGGESTIONS` (8) chips; the rest sit behind a `+N more`
+    `DropdownMenu`. The split is the pure `HostSuggestionLayout` in `core/system`, unit-tested by
+    `HostSuggestionLayoutTest` (7 tests: empty, under, exactly at, one past, 20 hosts, order
+    preserved, explicit cap).
+  - Tap fills the field; long-press copies the host with a haptic tick. `AssistChip` has no
+    long-press slot, so the chip is a `Surface` + `combinedClickable` styled like an assist chip,
+    and it dims at Material's disabled alpha when `enabled = false` (Masscan / MITM / One-Tap MITM
+    pass `!isRunning`, as before).
+  - The `if (suggestions.isNotEmpty())` guard moved inside the component; each call site is now
+    three lines (`hosts`, `onSelect`, optional `enabled`).
+  Device-verified (moto g60): two real chips from the mobile-data interface, tap filled
+  `10.161.185.30`, long-press + paste yielded `10.161.185.29`; with 20 hosts temporarily seeded in
+  the VM (reverted before commit — no fake data shipped) the row wrapped to two lines as 7 chips +
+  `+15 more`, the menu listed 10.9.9.6 … 10.9.9.20, and tapping an entry filled the field. 0
+  StrictMode violations.
 - [ ] 5.2 Cap/expire `discoveredHosts` + clear action — S
 - [ ] 6.3 Remove unused permissions (unless 7.1) — S
 - [ ] Sprint 2 device pass: screenshots light+dark — M (in progress; the WS-2.1/2.2/2.3 screens
