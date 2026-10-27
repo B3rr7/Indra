@@ -13,6 +13,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import org.indra.android.ui.components.EmptyState
+import org.indra.android.ui.components.FormError
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -47,7 +49,7 @@ fun SessionHijackScreen(
             if (uiState.isRunning) {
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             }
-            Text("Captured sessions: ${uiState.sessions.size}", style = MaterialTheme.typography.titleSmall)
+            CapturedSessionsHeader(uiState)
             LazyColumn(
                 modifier = Modifier.weight(1f).fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -65,10 +67,42 @@ fun SessionHijackScreen(
                     }
                 }
             }
-            uiState.error?.let {
-                Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-            }
+            uiState.error?.let { FormError(it) }
         }
+    }
+}
+
+/**
+ * "Not capturing yet", "listening", "captured N" and "captured nothing" are four different
+ * states and the header used to collapse three of them into `Captured sessions: 0`.
+ */
+@Composable
+private fun CapturedSessionsHeader(uiState: SessionHijackUiState) {
+    when {
+        uiState.sessions.isNotEmpty() ->
+            Text(
+                text = "Captured sessions: ${uiState.sessions.size}",
+                style = MaterialTheme.typography.titleSmall,
+            )
+        uiState.isRunning ->
+            Text(
+                text = "Listening for Cookie headers on ${uiState.iface}…",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        uiState.hasRun && uiState.error == null ->
+            EmptyState(
+                text = "No sessions captured",
+                hint = "tcpdump ran with the filter above and saw no Cookie header. " +
+                    "Traffic from other devices only appears while you are in MITM position.",
+            )
+        uiState.hasRun -> Unit
+        else ->
+            Text(
+                text = "Not capturing yet — press Start.",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
     }
 }
 

@@ -21,6 +21,9 @@ data class PacketCaptureUiState(
     val saveToFile: Boolean = false,
     val capturePath: String = "",
     val isActive: Boolean = false,
+    /** True once a capture has been started, so a finished empty capture is not
+     *  reported as "not started yet" (and a pre-start header never reads "Captured (0 lines)"). */
+    val hasRun: Boolean = false,
     val monitorMode: Boolean = false,
     val monitorWarningShown: Boolean = false,
     val packets: List<String> = emptyList(),
@@ -136,7 +139,14 @@ class PacketCaptureViewModel
                         _uiState.value = _uiState.value.copy(error = gate.message)
                         return@launch
                     }
-                    _uiState.value = _uiState.value.copy(isActive = true, error = null, packets = emptyList(), packetCount = 0)
+                    _uiState.value =
+                        _uiState.value.copy(
+                            isActive = true,
+                            hasRun = true,
+                            error = null,
+                            packets = emptyList(),
+                            packetCount = 0,
+                        )
                     val outFile =
                         if (state.saveToFile) {
                             // The capture goes to the user-visible workspace

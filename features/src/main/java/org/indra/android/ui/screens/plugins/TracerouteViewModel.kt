@@ -18,6 +18,8 @@ data class TracerouteUiState(
     val target: String = "",
     val isLoading: Boolean = false,
     val hops: List<TracerouteHop> = emptyList(),
+    /** True once a trace finished — "not traced yet" and "traced, no hops" differ. */
+    val finished: Boolean = false,
     val error: String? = null,
     val suggestions: List<String> = emptyList(),
 )
@@ -68,7 +70,7 @@ class TracerouteViewModel
                     return@launch
                 }
 
-                _uiState.value = _uiState.value.copy(isLoading = true, error = null, hops = emptyList())
+                _uiState.value = _uiState.value.copy(isLoading = true, error = null, finished = false, hops = emptyList())
 
                 // Hops arrive line by line while the tool runs; the final result repeats
                 // the whole capture, so only live lines are parsed (keyed by hop number
@@ -94,13 +96,12 @@ class TracerouteViewModel
                 _uiState.value =
                     _uiState.value.copy(
                         isLoading = false,
+                        finished = true,
                         hops = hops.values.toList(),
-                        error =
-                            failure ?: if (hops.isEmpty() && target.isNotEmpty()) {
-                                "No hops reported"
-                            } else {
-                                null
-                            },
+                        // A completed trace with no hop lines is a result, not a failure: the
+                        // screen says so in a neutral empty state. Only the tool's own error
+                        // is an error.
+                        error = failure,
                     )
             }
         }

@@ -13,6 +13,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import org.indra.android.ui.components.EmptyState
+import org.indra.android.ui.components.FormError
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -88,6 +90,13 @@ fun InspectorScreen(
                         )
                     }
                 }
+            } else if (uiState.finished && uiState.error == null && uiState.services.isNotEmpty()) {
+                // nmap ran the OS probes and matched nothing. That is different from "no open
+                // ports" and different again from "could not look" — say which one it is.
+                EmptyState(
+                    text = "No OS match",
+                    hint = "nmap fingerprinted ${uiState.services.size} open services but reported no OS class.",
+                )
             }
 
             if (uiState.services.isNotEmpty()) {
@@ -121,15 +130,16 @@ fun InspectorScreen(
                         }
                     }
                 }
-            }
-
-            if (uiState.error != null) {
-                Text(
-                    text = uiState.error!!,
-                    color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodySmall,
+            } else if (uiState.finished && uiState.error == null) {
+                EmptyState(
+                    text = "No open ports found",
+                    hint =
+                        "nmap scanned 1-1000 on ${uiState.target} and reported nothing open — " +
+                            "a host with no open ports also gets no OS fingerprint.",
                 )
             }
+
+            uiState.error?.let { FormError(it) }
         }
     }
 }

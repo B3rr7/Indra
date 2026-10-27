@@ -250,7 +250,25 @@ baseline shrunk; CI produces a debug artifact.
   "nuclei exited with code 1"), exit 1 with no recognised finding line is an explicit failure,
   and any other non-zero keeps the tool error. Zero findings renders "No findings", never a
   fabricated result row; a failed run renders the error and *no* findings verdict
-- [ ] 2.5 Screen-by-screen empty-state audit (null vs 0) — M
+- [x] 2.5 Screen-by-screen empty-state audit (null vs 0) — M. Six screens reported "could not
+  look" and "looked, found nothing" the same way (or the reverse). Each now carries a `finished`
+  (or `hasRun`) flag so the UI can tell the two apart, and a real zero renders a neutral empty
+  state instead of a red error or silence:
+  - **Port Scanner**: zero open ports was `error = "No open ports found"` (red, reads like a
+    failure) → neutral `No open ports in <range>` once `finished`.
+  - **Traceroute**: zero hops was `error = "No hops reported"` → neutral empty state.
+  - **Inspector**: `osInfo` doubled as a message field (`osInfo = "No open ports found"`), so
+    "no open ports" and "no OS match" were the same string, and both were indistinguishable from
+    "not inspected yet" → `finished` plus two separate empty states (a host with no open ports
+    gets no OS fingerprint, which is not the same as a failed fingerprint).
+  - **Session Hijack**: the header printed `Captured sessions: 0` before anything ran →
+    four states (not started / listening / captured N / captured nothing).
+  - **Packet Capture**: the header printed `Captured (0 lines)` before Start →
+    "Not capturing yet", and a finished capture with no lines now says so.
+  - **WiFi Scanner**: a zero-result scan rendered nothing at all → `finished` + neutral
+    "No networks found" and an "The scan did not complete" variant.
+  Audit table (all 36 plugin screens) and the remaining silent consoles are recorded in
+  [`docs/audit/2026-10-27-empty-states.md`](../audit/2026-10-27-empty-states.md)
 - [ ] 3.1 `PluginScaffold` + 3 pilot screens — M
 - [~] 3.3 `LiveOutputCard` / `EmptyState` / `FormError` added in `ui/components/OutputConsole.kt`
   and used by the three WS-2.1 screens; migrating the remaining hand-rolled consoles/error lines
@@ -271,6 +289,14 @@ Device-pass findings (Sprint 2):
   included — so `chroot` cannot exec anything. `installAlpine` only sets `bin/sh` executable and
   that symlink target did not survive either; the extractor needs to restore tar modes (or a
   recursive `chmod` post-pass). Not fixed in Sprint 2 (it belongs with the Alpine/WS-7 work).
+- **WiFi Scanner cannot run on the tested device** (`2.5` sweep, still open): the screen runs
+  `iw dev <iface> scan` through `shell`, but neither the native core (tools list: aircrack-ng,
+  arpspoof, ettercap, fusemounts, gobuster, hping3, hydra, masscan, network-radar, nmap, reaver,
+  tcpdump) nor the ROM ships `iw` — every scan dies with
+  `shell exited with code 127: /system/bin/sh: iw: inaccessible or not found`, while the plugin
+  card stays openable because `requires = "shell"` is satisfied. The empty state now says
+  "The scan did not complete" with that error, which is honest, but the feature needs `iw`
+  bundled (Phase 2 rule: ship the binary) or a different scanner. Not fixed in `2.5`.
 
 ### Sprint 3 — consolidation
 - [ ] 3.2 Migrate remaining 33 screens to `PluginScaffold` — L

@@ -17,8 +17,11 @@ import javax.inject.Inject
 data class InspectorUiState(
     val target: String = "",
     val isLoading: Boolean = false,
+    /** OS guesses, one per line. Blank means "no match reported", never "not inspected". */
     val osInfo: String = "",
     val services: List<ServiceInfo> = emptyList(),
+    /** True once a scan finished — the screen needs it to tell "nothing yet" from "found nothing". */
+    val finished: Boolean = false,
     val error: String? = null,
     val suggestions: List<String> = emptyList(),
 )
@@ -65,7 +68,14 @@ class InspectorViewModel
                     return@launch
                 }
 
-                _uiState.value = _uiState.value.copy(isLoading = true, error = null, osInfo = "", services = emptyList())
+                _uiState.value =
+                    _uiState.value.copy(
+                        isLoading = true,
+                        error = null,
+                        finished = false,
+                        osInfo = "",
+                        services = emptyList(),
+                    )
 
                 val services = LinkedHashMap<Int, ServiceInfo>()
                 var failure: String? = null // XML output carries service/version for every open port, and the
@@ -111,15 +121,12 @@ class InspectorViewModel
                 _uiState.value =
                     _uiState.value.copy(
                         isLoading = false,
+                        finished = true,
                         services = services.values.toList(),
-                        osInfo =
-                            if (osGuessList.isNotEmpty()) {
-                                osGuessList.joinToString("\n")
-                            } else if (services.isEmpty()) {
-                                "No open ports found"
-                            } else {
-                                ""
-                            },
+                        // osInfo stays empty when nmap matched no fingerprint; the screen
+                        // renders that separately from "no open ports", because they mean
+                        // different things (nmap only fingerprints hosts with open ports).
+                        osInfo = osGuessList.joinToString("\n"),
                         error = failure,
                     )
             }

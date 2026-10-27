@@ -13,6 +13,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import org.indra.android.ui.components.EmptyState
+import org.indra.android.ui.components.FormError
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -63,6 +65,23 @@ fun WifiScannerScreen(
             if (uiState.isScanning) {
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             }
+            if (uiState.networks.isEmpty()) {
+                EmptyState(
+                    text =
+                        when {
+                            uiState.isScanning -> "Scanning for networks…"
+                            uiState.finished && uiState.error == null -> "No networks found"
+                            uiState.finished -> "The scan did not complete"
+                            else -> "Press Scan to list nearby networks"
+                        },
+                    hint =
+                        if (uiState.finished && uiState.error == null) {
+                            "iw reported no BSS lines on ${uiState.iface}."
+                        } else {
+                            null
+                        },
+                )
+            }
             LazyColumn(
                 modifier = Modifier.weight(1f).fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -73,9 +92,7 @@ fun WifiScannerScreen(
                     }
                 }
             }
-            uiState.error?.let {
-                Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-            }
+            uiState.error?.let { FormError(it) }
         }
     }
 }

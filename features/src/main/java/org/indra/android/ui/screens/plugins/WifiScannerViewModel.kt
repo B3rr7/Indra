@@ -18,6 +18,9 @@ data class WifiScannerUiState(
     val iface: String = "wlan0",
     val isScanning: Boolean = false,
     val networks: List<String> = emptyList(),
+    /** True once a scan finished — an empty [networks] before the first scan is not the same
+     *  as a scan that saw nothing. */
+    val finished: Boolean = false,
     val error: String? = null,
 )
 
@@ -50,7 +53,7 @@ class WifiScannerViewModel
                         _uiState.value = _uiState.value.copy(error = gate.message)
                         return@launch
                     }
-                    _uiState.value = _uiState.value.copy(isScanning = true, error = null, networks = emptyList())
+                    _uiState.value = _uiState.value.copy(isScanning = true, error = null, finished = false, networks = emptyList())
                     toolBox.shell("iw dev ${SmartToolBox.shellQuote(iface)} scan").collect { result ->
                         if (result.pid > 0) pid = result.pid
                         result.streamedLine?.let { line ->
@@ -60,7 +63,7 @@ class WifiScannerViewModel
                             }
                         }
                         if (!result.isStreaming) {
-                            _uiState.value = _uiState.value.copy(isScanning = false)
+                            _uiState.value = _uiState.value.copy(isScanning = false, finished = true)
                             pid = -1
                             if (!result.success) _uiState.value = _uiState.value.copy(error = result.error)
                         }

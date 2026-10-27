@@ -170,10 +170,10 @@ fun PacketCaptureScreen(
 
             Text(
                 text =
-                    if (uiState.saveToFile) {
-                        "Saving to ${uiState.capturePath.substringAfterLast('/')}"
-                    } else {
-                        "Captured (${uiState.packets.size} lines)"
+                    when {
+                        uiState.saveToFile -> "Saving to ${uiState.capturePath.substringAfterLast('/')}"
+                        uiState.isActive || uiState.hasRun -> "Captured (${uiState.packets.size} lines)"
+                        else -> "Not capturing yet"
                     },
                 style = MaterialTheme.typography.titleSmall,
             )
@@ -197,7 +197,12 @@ fun PacketCaptureScreen(
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
-                            text = if (uiState.isActive) "Waiting for packets…" else "Press Start to begin capturing",
+                            text =
+                                when {
+                                    uiState.isActive -> "Waiting for packets…"
+                                    uiState.hasRun -> "Capture finished with no packet lines — check the filter and interface."
+                                    else -> "Press Start to begin capturing"
+                                },
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )

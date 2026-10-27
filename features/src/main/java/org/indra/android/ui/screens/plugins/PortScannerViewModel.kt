@@ -23,6 +23,12 @@ data class PortScannerUiState(
     val isLoading: Boolean = false,
     val results: List<PortScanResult> = emptyList(),
     val liveLines: List<String> = emptyList(),
+    /**
+     * True once a scan has finished. Without it "no results yet" and "scanned, found
+     * nothing" look identical on screen — and the zero case used to be reported as a red
+     * error, which reads like the scan failed.
+     */
+    val finished: Boolean = false,
     val error: String? = null,
     val suggestions: List<String> = emptyList(),
 )
@@ -82,7 +88,14 @@ class PortScannerViewModel
                         return@launch
                     }
 
-                    _uiState.value = _uiState.value.copy(isLoading = true, error = null, results = emptyList(), liveLines = emptyList())
+                    _uiState.value =
+                        _uiState.value.copy(
+                            isLoading = true,
+                            error = null,
+                            finished = false,
+                            results = emptyList(),
+                            liveLines = emptyList(),
+                        )
 
                     toolBox.nmap(_uiState.value.target, _uiState.value.portRange).collect { toolResult ->
                         if (toolResult.isStreaming) {
@@ -129,6 +142,7 @@ class PortScannerViewModel
                 _uiState.value =
                     _uiState.value.copy(
                         isLoading = false,
+                        finished = true,
                         error = toolResult.error ?: "Scan failed",
                     )
                 return
@@ -139,11 +153,14 @@ class PortScannerViewModel
                     .ifEmpty { parsePorts(toolResult.rawOutput) }
                     .distinctBy { it.port }
                     .sortedBy { it.port }
+            // Zero open ports is a result, not an error: the screen renders it as an empty
+            // state ("scanned, found nothing"), which is the opposite of "could not look".
             _uiState.value =
                 _uiState.value.copy(
                     isLoading = false,
+                    finished = true,
                     results = results,
-                    error = if (results.isEmpty()) "No open ports found" else null,
+                    error = null,
                 )
         }
 

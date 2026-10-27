@@ -26,6 +26,12 @@ data class SessionHijackUiState(
      *  to capture HTTP traffic. */
     val filter: String = DEFAULT_HTTP_FILTER,
     val isRunning: Boolean = false,
+    /**
+     * True once a capture has been started. The header used to print
+     * `Captured sessions: 0` before anything ran, which reads like a completed capture
+     * that found nothing instead of "not started yet".
+     */
+    val hasRun: Boolean = false,
     val sessions: List<HijackedSession> = emptyList(),
     val output: List<String> = emptyList(),
     val error: String? = null
@@ -55,7 +61,14 @@ class SessionHijackViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(error = gate.message)
                 return@launch
             }
-            _uiState.value = _uiState.value.copy(isRunning = true, error = null, sessions = emptyList(), output = emptyList())
+            _uiState.value =
+                _uiState.value.copy(
+                    isRunning = true,
+                    hasRun = true,
+                    error = null,
+                    sessions = emptyList(),
+                    output = emptyList(),
+                )
             // stderr is kept: tcpdump's "SIOCGIFHWADDR: No such device" and its capture
             // summary are the only explanation a failing run gives, and ToolResult.error
             // carries the last output line.
