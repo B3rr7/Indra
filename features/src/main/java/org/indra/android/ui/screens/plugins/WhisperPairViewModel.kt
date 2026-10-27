@@ -96,7 +96,15 @@ class WhisperPairViewModel
                     _uiState.value = _uiState.value.copy(error = "BLE scanner not available")
                     return
                 }
-            _uiState.value = _uiState.value.copy(isScanning = true, devices = emptyList(), status = "Scanning for Fast Pair devices…")
+            _uiState.value =
+                _uiState.value.copy(
+                    isScanning = true,
+                    // Clear the previous failure: a scan that is running is not still
+                    // "Bluetooth is disabled" from the attempt before it.
+                    error = null,
+                    devices = emptyList(),
+                    status = "Scanning for Fast Pair devices…",
+                )
             scanCallback =
                 object : ScanCallback() {
                     override fun onScanResult(

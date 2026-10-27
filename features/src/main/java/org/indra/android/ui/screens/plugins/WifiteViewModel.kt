@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import org.indra.android.core.system.MonitorMode
 import org.indra.android.core.system.SmartToolBox
 import org.indra.android.core.system.ToolHandle
 import org.indra.android.core.system.ToolResult
@@ -71,12 +72,15 @@ class WifiteViewModel
         private fun abort(
             what: String,
             result: ToolResult?,
+            message: String? = null,
         ) {
             _uiState.value =
                 _uiState.value.copy(
                     isRunning = false,
                     stage = "idle",
-                    error = "$what: ${result?.error ?: result?.rawOutput?.trim()?.ifEmpty { null } ?: "no output"}",
+                    error =
+                        message
+                            ?: "$what: ${result?.error ?: result?.rawOutput?.trim()?.ifEmpty { null } ?: "no output"}",
                 )
             pid = -1
         }
@@ -93,18 +97,17 @@ class WifiteViewModel
                         return@launch
                     }
                     _uiState.value = _uiState.value.copy(isRunning = true, error = null, output = emptyList(), stage = "monitor")
-                    val qu = SmartToolBox.shellQuote(iface)
 
                     // Each stage is reported from its child's exit status. The old code
                     // appended "[monitor mode enabled]" / "[capture done]" unconditionally,
                     // so a failure at any step still looked like a completed run.
-                    val monitor =
-                        stage(
-                            "monitor",
-                            toolBox.shell("ip link set $qu down && iw dev $qu set type monitor && ip link set $qu up"),
-                        )
+                    val monitor = stage("monitor", toolBox.shell(MonitorMode.script(iface, monitor = true)))
                     if (monitor?.success != true) {
-                        abort("Monitor mode could not be enabled", monitor)
+                        abort(
+                            "Monitor mode could not be enabled",
+                            monitor,
+                            MonitorMode.explainFailure(monitor?.error, monitor?.rawOutput),
+                        )
                         return@launch
                     }
 

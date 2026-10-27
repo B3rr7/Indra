@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import org.indra.android.core.system.MonitorMode
 import org.indra.android.core.system.SmartToolBox
 import org.indra.android.core.system.ToolHandle
 import org.indra.android.core.system.streamedLine
@@ -100,13 +101,7 @@ class PacketCaptureViewModel
                     )
                 return
             }
-            val qu = SmartToolBox.shellQuote(iface)
-            val cmd =
-                if (enterMonitor) {
-                    "ip link set $qu down && iw dev $qu set type monitor && ip link set $qu up"
-                } else {
-                    "ip link set $qu down && iw dev $qu set type managed && ip link set $qu up"
-                }
+            val cmd = MonitorMode.script(iface, enterMonitor)
             viewModelScope.launch {
                 toolBox.shell(cmd).collect { result ->
                     if (!result.isStreaming && !result.success) {
@@ -114,7 +109,10 @@ class PacketCaptureViewModel
                             _uiState.value.copy(
                                 // The device did not switch — don't leave the switch on.
                                 monitorMode = if (enterMonitor) false else _uiState.value.monitorMode,
-                                error = result.error ?: "monitor mode change failed",
+                                error =
+                                    MonitorMode.explainFailure(result.error, result.rawOutput)
+                                        ?: result.error
+                                        ?: "monitor mode change failed",
                             )
                     }
                 }

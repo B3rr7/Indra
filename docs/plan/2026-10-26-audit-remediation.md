@@ -359,6 +359,36 @@ Device-pass findings (Sprint 2):
   Device-verified (moto g60): two live access points with SSID/BSSID/channel/signal/security,
   and the Wi-Fi-off path after `svc wifi disable`. 0 StrictMode violations.
 
+Wireless feature audit (2026-10-27, out-of-band — not a plan task):
+- All 15 wireless plugins were opened and exercised on the moto g60. Full table, evidence and
+  findings: `docs/audit/2026-10-27-wireless-features.md`.
+- **Working, device-verified**: WiFi Scanner, WiFi Audit (needs a `.cap`), Handshakes, Packet
+  Capture (managed mode — 124 real lines on `rmnet_data2`), Network Radar, Session Hijacking,
+  DNS Spoofing (start → iptables REDIRECT installed → removed → stop, rule verified with
+  `iptables -t nat -S`), MAC Changer, GeoMac (valid KML), WhisperPair (BLE scan).
+- **Monitor mode cannot work at all** (the one real blocker): `iw` ships in neither the core nor
+  the ROM, so Wifite's stage 1, Packet Capture's handshake capture and Reaver are unreachable.
+  Two honest paths recorded in the audit: vendor `libnl` + build `iw` into the core, or gate the
+  two screens and drop the affordance.
+- **Fixed on the way** — the old switch chain was
+  `ip link set <if> down && iw dev <if> set type monitor && ip link set <if> up`, and `&&` stops
+  at the first failure: with `iw` missing the interface was left **down** (verified on `dummy0`:
+  `UP` → `DOWN`, exit 127). On `wlan0` that takes Wi-Fi off the air. `core/system/MonitorMode.kt`
+  (pure, 8 tests) uses `;`, always restores the link and keeps `iw`'s exit status; Packet Capture
+  and Wifite now report "Monitor mode needs `iw`, which the native core does not ship — the
+  interface was left in its previous mode." Device-verified with `dummy0` forced `DOWN` and back
+  to `UP`.
+- **Fixed on the way** — WhisperPair never cleared `error` in `startScan()`, so the screen read
+  `Scanning…` **and** `Bluetooth is disabled` after the radio was turned back on.
+- **Open** — Reaver has no monitor-mode precondition (its field says "Interface (monitor mode)"
+  and it starts regardless); Bettercap needs its ~67 MB artifact; MITM/One-Tap MITM were not run
+  (arpspoof hard-resets this phone, 3/3).
+- **Open, pre-existing** — one `DiskReadViolation` (69 ms) when Wifite opens: `defaultWordlist()`
+  → `context.filesDir` runs in the ViewModel constructor on Main. Same shape in
+  `WifiAuditViewModel.init` and `PacketCaptureViewModel`'s `capturePath()` initialiser. The
+  systemic fix is to resolve those three paths once in `IndraApplication.startupScope` and serve
+  cached strings; belongs with the Sprint 4 "nothing on Main" work, not with this audit.
+
 ### Sprint 3 — consolidation
 - [ ] 3.2 Migrate remaining 33 screens to `PluginScaffold` — L
 - [ ] 3.4 Resolve the 6 shared components (use or delete) — M
