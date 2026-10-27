@@ -389,6 +389,40 @@ Wireless feature audit (2026-10-27, out-of-band — not a plan task):
   systemic fix is to resolve those three paths once in `IndraApplication.startupScope` and serve
   cached strings; belongs with the Sprint 4 "nothing on Main" work, not with this audit.
 
+All-tools audit (2026-10-27, out-of-band — not a plan task):
+- All 37 registered plugins were opened on the moto g60 and driven far enough to tell real
+  work from advertising. Full table, per-plugin evidence and findings F1–F7:
+  `docs/audit/2026-10-27-all-tools.md`.
+- **Nothing in the tree fabricates a result.** 21 plugins do real work on the device, 4 are
+  honest gates for components that are genuinely not installed (nuclei templates, msf chroot,
+  ExploitDB, bettercap), 3 are blocked by the missing `iw`/monitor mode, 2 are dead
+  (`responder`, `topology`), 2 were not run (arpspoof hard-resets this phone).
+- **Fixed — nuclei could never start**: it creates `~/.config/nuclei` before reading anything
+  and the daemon's `HOME` is `/` (read-only), so every run died with
+  `mkdir /.config: read-only file system` (and `-nc` does not skip the directory).
+  `SmartToolBox.nuclei` now runs `mkdir -p <filesDir>/home && HOME=<filesDir>/home …` through
+  `shell()`, which grew `label`/`timeoutMs` parameters so the 15-minute scan budget survives.
+- **Fixed — one refused start wedged every gate**: `isDaemonConnected()` is client-side
+  (`!hasStartFailed() && connected && authenticated`) and `startFailed` latched with no reset,
+  because the gate itself refused to attempt another start. With `indrad` alive, Masscan and
+  Packet Forger both answered "Native daemon is not running" and every later gate did too until
+  the app was force-stopped. New `CoreManager.reconnect()` (attach-only, no `su`, returns
+  immediately when the socket file is gone) is called once from `requireTool`. Verified: Port
+  Scanner → IPTables back to back now lists real iptables chains.
+- **Open — Go binaries cannot resolve DNS in the daemon**: Android has no `/etc/resolv.conf`,
+  so Go's pure resolver falls back to `[::1]:53` → `connection refused`. Gobuster works for IP
+  targets and fails on hostnames; nuclei additionally has no templates (`installNuclei` ships
+  only the binary, and `-update-templates` needs DNS) → `no templates provided for scan`. The
+  recommended fix is to install templates through the app's own OkHttp (Android resolver).
+- **Open — masscan cannot pick an interface**: `could not determine default interface`; `-e
+  rmnet_data2` hits libpcap's `LINUX_SLL` (`arptype 519 not supported`), `-e lo` opens but
+  sends 0 pps. Needs `-e <active iface>` to work on Wi-Fi (unverifiable here: `wlan0` is
+  unassociated and the only in-range APs are off-limits).
+- **Open** — `responder` is registered but hard-blocked as `UNSUPPORTED` while
+  `ResponderViewModel` is a working LLMNR listener (dead code: delete it or unblock it behind
+  Wi-Fi + location permission); `topology` still has no data source (`2.4`); Arsenal ships no
+  templates (works, but an empty list on a fresh install).
+
 ### Sprint 3 — consolidation
 - [ ] 3.2 Migrate remaining 33 screens to `PluginScaffold` — L
 - [ ] 3.4 Resolve the 6 shared components (use or delete) — M

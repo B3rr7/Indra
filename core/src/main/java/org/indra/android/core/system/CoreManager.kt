@@ -586,6 +586,24 @@ class CoreManager
             }
 
         /**
+         * Re-attaches the JNI client to a daemon that is already running — it never starts one.
+         *
+         * `connected`, `authenticated` and `startFailed` are **client-side** flags, and they go
+         * stale: the native reader thread exits when the peer drops (or one command is refused),
+         * and nothing but an app restart used to clear that. Every tool gate then answered
+         * "daemon not running" while `indrad` was perfectly healthy (observed twice in one
+         * sweep). The socket-file check keeps this cheap and silent when the daemon is really
+         * gone, so a gate never triggers a `su` prompt.
+         */
+        suspend fun reconnect(): Boolean =
+            withContext(Dispatchers.IO) {
+                if (!File(socketPath).exists()) return@withContext false
+                runCatching { connectAndLogin() }
+                    .onFailure { Logger.w("Reconnect failed: ${it.message}") }
+                    .isSuccess
+            }
+
+        /**
          * Attaches to an already-running daemon, starting it when the core is installed
          * but the socket is missing. Safe to call on app start.
          */

@@ -63,6 +63,10 @@ class SmartToolBox
              *  save-to-file switch is on; WiFi Audit prefill's from here too. */
             const val CAPTURE_PATH = "captures/last.cap"
 
+            /** Writable `HOME` for nuclei: it insists on creating `~/.config/nuclei`
+             *  and keeps its downloaded template repo in `~/nuclei-templates`. */
+            private const val NUCLEI_HOME_PATH = "home"
+
             /**
              * Single-quotes a value for the shell that executes `shell()` command strings
              * (POSIX `'"'"'` escaping, same rule as `CoreManager.shellQuote`).
@@ -213,6 +217,9 @@ class SmartToolBox
          */
         suspend fun requireTool(name: String): ToolHandle =
             withContext(Dispatchers.IO) {
+                // A stale client-side flag must not masquerade as a dead daemon: re-attach
+                // once before believing it (cheap no-op when the socket is gone).
+                if (!isDaemonConnected()) coreManager.reconnect()
                 val instance = getTool(name)
                 when {
                     // Liveness is checked first and separately: when the daemon dies, the
@@ -384,16 +391,24 @@ class SmartToolBox
          * lines so stdout is one line per finding, and `-nc` keeps ANSI colour codes out of it.
          * [Nuclei.parseFindings] reads those lines, and the severity tags are what tells a finding
          * apart from a log message.
+         *
+         * It runs through [shell] for one reason: nuclei creates `~/.config/nuclei` before it
+         * reads a single template, and the daemon's `HOME` is `/` (read-only), so every run
+         * died with `mkdir /.config: read-only file system` (`-nc` does not skip the
+         * directory). The script creates a writable `HOME` first — the daemon is root, so it
+         * can — and keeps nuclei's template repo next to it.
          */
         fun nuclei(
             target: String,
             templates: String = "",
-        ): Flow<ToolResult> =
-            rawCommand(
-                "nuclei",
-                "${binary("nuclei")} -silent -nc -u ${shellQuote(target)} $templates",
+        ): Flow<ToolResult> {
+            val home = shellQuote(File(context.filesDir, NUCLEI_HOME_PATH).absolutePath)
+            return shell(
+                "mkdir -p $home && HOME=$home ${binary("nuclei")} -silent -nc -u ${shellQuote(target)} $templates",
+                label = "nuclei",
                 timeoutMs = SCAN_TIMEOUT_MS,
             )
+        }
 
         fun aircrack(args: String): Flow<ToolResult> =
             rawCommand("aircrack", "${binary("aircrack-ng")} $args", timeoutMs = LONG_RUNNING_TIMEOUT_MS)
@@ -449,11 +464,15 @@ class SmartToolBox
          * Without that, this is a root shell (which it already is, since the daemon runs
          * as root).
          */
-        fun shell(command: String): Flow<ToolResult> {
+        fun shell(
+            command: String,
+            label: String = "shell",
+            timeoutMs: Long = TOOL_TIMEOUT_MS,
+        ): Flow<ToolResult> {
             // A leading escaped space/tab/quote/backslash would be dropped by parse_cmd
             // (it only opens an argument on a plain char); a newline is plain and inert.
             val script = if (startsWithDroppedChar(command)) "\n$command" else command
-            return execute("shell", "$SH_BINARY -c ${encodeArg(script)}")
+            return execute("shell", "$SH_BINARY -c ${encodeArg(script)}", label, timeoutMs)
         }
 
         /** Path (relative to the core dir, the daemon's cwd) of a bundled tool binary. */
