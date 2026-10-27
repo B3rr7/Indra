@@ -45,7 +45,11 @@ class PluginAvailability
             TOOL_MISSING("not in native core", false),
 
             /** nuclei / gobuster / msf / iptables artifact not installed. */
-            ARTIFACT_MISSING("component not installed", false),
+            // Still openable: for every one of these the installer lives inside the plugin
+            // screen (Vulnerability Scanner installs nuclei, Exploit Finder installs msf, …).
+            // A disabled card made those installers unreachable, so the only way out was to
+            // guess that the component existed at all.
+            ARTIFACT_MISSING("component not installed", true),
 
             /** Needs raw sockets or root, but the user enabled rootless mode. */
             NEEDS_ROOT("needs root", false),

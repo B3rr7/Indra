@@ -235,16 +235,42 @@ baseline shrunk; CI produces a debug artifact.
   instead of one `not in native core` label for everything, and a down daemon keeps the card openable so the
   screen's gate explains the fix; daemon liveness also covers a daemon that died under the app
   (`IndraClient.noteStartResult` + `startFailed`, since the native `connected` flag never clears)
-- [ ] 2.3 Replace `status == "running"` literals with `isStreaming` — S
-- [ ] 2.1 Real streaming console + findings for nuclei/msf screens — L
-- [ ] 2.2 Per-tool success policy (nuclei exit 1 ≠ failure) — M
+- [x] 2.3 Replaced both `status == "running"` literals (`PortScannerViewModel`, `RouterPwnViewModel`)
+  with `isStreaming`; `ToolResultTest` now pins that only `running` streams and that the final
+  emissions never append a line — S
+- [x] 2.1 Real console + findings for the nuclei/msf screens — L. `Nuclei.parseFindings` reads
+  nuclei's `[severity] …` lines (case-sensitive, so `[INF]` banners never count as findings),
+  `Nuclei.summary` renders `3 findings · 1 critical · 1 high`; `MsfSearch.parse` reads
+  msfconsole's fixed-width module table by header offsets (space-splitting merged `Rank` and
+  `Check`); all three screens now append `streamedLine` to a 500-line console and keep the full
+  transcript for Copy. `nuclei` gained `-silent -nc` so stdout is one line per finding with no
+  ANSI codes
+- [x] 2.2 Per-tool success policy — M. `Nuclei.interpret` knows nuclei exits **1** when it found
+  something: exit 1 + findings is a success (previously every finding was hidden behind
+  "nuclei exited with code 1"), exit 1 with no recognised finding line is an explicit failure,
+  and any other non-zero keeps the tool error. Zero findings renders "No findings", never a
+  fabricated result row; a failed run renders the error and *no* findings verdict
 - [ ] 2.5 Screen-by-screen empty-state audit (null vs 0) — M
 - [ ] 3.1 `PluginScaffold` + 3 pilot screens — M
-- [ ] 3.3 `LiveOutputCard` / `EmptyState` / `FormError` + migration — L
+- [~] 3.3 `LiveOutputCard` / `EmptyState` / `FormError` added in `ui/components/OutputConsole.kt`
+  and used by the three WS-2.1 screens; migrating the remaining hand-rolled consoles/error lines
+  is still open — L
 - [ ] 5.1 `HostSuggestions` (FlowRow, capped) on 14 screens — M
 - [ ] 5.2 Cap/expire `discoveredHosts` + clear action — S
 - [ ] 6.3 Remove unused permissions (unless 7.1) — S
-- [ ] Sprint 2 device pass: screenshots light+dark — M
+- [ ] Sprint 2 device pass: screenshots light+dark — M (in progress; the WS-2.1/2.2/2.3 screens
+  are verified, the rest land with the remaining tasks)
+
+Device-pass findings (Sprint 2):
+- **`ARTIFACT_MISSING` cards were dead ends** (regression from the Sprint 1 honest-card work):
+  the card was disabled *because* nuclei / msf / gobuster was not installed, while the installer
+  for that component lives inside the plugin screen — so it could never be installed. Fixed:
+  `ARTIFACT_MISSING` is openable like `DAEMON_DOWN`; the label still says `component not installed`.
+- **Alpine chroot is not runnable** (found while faking an msf chroot for the Exploit Finder test,
+  still open): every file in `files/alpine` extracted as mode `600` — `bin/busybox`, `lib/ld-musl-*`
+  included — so `chroot` cannot exec anything. `installAlpine` only sets `bin/sh` executable and
+  that symlink target did not survive either; the extractor needs to restore tar modes (or a
+  recursive `chmod` post-pass). Not fixed in Sprint 2 (it belongs with the Alpine/WS-7 work).
 
 ### Sprint 3 — consolidation
 - [ ] 3.2 Migrate remaining 33 screens to `PluginScaffold` — L

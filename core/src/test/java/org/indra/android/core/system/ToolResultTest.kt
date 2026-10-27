@@ -52,4 +52,30 @@ class ToolResultTest {
         val result = ToolResult.fromJson("invalid json")
         assertNull(result)
     }
+
+    @Test
+    fun testOnlyRunningEmissionsStream() {
+        val running = ToolResult(tool = "nmap", success = true, status = SmartToolBox.STATUS_RUNNING)
+        assertTrue(running.isStreaming)
+        assertEquals("53/tcp open domain", running.copy(rawOutput = "53/tcp open domain").streamedLine)
+
+        listOf(
+            SmartToolBox.STATUS_COMPLETED,
+            SmartToolBox.STATUS_TIMEOUT,
+            SmartToolBox.STATUS_FAILED,
+            "",
+        ).forEach { status ->
+            val final = ToolResult(tool = "nmap", success = false, status = status, rawOutput = "53/tcp open domain")
+            assertFalse("status=$status must not stream", final.isStreaming)
+            assertNull("status=$status must not append a line", final.streamedLine)
+        }
+    }
+
+    @Test
+    fun testRunningLineSuppressesTheExecutingEcho() {
+        val echo = ToolResult(tool = "shell", success = true, status = SmartToolBox.STATUS_RUNNING, rawOutput = "Executing: id")
+        assertNull(echo.streamedLine)
+        val blank = ToolResult(tool = "shell", success = true, status = SmartToolBox.STATUS_RUNNING, rawOutput = " ")
+        assertNull(blank.streamedLine)
+    }
 }

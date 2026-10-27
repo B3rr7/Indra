@@ -11,6 +11,7 @@ import kotlinx.coroutines.launch
 import org.indra.android.core.system.NetworkHelper
 import org.indra.android.core.system.SmartToolBox
 import org.indra.android.core.system.ToolHandle
+import org.indra.android.core.system.isStreaming
 import org.indra.android.data.repository.NetworkRepository
 import javax.inject.Inject
 
@@ -60,7 +61,7 @@ class RouterPwnViewModel
                     val findings = LinkedHashMap<Int, RouterVulnerability>()
 
                     toolBox.nmap(_uiState.value.target, "22,80,443,8080,8443").collect { result ->
-                        if (result.status == "running") {
+                        if (result.isStreaming) {
                             result.ports.forEach { port ->
                                 findings[port.port] =
                                     RouterVulnerability(

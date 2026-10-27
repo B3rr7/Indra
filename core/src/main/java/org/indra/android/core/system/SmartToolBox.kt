@@ -377,13 +377,21 @@ class SmartToolBox
                 timeoutMs = LONG_RUNNING_TIMEOUT_MS,
             )
 
+        /**
+         * Runs nuclei.
+         *
+         * `-silent -nc` are load-bearing, not cosmetic: `-silent` drops the banner/diagnostic
+         * lines so stdout is one line per finding, and `-nc` keeps ANSI colour codes out of it.
+         * [Nuclei.parseFindings] reads those lines, and the severity tags are what tells a finding
+         * apart from a log message.
+         */
         fun nuclei(
             target: String,
             templates: String = "",
         ): Flow<ToolResult> =
             rawCommand(
                 "nuclei",
-                "${binary("nuclei")} -u ${shellQuote(target)} $templates",
+                "${binary("nuclei")} -silent -nc -u ${shellQuote(target)} $templates",
                 timeoutMs = SCAN_TIMEOUT_MS,
             )
 

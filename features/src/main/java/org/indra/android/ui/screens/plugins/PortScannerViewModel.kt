@@ -12,6 +12,7 @@ import org.indra.android.core.system.NetworkHelper
 import org.indra.android.core.system.SmartToolBox
 import org.indra.android.core.system.ToolHandle
 import org.indra.android.core.system.ToolResult
+import org.indra.android.core.system.isStreaming
 import org.indra.android.core.system.streamedLine
 import org.indra.android.data.repository.NetworkRepository
 import javax.inject.Inject
@@ -84,7 +85,7 @@ class PortScannerViewModel
                     _uiState.value = _uiState.value.copy(isLoading = true, error = null, results = emptyList(), liveLines = emptyList())
 
                     toolBox.nmap(_uiState.value.target, _uiState.value.portRange).collect { toolResult ->
-                        if (toolResult.status == "running") {
+                        if (toolResult.isStreaming) {
                             mergeLiveResults(toolResult)
                         } else {
                             finishScan(toolResult)

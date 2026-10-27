@@ -55,10 +55,19 @@ class PluginAvailabilityTest {
     }
 
     @Test
-    fun onlyTheDaemonDownStateStaysOpenable() {
-        // Every other blocker is a dead end, so the card stays disabled; a stopped daemon
-        // is fixable from the screen's own gate message.
+    fun openableStatesAreTheFixableOnes() {
+        // A card is disabled only for a blocker the user cannot act on from the app. A stopped
+        // daemon is fixed from the screen's gate, and a missing optional component is installed
+        // by the plugin screen itself — dimming those two made their install/fix paths
+        // unreachable.
         val openable = PluginAvailability.PluginStatus.entries.filter { it.openable }
-        assertEquals(listOf(PluginAvailability.PluginStatus.AVAILABLE, PluginAvailability.PluginStatus.DAEMON_DOWN), openable)
+        assertEquals(
+            listOf(
+                PluginAvailability.PluginStatus.AVAILABLE,
+                PluginAvailability.PluginStatus.DAEMON_DOWN,
+                PluginAvailability.PluginStatus.ARTIFACT_MISSING,
+            ),
+            openable,
+        )
     }
 }

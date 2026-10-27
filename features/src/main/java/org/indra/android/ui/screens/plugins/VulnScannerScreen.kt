@@ -1,8 +1,6 @@
 package org.indra.android.ui.screens.plugins
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
@@ -12,6 +10,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import org.indra.android.core.system.Nuclei
+import org.indra.android.core.system.NucleiFinding
+import org.indra.android.core.system.NucleiSeverity
+import org.indra.android.ui.components.FormError
+import org.indra.android.ui.components.LiveOutputCard
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -73,96 +76,106 @@ fun VulnScannerScreen(
             }
 
             if (!uiState.nucleiInstalled) {
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        Text(
-                            text = "Nuclei is not installed (~126 MB download)",
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                        if (uiState.isInstalling) {
-                            LinearProgressIndicator(
-                                progress = { uiState.installProgress },
-                                modifier = Modifier.fillMaxWidth(),
-                            )
-                            Text(
-                                text = "Installing… ${(uiState.installProgress * 100).toInt()}%",
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                        } else {
-                            Button(
-                                onClick = { viewModel.installNuclei() },
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Text("Install Nuclei")
-                            }
-                        }
-                    }
-                }
-            }
-
-            if (uiState.vulnerabilities.isNotEmpty()) {
-                Text(
-                    text = "Found ${uiState.vulnerabilities.size} vulnerabilities",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.error,
+                NucleiInstallCard(
+                    uiState = uiState,
+                    onInstall = { viewModel.installNuclei() },
                 )
-                LazyColumn(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    items(uiState.vulnerabilities) { vuln ->
-                        Card(modifier = Modifier.fillMaxWidth()) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Text(
-                                    text = vuln.name,
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
-                                )
-                                Text(
-                                    text = vuln.severity,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color =
-                                        when (vuln.severity) {
-                                            "Critical" -> MaterialTheme.colorScheme.error
-                                            "High" -> MaterialTheme.colorScheme.error
-                                            else -> MaterialTheme.colorScheme.onSurfaceVariant
-                                        },
-                                )
-                                Text(
-                                    text = vuln.description,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
-                    }
-                }
             }
 
-            if (uiState.error != null) {
+            FindingsHeader(uiState)
+
+            LiveOutputCard(
+                lines = uiState.lines,
+                appendCount = uiState.lineCount,
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                title = "nuclei output",
+                placeholder = consolePlaceholder(uiState),
+                isRunning = uiState.isLoading,
+                copyText = uiState.transcript,
+            )
+
+            uiState.error?.let { FormError(it) }
+        }
+    }
+}
+
+@Composable
+private fun NucleiInstallCard(
+    uiState: VulnScannerUiState,
+    onInstall: () -> Unit,
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = "Nuclei is not installed (~126 MB download)",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            if (uiState.isInstalling) {
+                LinearProgressIndicator(
+                    progress = { uiState.installProgress },
+                    modifier = Modifier.fillMaxWidth(),
+                )
                 Text(
-                    text = uiState.error!!,
-                    color = MaterialTheme.colorScheme.error,
+                    text = "Installing… ${(uiState.installProgress * 100).toInt()}%",
                     style = MaterialTheme.typography.bodySmall,
                 )
+            } else {
+                Button(onClick = onInstall, modifier = Modifier.fillMaxWidth()) {
+                    Text("Install Nuclei")
+                }
             }
         }
     }
 }
 
-data class Vulnerability(
-    val name: String,
-    val severity: String,
-    val description: String,
-)
+/**
+ * The verdict line, and only when there is a verdict to give: a run that failed never prints
+ * "No findings", because a scan that could not look has not found zero vulnerabilities.
+ */
+@Composable
+private fun FindingsHeader(uiState: VulnScannerUiState) {
+    val summary = Nuclei.summary(uiState.findings)
+    val severe =
+        uiState.findings.any {
+            it.severity == NucleiSeverity.CRITICAL || it.severity == NucleiSeverity.HIGH
+        }
+    when {
+        summary != null ->
+            Text(
+                text = summary,
+                style = MaterialTheme.typography.titleMedium,
+                color = if (severe) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+            )
+        uiState.finished && uiState.error == null ->
+            Text(
+                text = "No findings",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+    }
+}
+
+private fun consolePlaceholder(uiState: VulnScannerUiState): String =
+    when {
+        uiState.isLoading -> "Waiting for output…"
+        uiState.finished -> "No output"
+        else -> "Run a scan to see live output"
+    }
 
 data class VulnScannerUiState(
     val target: String = "",
     val isLoading: Boolean = false,
-    val vulnerabilities: List<Vulnerability> = emptyList(),
+    /** Parsed from the transcript by [Nuclei]; never synthesised. */
+    val findings: List<NucleiFinding> = emptyList(),
+    /** Capped live lines for the console; [lineCount] is the monotonic append counter. */
+    val lines: List<String> = emptyList(),
+    val lineCount: Int = 0,
+    /** The final transcript, kept for Copy even after the console trimmed old lines. */
+    val transcript: String = "",
+    val finished: Boolean = false,
     val error: String? = null,
     val nucleiInstalled: Boolean = false,
     val isInstalling: Boolean = false,
