@@ -269,7 +269,13 @@ baseline shrunk; CI produces a debug artifact.
     "No networks found" and an "The scan did not complete" variant.
   Audit table (all 36 plugin screens) and the remaining silent consoles are recorded in
   [`docs/audit/2026-10-27-empty-states.md`](../audit/2026-10-27-empty-states.md)
-- [ ] 3.1 `PluginScaffold` + 3 pilot screens — M
+- [x] 3.1 `PluginScaffold(title, onNavigateBack, actions, content)` in
+  `ui/components/PluginScaffold.kt`, with Port Scanner / Inspector / Traceroute migrated (their
+  hand-rolled `Scaffold` + `TopAppBar` + `IconButton` + `ArrowBack` blocks are gone, along with
+  the `@OptIn(ExperimentalMaterial3Api)` that only existed for `TopAppBar`). Device screenshots
+  before/after are pixel-identical; `Trace` still runs and the empty state still renders. The
+  three `LongMethod` baseline IDs were re-keyed (the signature string changed) — same rule, same
+  function, no new suppression — M
 - [~] 3.3 `LiveOutputCard` / `EmptyState` / `FormError` added in `ui/components/OutputConsole.kt`
   and used by the three WS-2.1 screens; migrating the remaining hand-rolled consoles/error lines
   is still open — L

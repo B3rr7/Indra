@@ -53,7 +53,7 @@
     <ID>LongMethod:GadgetProfilesScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun GadgetProfilesScreen( onNavigateBack: () -&gt; Unit, viewModel: GadgetProfilesViewModel = hiltViewModel() )</ID>
     <ID>LongMethod:GeoMacScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun GeoMacScreen( onNavigateBack: () -&gt; Unit, viewModel: GeoMacViewModel = hiltViewModel(), )</ID>
     <ID>LongMethod:HandshakesScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun HandshakesScreen( onNavigateBack: () -&gt; Unit, viewModel: HandshakesViewModel = hiltViewModel(), )</ID>
-    <ID>LongMethod:InspectorScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun InspectorScreen( onNavigateBack: () -&gt; Unit, viewModel: InspectorViewModel = hiltViewModel(), )</ID>
+    <ID>LongMethod:InspectorScreen.kt$@Composable fun InspectorScreen( onNavigateBack: () -&gt; Unit, viewModel: InspectorViewModel = hiltViewModel(), )</ID>
     <ID>LongMethod:LoginCrackerScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun LoginCrackerScreen( onNavigateBack: () -&gt; Unit, viewModel: LoginCrackerViewModel = hiltViewModel(), )</ID>
     <ID>LongMethod:MacChangerScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun MacChangerScreen( onNavigateBack: () -&gt; Unit, viewModel: MacChangerViewModel = hiltViewModel(), )</ID>
     <ID>LongMethod:MasscanScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun MasscanScreen( onNavigateBack: () -&gt; Unit, viewModel: MasscanViewModel = hiltViewModel(), )</ID>
@@ -62,9 +62,9 @@
     <ID>LongMethod:OneTapMitmScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun OneTapMitmScreen( onNavigateBack: () -&gt; Unit, viewModel: OneTapMitmViewModel = hiltViewModel() )</ID>
     <ID>LongMethod:PacketCaptureScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun PacketCaptureScreen( onNavigateBack: () -&gt; Unit, viewModel: PacketCaptureViewModel = hiltViewModel(), )</ID>
     <ID>LongMethod:PacketForgerScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun PacketForgerScreen( onNavigateBack: () -&gt; Unit, viewModel: PacketForgerViewModel = hiltViewModel(), )</ID>
-    <ID>LongMethod:PortScannerScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun PortScannerScreen( onNavigateBack: () -&gt; Unit, viewModel: PortScannerViewModel = hiltViewModel(), )</ID>
+    <ID>LongMethod:PortScannerScreen.kt$@Composable fun PortScannerScreen( onNavigateBack: () -&gt; Unit, viewModel: PortScannerViewModel = hiltViewModel(), )</ID>
     <ID>LongMethod:RouterPwnScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun RouterPwnScreen( onNavigateBack: () -&gt; Unit, viewModel: RouterPwnViewModel = hiltViewModel(), )</ID>
-    <ID>LongMethod:TracerouteScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun TracerouteScreen( onNavigateBack: () -&gt; Unit, viewModel: TracerouteViewModel = hiltViewModel(), )</ID>
+    <ID>LongMethod:TracerouteScreen.kt$@Composable fun TracerouteScreen( onNavigateBack: () -&gt; Unit, viewModel: TracerouteViewModel = hiltViewModel(), )</ID>
     <ID>LongMethod:VulnScannerScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun VulnScannerScreen( onNavigateBack: () -&gt; Unit, viewModel: VulnScannerViewModel = hiltViewModel(), )</ID>
     <ID>LongMethod:WebTesterScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun WebTesterScreen( onNavigateBack: () -&gt; Unit, viewModel: WebTesterViewModel = hiltViewModel(), )</ID>
     <ID>LongMethod:WhisperPairScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun WhisperPairScreen( onNavigateBack: () -&gt; Unit, viewModel: WhisperPairViewModel = hiltViewModel(), )</ID>
