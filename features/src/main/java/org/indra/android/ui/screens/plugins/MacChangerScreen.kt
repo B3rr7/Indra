@@ -10,11 +10,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import org.indra.android.ui.components.LiveOutputCard
+import org.indra.android.ui.components.FormError
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -107,22 +107,16 @@ fun MacChangerScreen(
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             }
             if (uiState.output.isNotEmpty()) {
-                LazyColumn(
-                    modifier =
-                        Modifier
-                            .weight(1f)
-                            .fillMaxWidth()
-                            .padding(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
-                ) {
-                    items(uiState.output) { line ->
-                        Text(line, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
-                    }
-                }
+                LiveOutputCard(
+                    lines = uiState.output,
+                    appendCount = uiState.output.size,
+                    modifier = Modifier.weight(1f),
+                    title = "Output",
+                    placeholder = "No output yet",
+                    isRunning = uiState.isRunning,
+                )
             }
-            uiState.error?.let {
-                Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-            }
+            uiState.error?.let { FormError(it) }
         }
     }
 }

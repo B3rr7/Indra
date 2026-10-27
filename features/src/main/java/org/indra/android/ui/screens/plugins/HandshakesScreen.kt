@@ -22,6 +22,7 @@ import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.io.File
+import org.indra.android.ui.components.FormError
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -148,9 +149,7 @@ fun HandshakesScreen(
                     Text("Share ${file.name}")
                 }
             }
-            uiState.error?.let {
-                Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-            }
+            uiState.error?.let { FormError(it) }
         }
     }
 }

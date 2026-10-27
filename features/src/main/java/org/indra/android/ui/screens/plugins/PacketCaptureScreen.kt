@@ -1,21 +1,17 @@
 package org.indra.android.ui.screens.plugins
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import org.indra.android.ui.components.AutoFollowScrollEffect
-import org.indra.android.ui.components.rememberAutoFollowState
+import org.indra.android.ui.components.LiveOutputCard
+import org.indra.android.ui.components.FormError
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -168,68 +164,33 @@ fun PacketCaptureScreen(
                 }
             }
 
-            Text(
-                text =
-                    when {
-                        uiState.saveToFile -> "Saving to ${uiState.capturePath.substringAfterLast('/')}"
-                        uiState.isActive || uiState.hasRun -> "Captured (${uiState.packets.size} lines)"
-                        else -> "Not capturing yet"
-                    },
-                style = MaterialTheme.typography.titleSmall,
-            )
-
-            val listState = rememberLazyListState()
-            val listFollow = rememberAutoFollowState(listState)
-            // packetCount (not packets.size) is the follow key: the list is capped,
-            // so its size stops changing and a size-keyed effect freezes at the cap.
-            val headTrimmed = (uiState.packetCount - uiState.packets.size).toInt()
-            AutoFollowScrollEffect(
-                listState,
-                uiState.packetCount.toInt(),
-                { uiState.packets.size - 1 },
-                listFollow,
-                headTrimmed,
-            )
-            Card(modifier = Modifier.fillMaxWidth().weight(1f)) {
-                if (uiState.packets.isEmpty()) {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            text =
-                                when {
-                                    uiState.isActive -> "Waiting for packets…"
-                                    uiState.hasRun -> "Capture finished with no packet lines — check the filter and interface."
-                                    else -> "Press Start to begin capturing"
-                                },
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                } else {
-                    LazyColumn(
-                        state = listState,
-                        modifier = Modifier.fillMaxSize().padding(8.dp),
-                    ) {
-                        items(uiState.packets) { line ->
-                            Text(
-                                text = line,
-                                style = MaterialTheme.typography.bodySmall,
-                                fontFamily = FontFamily.Monospace,
-                            )
-                        }
-                    }
-                }
-            }
-
-            if (uiState.error != null) {
+            if (uiState.saveToFile || uiState.packets.isNotEmpty()) {
                 Text(
-                    text = uiState.error!!,
-                    color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodySmall,
+                    text =
+                        if (uiState.saveToFile) {
+                            "Saving to ${uiState.capturePath.substringAfterLast('/')}"
+                        } else {
+                            "Captured (${uiState.packets.size} lines)"
+                        },
+                    style = MaterialTheme.typography.titleSmall,
                 )
             }
+
+            LiveOutputCard(
+                lines = uiState.packets,
+                appendCount = uiState.packetCount.toInt(),
+                modifier = Modifier.weight(1f),
+                title = "Packets",
+                placeholder =
+                    when {
+                        uiState.isActive -> "Waiting for packets…"
+                        uiState.hasRun -> "Capture finished with no packet lines — check the filter and interface."
+                        else -> "Press Start to begin capturing"
+                    },
+                isRunning = uiState.isActive,
+            )
+
+            uiState.error?.let { FormError(it) }
         }
     }
 }

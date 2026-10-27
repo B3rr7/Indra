@@ -1,19 +1,15 @@
 package org.indra.android.ui.screens.plugins
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import org.indra.android.ui.components.EmptyState
+import org.indra.android.ui.components.LiveOutputCard
 import org.indra.android.ui.components.FormError
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -65,33 +61,24 @@ fun WifiScannerScreen(
             if (uiState.isScanning) {
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             }
-            if (uiState.networks.isEmpty()) {
-                EmptyState(
-                    text =
-                        when {
-                            uiState.isScanning -> "Scanning for networks…"
-                            uiState.finished && uiState.error == null -> "No networks found"
-                            uiState.finished -> "The scan did not complete"
-                            else -> "Press Scan to list nearby networks"
-                        },
-                    hint =
-                        if (uiState.finished && uiState.error == null) {
-                            "iw reported no BSS lines on ${uiState.iface}."
-                        } else {
-                            null
-                        },
-                )
-            }
-            LazyColumn(
-                modifier = Modifier.weight(1f).fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                items(uiState.networks) { net ->
-                    Card(modifier = Modifier.fillMaxWidth()) {
-                        Text(net, modifier = Modifier.padding(12.dp), fontFamily = FontFamily.Monospace, fontSize = 12.sp)
-                    }
+            // The console's placeholder carries the same four states the old EmptyState did
+            // (not started / scanning / ran-empty / failed), so nothing is lost by dropping it.
+            val placeholder =
+                when {
+                    uiState.isScanning -> "Scanning for networks…"
+                    uiState.finished && uiState.error == null ->
+                        "No networks found — iw reported no BSS lines on ${uiState.iface}."
+                    uiState.finished -> "The scan did not complete"
+                    else -> "Press Scan to list nearby networks"
                 }
-            }
+            LiveOutputCard(
+                lines = uiState.networks,
+                appendCount = uiState.networks.size,
+                modifier = Modifier.weight(1f),
+                title = "Networks",
+                placeholder = placeholder,
+                isRunning = uiState.isScanning,
+            )
             uiState.error?.let { FormError(it) }
         }
     }

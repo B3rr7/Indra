@@ -21,6 +21,11 @@ data class WifiAuditUiState(
     val essid: String = "",
     val isActive: Boolean = false,
     val lines: List<String> = emptyList(),
+    /**
+     * Monotonic line counter: [lines] is capped at `MAX_LINES`, so the console cannot key its
+     * auto-follow on `lines.size` (it stops changing at the cap).
+     */
+    val lineCount: Int = 0,
     val keyFound: Boolean = false,
     val error: String? = null,
 )
@@ -111,7 +116,14 @@ class WifiAuditViewModel
                         _uiState.value = _uiState.value.copy(error = gate.message)
                         return@launch
                     }
-                    _uiState.value = _uiState.value.copy(isActive = true, error = null, lines = emptyList(), keyFound = false)
+                    _uiState.value =
+                        _uiState.value.copy(
+                            isActive = true,
+                            error = null,
+                            lines = emptyList(),
+                            lineCount = 0,
+                            keyFound = false,
+                        )
                     var found = false
                     toolBox.aircrack(args).collect { result ->
                         if (result.pid > 0) pid = result.pid
@@ -120,6 +132,7 @@ class WifiAuditViewModel
                             _uiState.value =
                                 _uiState.value.copy(
                                     lines = (_uiState.value.lines + line).takeLast(MAX_LINES),
+                                    lineCount = _uiState.value.lineCount + 1,
                                     keyFound = _uiState.value.keyFound || line.contains("KEY FOUND"),
                                 )
                         }

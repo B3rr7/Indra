@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import org.indra.android.ui.components.FormError
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -94,9 +95,7 @@ fun GadgetProfilesScreen(
                 }
             }
             Text(uiState.status, style = MaterialTheme.typography.bodySmall)
-            uiState.error?.let {
-                Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-            }
+            uiState.error?.let { FormError(it) }
         }
     }
 }

@@ -12,10 +12,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.indra.android.core.system.ArsenalTemplate
+import org.indra.android.ui.components.LiveOutputCard
+import org.indra.android.ui.components.FormError
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -128,21 +129,18 @@ fun ArsenalScreen(
                     }
                 }
             }
-            if (uiState.output.isNotEmpty()) {
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    LazyColumn(modifier = Modifier.height(120.dp).padding(8.dp)) {
-                        items(uiState.output) { line ->
-                            Text(line, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
-                        }
-                    }
-                }
-            }
+            LiveOutputCard(
+                lines = uiState.output,
+                appendCount = uiState.output.size,
+                modifier = Modifier.height(160.dp),
+                title = "Command output",
+                placeholder = "No output yet",
+                isRunning = uiState.runningId != null,
+            )
             if (uiState.runningId != null) {
                 OutlinedButton(onClick = { viewModel.stop() }, modifier = Modifier.fillMaxWidth()) { Text("Stop") }
             }
-            uiState.error?.let {
-                Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-            }
+            uiState.error?.let { FormError(it) }
         }
     }
 }

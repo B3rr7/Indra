@@ -22,6 +22,7 @@ import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import java.io.File
+import org.indra.android.ui.components.FormError
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -129,9 +130,7 @@ fun GeoMacScreen(
                     Text("Share ${file.name}")
                 }
             }
-            uiState.error?.let {
-                Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-            }
+            uiState.error?.let { FormError(it) }
         }
     }
 }

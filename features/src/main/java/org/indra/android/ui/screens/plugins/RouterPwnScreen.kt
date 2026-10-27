@@ -12,6 +12,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import org.indra.android.ui.components.FormError
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -73,10 +74,11 @@ fun RouterPwnScreen(
             }
 
             if (uiState.vulnerabilities.isNotEmpty()) {
+                // Open services are a finding, not a failure: painting them in the error colour
+                // made a completed scan look like it went wrong. Errors use FormError instead.
                 Text(
                     text = "Found ${uiState.vulnerabilities.size} open services",
                     style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.error,
                 )
                 LazyColumn(
                     modifier = Modifier.weight(1f),
@@ -115,13 +117,7 @@ fun RouterPwnScreen(
                 }
             }
 
-            if (uiState.error != null) {
-                Text(
-                    text = uiState.error!!,
-                    color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
+            uiState.error?.let { FormError(it) }
         }
     }
 }

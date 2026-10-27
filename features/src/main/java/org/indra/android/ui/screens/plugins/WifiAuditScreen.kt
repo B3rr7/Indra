@@ -1,18 +1,17 @@
 package org.indra.android.ui.screens.plugins
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import org.indra.android.ui.components.LiveOutputCard
+import org.indra.android.ui.components.FormError
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -98,13 +97,7 @@ fun WifiAuditScreen(
                 }
             }
 
-            if (uiState.error != null) {
-                Text(
-                    text = uiState.error!!,
-                    color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
+            uiState.error?.let { FormError(it) }
 
             if (uiState.lines.isNotEmpty()) {
                 Text(
@@ -118,18 +111,13 @@ fun WifiAuditScreen(
                             MaterialTheme.colorScheme.onSurface
                         },
                 )
-                LazyColumn(
+                LiveOutputCard(
+                    lines = uiState.lines,
+                    appendCount = uiState.lineCount,
                     modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
-                ) {
-                    items(uiState.lines) { line ->
-                        Text(
-                            text = line,
-                            style = MaterialTheme.typography.bodySmall,
-                            fontFamily = FontFamily.Monospace,
-                        )
-                    }
-                }
+                    title = "Cracker output",
+                    isRunning = uiState.isActive,
+                )
             } else if (!uiState.isActive) {
                 Text(
                     text = "Needs a capture file that contains the WPA handshake or WEP traffic — capture one first, then run the cracker against it",

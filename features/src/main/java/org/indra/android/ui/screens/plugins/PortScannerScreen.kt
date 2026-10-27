@@ -6,11 +6,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import org.indra.android.ui.components.LiveOutputCard
 import org.indra.android.ui.components.EmptyState
 import org.indra.android.ui.components.PluginScaffold
 import org.indra.android.ui.components.FormError
@@ -75,26 +75,14 @@ fun PortScannerScreen(
             }
 
             if (uiState.liveLines.isNotEmpty()) {
-                Text(
-                    text = "Live output",
-                    style = MaterialTheme.typography.titleSmall,
+                LiveOutputCard(
+                    lines = uiState.liveLines,
+                    appendCount = uiState.liveLines.size,
+                    modifier = Modifier.fillMaxWidth().height(160.dp),
+                    title = "Live output",
+                    placeholder = "No output yet",
+                    isRunning = uiState.isLoading,
                 )
-                Card(
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .heightIn(max = 160.dp),
-                ) {
-                    LazyColumn(modifier = Modifier.fillMaxSize().padding(8.dp)) {
-                        items(uiState.liveLines) { line ->
-                            Text(
-                                text = line,
-                                style = MaterialTheme.typography.bodySmall,
-                                fontFamily = FontFamily.Monospace,
-                            )
-                        }
-                    }
-                }
             }
 
             if (uiState.results.isNotEmpty()) {

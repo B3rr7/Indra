@@ -1,22 +1,17 @@
 package org.indra.android.ui.screens.plugins
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import org.indra.android.ui.components.AutoFollowScrollEffect
-import org.indra.android.ui.components.rememberAutoFollowState
+import org.indra.android.ui.components.LiveOutputCard
+import org.indra.android.ui.components.FormError
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -153,65 +148,15 @@ fun MitmScreen(
                 }
             }
 
-            when {
-                uiState.log.isNotEmpty() -> {
-                    Text(
-                        text = "Log",
-                        style = MaterialTheme.typography.titleSmall,
-                    )
-                    val logState = rememberLazyListState()
-                    val logFollow = rememberAutoFollowState(logState)
-                    // logCount is monotonic while the log itself is capped, so it is
-                    // the follow key; a size-keyed effect would freeze at the cap.
-                    val headTrimmed = (uiState.logCount - uiState.log.size).toInt()
-                    AutoFollowScrollEffect(
-                        logState,
-                        uiState.logCount.toInt(),
-                        { uiState.log.size - 1 },
-                        logFollow,
-                        headTrimmed,
-                    )
-                    Card(modifier = Modifier.fillMaxWidth().weight(1f)) {
-                        LazyColumn(
-                            state = logState,
-                            modifier =
-                                Modifier
-                                    .fillMaxSize()
-                                    .padding(8.dp),
-                        ) {
-                            items(uiState.log) { line ->
-                                Text(
-                                    text = line,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    fontFamily = FontFamily.Monospace,
-                                )
-                            }
-                        }
-                    }
-                }
-                uiState.isActive -> {
-                    Card(modifier = Modifier.fillMaxWidth().weight(1f)) {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text(
-                                text = "Waiting for arpspoof output…",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                }
-            }
-
-            if (uiState.error != null) {
-                Text(
-                    text = uiState.error!!,
-                    color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
+            LiveOutputCard(
+                lines = uiState.log,
+                appendCount = uiState.logCount.toInt(),
+                modifier = Modifier.weight(1f),
+                title = "Log",
+                placeholder = if (uiState.isActive) "Waiting for arpspoof output…" else "No output yet",
+                isRunning = uiState.isActive,
+            )
+            uiState.error?.let { FormError(it) }
         }
     }
 }

@@ -1,18 +1,16 @@
 package org.indra.android.ui.screens.plugins
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import org.indra.android.ui.components.LiveOutputCard
+import org.indra.android.ui.components.FormError
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -85,17 +83,15 @@ fun WifiteScreen(
             if (uiState.isRunning) {
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             }
-            LazyColumn(
-                modifier = Modifier.weight(1f).fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(2.dp),
-            ) {
-                items(uiState.output) { line ->
-                    Text(line, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
-                }
-            }
-            uiState.error?.let {
-                Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-            }
+            LiveOutputCard(
+                lines = uiState.output,
+                appendCount = uiState.output.size,
+                modifier = Modifier.weight(1f),
+                title = "Output",
+                placeholder = "No output yet",
+                isRunning = uiState.isRunning,
+            )
+            uiState.error?.let { FormError(it) }
         }
     }
 }

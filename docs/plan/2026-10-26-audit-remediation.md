@@ -276,9 +276,33 @@ baseline shrunk; CI produces a debug artifact.
   before/after are pixel-identical; `Trace` still runs and the empty state still renders. The
   three `LongMethod` baseline IDs were re-keyed (the signature string changed) — same rule, same
   function, no new suppression — M
-- [~] 3.3 `LiveOutputCard` / `EmptyState` / `FormError` added in `ui/components/OutputConsole.kt`
-  and used by the three WS-2.1 screens; migrating the remaining hand-rolled consoles/error lines
-  is still open — L
+- [x] 3.3 `LiveOutputCard` / `EmptyState` / `FormError` are now the only error and console
+  surfaces — L
+  - **Errors**: all 28 hand-rolled error `Text`s (three shapes across 26 screens) are
+    `uiState.error?.let { FormError(it) }`. `rg "color = MaterialColor\.colorScheme\.error"` in
+    `features/.../plugins` now matches exactly one line — Wifite's monitor-mode danger notice,
+    which is a warning affordance, not an error. RouterPwn's "Found N open services" header
+    stopped using the error colour: a completed scan with findings is not a failure.
+  - **Consoles**: 17 screens moved onto `LiveOutputCard` (Masscan, Gobuster, SearchSploit,
+    Arsenal, Iptables, Bettercap, MacChanger, Reaver, Responder, DNS Spoofer, One-Tap MITM, MITM,
+    Packet Capture, Port Scanner, WiFi Scanner, WiFi Audit, Wifite), on top of the three WS-2.1
+    screens — 20 total. Each gains the same header (`· running` while live), Copy button and
+    auto-follow; `heightIn(max = 160.dp)` and every hand-rolled `Card { LazyColumn { Text(…,
+    FontFamily.Monospace) } }` are gone (`rg "heightIn\(max"` → 0).
+  - **Auto-follow needs a monotonic key, not `lines.size`**: capped lists stop growing at the cap,
+    so `WifiAuditUiState.lineCount` was added (Mitm's `logCount` and PacketCapture's `packetCount`
+    already existed) and the uncapped consoles pass `lines.size`.
+  - **Deliberately not migrated**: the static one-shot *result* cards (hydra transcript in Login
+    Cracker / Credential Tester, hping3's stats in Packet Forger, DuckyScript's parse summary,
+    Inspector's OS guesses, Traceroute's hops, Network Radar's hosts, Session Hijack's sessions).
+    They are verdicts or structured rows rendered in a page-scrolling form, not live consoles;
+    boxing them into a fixed-height console would hide content, not unify it.
+  - Device-verified (moto g60): Masscan (`Output` + Copy + placeholder, then the real
+    `FAIL: could not determine default interface` in the console and `masscan exited with code 1`
+    in the shared error style), IPTables (`-L -n -v` real listing), Packet Capture
+    (`Packets · running` while streaming, auto-followed, `Captured (500 lines)` after Stop at the
+    cap), WiFi Scanner (placeholder `The scan did not complete` + the `iw` error line), Port
+    Scanner (160 dp live console + neutral `No open ports in 1-9000`), 0 StrictMode violations.
 - [ ] 5.1 `HostSuggestions` (FlowRow, capped) on 14 screens — M
 - [ ] 5.2 Cap/expire `discoveredHosts` + clear action — S
 - [ ] 6.3 Remove unused permissions (unless 7.1) — S
