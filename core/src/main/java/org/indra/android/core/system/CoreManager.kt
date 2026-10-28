@@ -120,7 +120,7 @@ class CoreManager
 
         fun alpinePath(): File = File(coreDir, ALPINE_DIR_NAME)
 
-        fun isAlpineInstalled(): Boolean = File(alpinePath(), "bin/sh").canExecute()
+        fun isAlpineInstalled(): Boolean = File(alpinePath(), "bin/busybox").canExecute()
 
         /** Downloads + extracts the Alpine minirootfs (musl) for this device's ABI,
          *  giving the Terminal a real Linux userspace (python3, perl, aircrack-ng,
@@ -179,7 +179,31 @@ class CoreManager
                         if (!hasContent) error("Alpine archive is empty or unreadable")
                         tmp.delete()
                     }
-                    File(dir, "bin/sh").setExecutable(true, false)
+                    // The minirootfs tar carries modes, but our extractor does not restore
+                    // the exec bit, so only bin/sh ended up runnable. Make the whole tree
+                    // executable: directories need +x to be traversable and every binary in
+                    // bin/sbin/usr/bin/usr/sbin needs +x. Libs gaining +x is harmless.
+                    dir.walkTopDown().forEach { f ->
+                        f.setExecutable(true, false)
+                    }
+                    // The extractor skips symlinks, and Alpine's /bin/sh is a symlink to
+                    // busybox — recreate it so the chroot has a working shell.
+                    val shLink = File(dir, "bin/sh")
+                    if (!shLink.exists()) {
+                        runCatching {
+                            java.nio.file.Files.createSymbolicLink(
+                                shLink.toPath(),
+                                java.nio.file.Paths.get("busybox"),
+                            )
+                        }
+                    }
+                    // Alpine's musl resolver reads /etc/resolv.conf; without it, Go binaries
+                    // running inside the chroot (nuclei, gobuster) fall back to 127.0.0.1 and
+                    // fail with "connection refused". Android has no resolv.conf of its own,
+                    // so ship a sane default — the chroot is the only place Go can see one.
+                    val etcDir = File(dir, "etc")
+                    if (!etcDir.exists()) etcDir.mkdirs()
+                    File(etcDir, "resolv.conf").writeText("nameserver 8.8.8.8\nnameserver 1.1.1.1\n")
                     Logger.i("Alpine $ALPINE_VERSION installed to ${dir.absolutePath}")
                 }
             }

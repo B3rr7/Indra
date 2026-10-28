@@ -7,6 +7,7 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.last
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.flowOn
@@ -62,10 +63,6 @@ class SmartToolBox
             /** Where tcpdump writes .cap files when the Packet Capture screen's
              *  save-to-file switch is on; WiFi Audit prefill's from here too. */
             const val CAPTURE_PATH = "captures/last.cap"
-
-            /** Writable `HOME` for nuclei: it insists on creating `~/.config/nuclei`
-             *  and keeps its downloaded template repo in `~/nuclei-templates`. */
-            private const val NUCLEI_HOME_PATH = "home"
 
             /**
              * Single-quotes a value for the shell that executes `shell()` command strings
@@ -402,19 +399,71 @@ class SmartToolBox
             target: String,
             templates: String = "",
         ): Flow<ToolResult> {
-            val home = shellQuote(File(context.filesDir, NUCLEI_HOME_PATH).absolutePath)
-            return shell(
-                "mkdir -p $home && HOME=$home ${binary("nuclei")} -silent -nc -u ${shellQuote(target)} $templates",
-                label = "nuclei",
-                timeoutMs = SCAN_TIMEOUT_MS,
-            )
+            if (!coreManager.isAlpineInstalled()) {
+                return flow {
+                    emit(
+                        ToolResult(
+                            tool = "nuclei",
+                            success = false,
+                            status = STATUS_FAILED,
+                            error = "Alpine chroot is not installed. " +
+                                "Install it in Settings → Native Core (it gives nuclei a writable HOME and DNS).",
+                            rawOutput = "",
+                        ),
+                    )
+                }
+            }
+            val alpine = shellQuote(coreManager.alpinePath().absolutePath)
+            val tools = shellQuote(coreManager.coreDir.resolve("tools").absolutePath)
+            // Inside the chroot: /etc/resolv.conf makes Go's resolver work (Android has none),
+            // /root is a writable HOME (nuclei creates ~/.config/nuclei), and /tools is a
+            // bind-mount of <core>/tools so the binary lives in one place.
+            val script =
+                "A=$alpine; T=$tools; " +
+                    "mkdir -p \"\$A/etc\" \"\$A/tools\" \"\$A/root/.cache\" \"\$A/root/.config\" " +
+                    "\"\$A/data\" \"\$A/data/user/0/org.indra.android/cache\"; " +
+                    "printf 'nameserver 8.8.8.8\\nnameserver 1.1.1.1\\n' > \"\$A/etc/resolv.conf\"; " +
+                    "mount --bind \"\$T\" \"\$A/tools\" 2>/dev/null || true; " +
+                    "mount --bind \"${context.cacheDir.absolutePath}\" " +
+                    "\"\$A/data/user/0/org.indra.android/cache\" 2>/dev/null || true; " +
+                    "chroot \"\$A\" /bin/busybox env HOME=/root " +
+                    "XDG_CACHE_HOME=/root/.cache /tools/nuclei/nuclei " +
+                    "-silent -nc -u ${shellQuote(target)} $templates"
+            return shell(script, label = "nuclei", timeoutMs = SCAN_TIMEOUT_MS)
         }
 
         fun aircrack(args: String): Flow<ToolResult> =
             rawCommand("aircrack", "${binary("aircrack-ng")} $args", timeoutMs = LONG_RUNNING_TIMEOUT_MS)
 
-        fun gobuster(args: String): Flow<ToolResult> =
-            rawCommand("gobuster", "${binary("gobuster")} $args", timeoutMs = LONG_RUNNING_TIMEOUT_MS)
+        fun gobuster(args: String): Flow<ToolResult> {
+            if (!coreManager.isAlpineInstalled()) {
+                return flow {
+                    emit(
+                        ToolResult(
+                            tool = "gobuster",
+                            success = false,
+                            status = STATUS_FAILED,
+                            error = "Alpine chroot is not installed. Install it in Settings → Native Core.",
+                            rawOutput = "",
+                        ),
+                    )
+                }
+            }
+            val alpine = shellQuote(coreManager.alpinePath().absolutePath)
+            val tools = shellQuote(coreManager.coreDir.resolve("tools").absolutePath)
+            val core = shellQuote(coreManager.coreDir.absolutePath)
+            // The VM passes absolute paths inside <core> (wordlist etc.); rewrite them to the
+            // chroot-relative mount point so gobuster can open them inside the chroot.
+            val rewritten = args.replace(coreManager.coreDir.absolutePath, "/indra")
+            val script =
+                "A=$alpine; T=$tools; C=$core; " +
+                    "mkdir -p \"\$A/etc\" \"\$A/tools\" \"\$A/indra\"; " +
+                    "printf 'nameserver 8.8.8.8\\nnameserver 1.1.1.1\\n' > \"\$A/etc/resolv.conf\"; " +
+                    "mount --bind \"\$T\" \"\$A/tools\" 2>/dev/null || true; " +
+                    "mount --bind \"\$C\" \"\$A/indra\" 2>/dev/null || true; " +
+                    "chroot \"\$A\" /bin/busybox env HOME=/root XDG_CACHE_HOME=/root/.cache /tools/gobuster/gobuster $rewritten"
+            return shell(script, label = "gobuster", timeoutMs = LONG_RUNNING_TIMEOUT_MS)
+        }
 
         fun hping3(
             target: String,
