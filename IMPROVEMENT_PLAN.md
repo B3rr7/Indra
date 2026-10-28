@@ -30,7 +30,7 @@ Headline items (do not duplicate detail here):
 - [x] **WS-4 (P0)** Done (`4.1`): the app is deliberately dark-only, and the window theme now agrees — dark `android:Theme.Material.NoActionBar` with `windowLightStatusBar=false`, `values-night` theme/splash deleted, `SystemBarStyle.dark(TRANSPARENT)` on both bars. Verified with the system in light mode.
 - [ ] **WS-5 (P1)** Suggestion chips in a non-scrollable `Row` ×14 over a never-shrinking singleton host list; zero `rememberSaveable`/`SavedStateHandle`.
 - [ ] **WS-6/9 (P2)** Dead API/DI scope/models, 5 unused Gradle deps, 5 unused permissions, 2 parallel plugin registries, 173 hardcoded strings (dead `strings.xml`).
-- [ ] **WS-7 (P1)** No foreground service for 30-minute tools; daemon auth is a static `DEADBEEF` compared in plaintext with a `0666` socket.
+- [ ] **WS-7 (P1)** No foreground service for 30-minute tools (still open). Daemon auth is no longer a static `DEADBEEF`: a per-install random secret lives in app-private prefs, `<core>/users` holds only its SHA-256 (compared in constant time), and the socket is `chown`ed to the app uid, `chmod 0600` and additionally gated on `SO_PEERCRED` (2026-10-28).
 - [ ] **WS-8 (P1)** Zero tests in `features` (4.5k LOC of ViewModels) and 389 detekt suppressions; no `testTag`s.
 - [ ] **WS-10 (P2)** No adaptive layout (no `WindowSizeClass`) despite `resizeableActivity`, targetSdk 35.
 

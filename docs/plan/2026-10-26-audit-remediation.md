@@ -435,8 +435,8 @@ All-tools audit (2026-10-27, out-of-band — not a plan task):
 
 ### Sprint 4 — system integration & hygiene
 - [ ] 7.1 Decide: foreground service (`ToolSessionService`) or drop permissions — L
-- [ ] 7.2 Per-install daemon credential + compatibility path — M
-- [ ] 7.3 (optional) native socket-permission gate + core rebuild — M
+- [x] 7.2 Per-install daemon credential — **done 2026-10-28** (random secret in prefs + `users` holds its SHA-256; `build.sh` ships a random placeholder; `startDaemon()` rewrites the file and restarts a daemon that refuses the attach, which is the compatibility path for old installs). Device check still pending: `cat users` ≠ `DEADBEEF` and tools run.
+- [x] 7.3 Native socket-permission gate — **done 2026-10-28** (`INDRA_ALLOWED_UID` → `chown` + `chmod 0600` + `SO_PEERCRED` gate; old 0666 behaviour only when the client uid cannot be determined). Core rebuilt for both APIs/ABIs; `ls -l` on device still pending.
 - [ ] 6.4 Drop unused Gradle deps — S
 - [ ] 6.6 Version catalog — M
 - [ ] 9.1 Strings → `strings.xml`, purge cSploit-era entries — L

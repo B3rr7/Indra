@@ -38,6 +38,16 @@ class SettingsRepository
             get() = prefs.getString("MSF_RPC_PORT", "55553")?.toIntOrNull() ?: 55553
             set(value) = prefs.edit().putString("MSF_RPC_PORT", value.toString()).apply()
 
+        /**
+         * Random per-install secret used to authenticate against `indrad`.
+         *
+         * Generated on first use and kept in app-private prefs; the core's `users`
+         * file only ever contains its SHA-256. `null` when no secret was generated yet.
+         */
+        var daemonSecret: String?
+            get() = prefs.getString("PREF_DAEMON_SECRET", null)
+            set(value) = prefs.edit().putString("PREF_DAEMON_SECRET", value).apply()
+
         var storagePath: String
             get() =
                 prefs.getString("PREF_SAVE_PATH", context.getExternalFilesDir(null)?.absolutePath ?: context.filesDir.absolutePath)

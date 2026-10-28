@@ -64,7 +64,16 @@ class CoreManager
 
             /** Credentials shipped inside the core package's `users` file. */
             private const val DAEMON_USER = "android"
-            private const val DAEMON_PASSWORD = "DEADBEEF"
+
+            /**
+             * Daemon password file. The archive ships an unusable placeholder; the app
+             * writes a per-install credential here before the daemon starts (the daemon
+             * only reads it at startup).
+             */
+            private const val USERS_FILE = "users"
+
+            /** Entropy of the per-install daemon secret, in bytes. */
+            private const val SECRET_BYTES = 32
 
             private const val NUCLEI_VERSION = "3.11.1"
             private const val NUCLEI_SHA256_ARM64 = "8044e3d9768ba0a744b2872c1a87e813006f013da97ca9f50f7661a4203bec07"
@@ -437,6 +446,8 @@ class CoreManager
                     installWordlist(dir)
                     installGobusterBinary(dir)
                     installDirWordlist(dir)
+                    // Replace the archive's placeholder credential with this install's.
+                    writeUsersFile(dir)
                     File(dir, "VERSION").writeText(CORE_VERSION)
                     Logger.i("Core $CORE_VERSION installed to ${dir.absolutePath}")
 
@@ -513,21 +524,20 @@ class CoreManager
                             error("$DAEMON_NAME is missing or not executable")
                         }
 
+                        // The daemon reads `users` once, at startup, so the credential has
+                        // to be on disk before it is created.
+                        writeUsersFile()
+
                         if (File(socketPath).exists()) {
                             // Daemon may already be running; make sure the client is attached.
                             if (runCatching { connectAndLogin() }.isSuccess) return@runCatching
 
-                            // Stale socket left behind by a dead daemon: remove it.
-                            if (settings.rootlessMode || !rootManager.detectRoot().isRooted) {
-                                File(socketPath).delete()
-                            } else {
-                                rootManager.detectRoot().suPath?.let { su ->
-                                    ProcessBuilder(su, "-c", "rm -f ${shellQuote(socketPath)}")
-                                        .redirectErrorStream(true)
-                                        .start()
-                                        .waitFor()
-                                }
-                            }
+                            // Attach failed: the running daemon predates a credential change
+                            // (or died and left its socket behind). Kill it and start a fresh
+                            // one so the file written above is the one that is loaded.
+                            Logger.w("Attach to running daemon failed, restarting it")
+                            killDaemon()
+                            File(socketPath).delete()
                         }
 
                         val rootless = settings.rootlessMode || !rootManager.detectRoot().isRooted
@@ -535,6 +545,9 @@ class CoreManager
                             buildString {
                                 append("cd ").append(shellQuote(coreDir.absolutePath))
                                 append(" && LD_LIBRARY_PATH=").append(shellQuote(File(coreDir, "lib").absolutePath))
+                                // The daemon only accepts connections from this uid
+                                // (SO_PEERCRED); it is normally root while we are not.
+                                append(" INDRA_ALLOWED_UID=").append(android.os.Process.myUid())
                                 append(" ./").append(DAEMON_NAME)
                             }
 
@@ -638,31 +651,94 @@ class CoreManager
                     }
                     client.disconnect()
 
-                    rootManager.detectRoot().suPath?.let { su ->
-                        val process =
-                            ProcessBuilder(
-                                su,
-                                "-c",
-                                "for p in \$(pidof $DAEMON_NAME); do kill \$p; done",
-                            ).redirectErrorStream(true).start()
-                        // Same hazard as startDaemon(): a `su` that never answers must not
-                        // hold the daemon mutex forever. The socket probe below is the
-                        // authority on whether the daemon actually stopped.
-                        process.inputStream.close()
-                        val finished =
-                            withTimeoutOrNull(DAEMON_START_TIMEOUT_MS) {
-                                runInterruptible(Dispatchers.IO) { process.waitFor() }
-                            }
-                        if (finished == null) process.destroyForcibly()
-                    }
+                    killDaemon()
 
-                    repeat(20) {
-                        if (!File(socketPath).exists()) return@runCatching
-                        Thread.sleep(100)
-                    }
                     if (File(socketPath).exists()) error("Daemon did not stop")
                 }
             }
+
+        /**
+         * Sends SIGTERM to every running daemon process and waits for the socket to go
+         * away. Shared by [stopDaemon] and by [startDaemon]'s failed-attach path.
+         *
+         * The JNI client's `connected` flag is deliberately not consulted here: it goes
+         * stale when the peer drops, and killing a healthy daemon is harmless.
+         */
+        private suspend fun killDaemon() {
+            val rootless = settings.rootlessMode || !rootManager.detectRoot().isRooted
+            val killScript = "for p in \$(pidof $DAEMON_NAME); do kill \$p; done"
+
+            // Root mode needs `su` (the daemon is another uid); rootless runs it as
+            // this app user, which may simply kill its own processes.
+            val command: List<String> =
+                rootManager.detectRoot().suPath
+                    ?.takeIf { !rootless }
+                    ?.let { listOf(it, "-c", killScript) }
+                    ?: listOf("/system/bin/sh", "-c", killScript)
+
+            runCatching {
+                val process = ProcessBuilder(command).redirectErrorStream(true).start()
+                // A `su` that never answers must not hold the daemon mutex forever; the
+                // socket probe below is the authority on whether it stopped.
+                process.inputStream.close()
+                val finished =
+                    withTimeoutOrNull(DAEMON_START_TIMEOUT_MS) {
+                        runInterruptible(Dispatchers.IO) { process.waitFor() }
+                    }
+                if (finished == null) process.destroyForcibly()
+            }.onFailure { Logger.w("Could not signal the daemon: ${it.message}") }
+
+            repeat(20) {
+                if (!File(socketPath).exists()) return
+                Thread.sleep(100)
+            }
+        }
+
+        /**
+         * Per-install daemon secret: 32 random bytes, generated once and kept in
+         * app-private preferences. Never shipped in the APK or the core archive.
+         */
+        private fun daemonSecret(): String {
+            settings.daemonSecret?.takeIf { it.length >= SECRET_BYTES * 2 }?.let { return it }
+
+            val bytes = ByteArray(SECRET_BYTES)
+            java.security.SecureRandom().nextBytes(bytes)
+            val secret = bytes.joinToString("") { "%02x".format(it) }
+
+            settings.daemonSecret = secret
+            return secret
+        }
+
+        /** What the daemon expects from [org.indra.android.core.client.IndraClient.login]. */
+        private fun daemonCredential(): String =
+            java.security.MessageDigest
+                .getInstance("SHA-256")
+                .digest(daemonSecret().toByteArray(Charsets.UTF_8))
+                .joinToString("") { "%02x".format(it) }
+
+        /**
+         * Writes the daemon's `users` file with the current credential, owner-readable
+         * only. The archive ships a placeholder, so this must run before the daemon is
+         * started (it only reads the file at startup).
+         */
+        private fun writeUsersFile(dir: File = coreDir) {
+            if (!dir.exists() && !dir.mkdirs()) {
+                error("Cannot create core directory: ${dir.absolutePath}")
+            }
+
+            val users = File(dir, USERS_FILE)
+            val expected = "$DAEMON_USER:${daemonCredential()}\n"
+
+            if (!users.isFile || users.readText() != expected) {
+                users.writeText(expected)
+            }
+
+            users.setReadable(false, false)
+            users.setReadable(true, true)
+            users.setWritable(false, false)
+            users.setWritable(true, true)
+            users.setExecutable(false, false)
+        }
 
         fun initializeCore(): Result<Unit> =
             runCatching {
@@ -684,7 +760,7 @@ class CoreManager
             if (!client.isConnected() && !client.connect(socketPath)) {
                 error("Cannot connect to daemon socket at $socketPath")
             }
-            if (!client.isAuthenticated() && !client.login(DAEMON_USER, DAEMON_PASSWORD)) {
+            if (!client.isAuthenticated() && !client.login(DAEMON_USER, daemonCredential())) {
                 error("Daemon authentication failed")
             }
             // Fresh socket + auth: whatever a previous start failure meant, the daemon answers now.
