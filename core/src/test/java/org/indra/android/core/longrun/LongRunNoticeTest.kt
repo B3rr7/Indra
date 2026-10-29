@@ -29,6 +29,20 @@ class LongRunNoticeTest {
     }
 
     @Test
+    fun `the starting state does not invent a count`() {
+        assertEquals("Starting tool…", LongRunNotice.TITLE_STARTING)
+        assertFalse(LongRunNotice.TITLE_STARTING.contains("0 tools"))
+    }
+
+    @Test
+    fun `a short command is not worth a foreground service`() {
+        // Everything the app runs is a tracked child, including Home's ~50 ms `ip neigh`
+        // probe; promoting on the first track() crashed the process on every cold start.
+        assertTrue("promotion must wait longer than a startup probe", LongRunController.PROMOTE_AFTER_MS >= 1_000L)
+        assertTrue("must still catch a real scan", LongRunController.PROMOTE_AFTER_MS <= 10_000L)
+    }
+
+    @Test
     fun `the text says why the notification cannot be dismissed`() {
         assertTrue(LongRunNotice.TEXT.contains("screen is off"))
         assertTrue(LongRunNotice.TEXT.contains("Stop"))

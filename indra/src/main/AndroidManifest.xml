@@ -36,6 +36,19 @@
          permission to be granted from the per-app settings screen, not a dialog). -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
+    <!-- Root managers (Settings → Root access, daemon start). Android 11+ hides packages an
+         app does not declare here, so every getPackageInfo("com.topjohnwu.magisk") threw
+         NameNotFoundException and the app could not name the manager that owns `su`. Magisk
+         v31 also stopped reinstalling its own app when missing, so "no manager visible" is a
+         real state to report rather than an assumption. -->
+    <queries>
+        <package android:name="com.topjohnwu.magisk" />
+        <package android:name="me.weishu.kernelsu" />
+        <package android:name="com.rifsxd.ksunext" />
+        <package android:name="eu.chainfire.supersu" />
+        <package android:name="com.koushikdutta.superuser" />
+    </queries>
+
     <application
         android:name=".IndraApplication"
         android:allowBackup="false"

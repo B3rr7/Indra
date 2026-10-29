@@ -20,6 +20,16 @@ object LongRunNotice {
         }
 
     /**
+     * Shown between the service starting and the first count arriving.
+     *
+     * The service promotes itself in `onCreate`, because the framework requires
+     * `startForeground()` after every `startForegroundService()` — even when the tool ends
+     * before `onStartCommand` runs. Saying "starting" avoids inventing a count it does not
+     * have yet.
+     */
+    const val TITLE_STARTING = "Starting tool…"
+
+    /**
      * Why the notification is there. It is not dismissable (the service is what keeps the scan
      * alive), so it has to explain itself instead of looking like a stuck notification.
      */

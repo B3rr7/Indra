@@ -22,6 +22,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -30,10 +31,13 @@ import androidx.lifecycle.lifecycleScope
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.indra.android.core.system.CoreManager
 import org.indra.android.core.system.IndraSystem
 import org.indra.android.core.system.PermissionManager
+import org.indra.android.core.system.RootAccess
 import org.indra.android.core.system.RootManager
+import org.indra.android.core.system.SettingsRepository
 import org.indra.android.core.system.terminal.TerminalSession
 import org.indra.android.terminal.TerminalBubbleHost
 import org.indra.android.ui.navigation.BottomNavBar
@@ -58,9 +62,16 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var terminalSession: TerminalSession
 
+    @Inject
+    lateinit var settings: SettingsRepository
+
     // Counts denied attempts, not just "denied": a boolean key could not re-fire
     // the snackbar when the user taps Grant and denies again (silent dead end).
     private var permissionDenials by mutableIntStateOf(0)
+
+    // Root hint for the snackbar: set once at startup when `su` exists but Indra is not
+    // granted. Magisk v31 has no on-demand prompt, so this is the only in-app signal.
+    private var rootHint by mutableStateOf<String?>(null)
 
     private val permissionLauncher =
         registerForActivityResult(
@@ -90,8 +101,9 @@ class MainActivity : ComponentActivity() {
         // Request permissions
         requestPermissionsIfNeeded()
 
-        // Request root access via Magisk when not rooted
-        requestRootIfNeeded()
+        // Root is granted ahead of time in the manager app (Magisk v31 dropped the
+        // on-demand prompt), so the most this can do is tell the user where to grant it.
+        checkRootGrant()
 
         // Attach to (or start) the native daemon in the background
         lifecycleScope.launch(Dispatchers.IO) {
@@ -108,6 +120,9 @@ class MainActivity : ComponentActivity() {
                         permissionDenials = permissionDenials,
                         onRequestPermissions = ::requestPermissionsIfNeeded,
                         terminalSession = terminalSession,
+                        rootHint = rootHint,
+                        onOpenRootManager = { rootManager.openRootManager() },
+                        onDismissRootHint = { rootHint = null },
                     )
                 }
             }
@@ -132,16 +147,23 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun requestRootIfNeeded() {
-        // detectRoot() shells out (`which su`, `su -c echo test`) with blocking waitFor().
-        // On a fresh Magisk install it parks the Main thread on the grant dialog — a
-        // guaranteed ANR at cold start. Detect off Main; requestRootAccess() only fires
-        // a system intent (safe from any thread thanks to FLAG_ACTIVITY_NEW_TASK).
+    /**
+     * Detects a refused root grant and surfaces it once as a snackbar with an "Open"
+     * action. Nothing is requested automatically: the old code fired
+     * `com.topjohnwu.magisk.action.REQUEST_ROOT`, an action that never existed, and
+     * Magisk v31 refuses at once without showing any prompt to wait for.
+     *
+     * Off Main: `detectRoot()` execs `su` and waits up to 15 s for it.
+     */
+    private fun checkRootGrant() {
         lifecycleScope.launch(Dispatchers.IO) {
-            val rootStatus = rootManager.detectRoot()
-            if (!rootStatus.isRooted) {
-                rootManager.requestRootAccess()
-            }
+            // Rootless mode is a deliberate choice (Settings → General); don't nag about it.
+            val status = if (settings.rootlessMode) null else rootManager.detectRoot()
+            val hint =
+                status
+                    ?.takeIf { it.suAccess == RootAccess.SuAccess.DENIED && it.managerPackage != null }
+                    ?.let { rootManager.guidance(it) }
+            withContext(Dispatchers.Main) { rootHint = hint }
         }
     }
 }
@@ -151,6 +173,9 @@ fun MainScaffold(
     permissionDenials: Int = 0,
     onRequestPermissions: () -> Unit = {},
     terminalSession: TerminalSession? = null,
+    rootHint: String? = null,
+    onOpenRootManager: (() -> Unit)? = null,
+    onDismissRootHint: () -> Unit = {},
 ) {
     val navController = androidx.navigation.compose.rememberNavController()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -168,6 +193,24 @@ fun MainScaffold(
             ) {
                 SnackbarResult.ActionPerformed -> onRequestPermissions()
                 SnackbarResult.Dismissed -> Unit
+            }
+        }
+    }
+
+    // "Root was refused — enable Indra in the Magisk app's Superuser tab". The snackbar
+    // only names the fix; the actual grant happens in the manager app (Magisk 31+ shows
+    // no prompt, so an in-app retry loop could never succeed).
+    if (rootHint != null) {
+        LaunchedEffect(rootHint) {
+            when (
+                snackbarHostState.showSnackbar(
+                    message = rootHint,
+                    actionLabel = "Open",
+                    duration = SnackbarDuration.Long,
+                )
+            ) {
+                SnackbarResult.ActionPerformed -> onOpenRootManager?.invoke()
+                SnackbarResult.Dismissed -> onDismissRootHint()
             }
         }
     }

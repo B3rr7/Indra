@@ -39,6 +39,13 @@ class LongRunService : Service() {
     override fun onCreate() {
         super.onCreate()
         createChannel()
+        // The framework demands a startForeground() after every startForegroundService(), and it
+        // does not care that the tool already ended: the process was killed with
+        // ForegroundServiceDidNotStartInTimeException on every cold start, because Home's
+        // `ip neigh` probe is a tracked child that lives ~50 ms. Promoted here, the contract is
+        // satisfied even if onStartCommand never runs; onStartCommand then replaces the text
+        // with the real count.
+        promote(LongRunNotice.TITLE_STARTING)
     }
 
     @Suppress("ReturnCount")
@@ -59,15 +66,19 @@ class LongRunService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
-        val started =
-            runCatching { ServiceCompat.startForeground(this, NOTIFICATION_ID, notification(running), TYPE) }
-                .onFailure { Logger.w("Long-run notification refused: ${it.message}") }
-        if (started.isFailure) {
-            stopSelf()
-            return START_NOT_STICKY
-        }
-        if (!LongRunNotice.isActive(running)) stopSelf()
+        promote(LongRunNotice.title(running))
         return START_NOT_STICKY
+    }
+
+    /** Promote into the foreground, or stop the service when the system refuses the promotion. */
+    private fun promote(title: String) {
+        runCatching { ServiceCompat.startForeground(this, NOTIFICATION_ID, notification(title), TYPE) }
+            .onFailure {
+                // No permission, no `specialUse` type on this API level, or a denied background
+                // start: the run continues without the protection instead of dying with it.
+                Logger.w("Long-run notification refused: ${it.message}")
+                stopSelf()
+            }
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -83,7 +94,7 @@ class LongRunService : Service() {
         )
     }
 
-    private fun notification(running: Int): Notification {
+    private fun notification(title: String): Notification {
         val open =
             PendingIntent.getActivity(
                 this,
@@ -103,7 +114,7 @@ class LongRunService : Service() {
         return NotificationCompat
             .Builder(this, CHANNEL_ID)
             .setSmallIcon(icon())
-            .setContentTitle(LongRunNotice.title(running))
+            .setContentTitle(title)
             .setContentText(LongRunNotice.TEXT)
             .setStyle(NotificationCompat.BigTextStyle().bigText(LongRunNotice.TEXT))
             .setContentIntent(open)
@@ -112,7 +123,6 @@ class LongRunService : Service() {
             .setSilent(true)
             .build()
     }
-
     /** The app's own icon; a library module ships no drawable of its own. */
     private fun icon(): Int = applicationInfo.icon.takeIf { it != 0 } ?: android.R.drawable.stat_sys_warning
 

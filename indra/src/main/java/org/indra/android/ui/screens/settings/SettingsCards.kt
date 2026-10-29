@@ -100,12 +100,22 @@ internal fun RootAccessCard(
                 )
             }
 
+            // "Not granted" alone is a dead end: Magisk 31 removed the on-demand prompt, so
+            // the fix is a step in the manager app's Superuser tab, not a retry here.
+            uiState.rootGuidance?.let { guidance ->
+                Text(
+                    text = guidance,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
             if (!uiState.isRooted) {
                 Button(
-                    onClick = viewModel::requestRootAccess,
+                    onClick = viewModel::openRootManager,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text("Request root access")
+                    Text("Open ${uiState.rootManagerLabel}")
                 }
             }
         }

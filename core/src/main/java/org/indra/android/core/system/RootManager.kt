@@ -2,13 +2,24 @@ package org.indra.android.core.system
 
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
+import android.net.Uri
+import android.provider.Settings
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import java.io.IOException
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/**
+ * Root state as Android lets an app observe it.
+ *
+ * Detection is *not* built on the root manager's package name: Magisk v31 stopped
+ * reinstalling its app when it goes missing, and older versions could be repackaged
+ * with a random package id. The authority is a single bounded `su -c` probe
+ * ([RootAccess.probeScript]); the package lookup is only used to tell the user where
+ * to grant access and to name the manager in the UI.
+ */
 @Singleton
 class RootManager
     @Inject
@@ -16,10 +27,15 @@ class RootManager
         @ApplicationContext private val context: Context,
     ) {
         companion object {
-            private const val MAGISK_PACKAGE = "com.topjohnwu.magisk"
-            private const val ACTION_REQUEST_ROOT = "com.topjohnwu.magisk.action.REQUEST_ROOT"
-            private const val SUPERSU_PACKAGE = "eu.chainfire.supersu"
-            private const val SUPERUSER_APK = "com.koushikdutta.superuser"
+            /**
+             * Magisk < 31 parks `su` on its grant dialog, so this must be long enough
+             * for a human to tap Allow, yet short enough that a wedged `magiskd` does
+             * not hang a caller: every caller runs this on [kotlinx.coroutines.Dispatchers.IO].
+             */
+            private const val PROBE_TIMEOUT_SECONDS = 15L
+
+            /** /proc/self/status is a few hundred bytes; anything longer is not ours. */
+            private const val MAX_PROBE_OUTPUT = 8 * 1024
         }
 
         enum class RootType {
@@ -36,173 +52,155 @@ class RootManager
             val suPath: String?,
             val magiskVersion: String?,
             val kernelSuVersion: String?,
+            val suAccess: RootAccess.SuAccess = if (isRooted) RootAccess.SuAccess.GRANTED else RootAccess.SuAccess.NO_BINARY,
+            /** Package of the manager that can grant/revoke root, or null when none is visible. */
+            val managerPackage: String? = null,
+            /** `null` means "not probed" (rootless / probe failed), never "not held". */
+            val hasNetRaw: Boolean? = null,
+            val hasNetAdmin: Boolean? = null,
+            /** First line of the probe output — the refusal reason when there is one. */
+            val detail: String = "",
         )
 
         fun detectRoot(): RootStatus {
             val suPath = findSuBinary()
-            val isRooted = suPath != null && canExecuteSu(suPath)
-
+            val probe = probeRoot(suPath)
+            val managerPackage = findManagerPackage()
+            val granted = probe.access == RootAccess.SuAccess.GRANTED
             val rootType =
                 when {
-                    isMagiskInstalled() -> RootType.MAGISK
-                    isKernelSUInstalled() -> RootType.KERNELSU
-                    isSuperSUInstalled() -> RootType.SUPERSU
-                    isRooted -> detectRootTypeFromSu(suPath)
-                    else -> RootType.NONE
+                    granted && probe.rootType != RootType.UNKNOWN -> probe.rootType
+                    managerPackage != null -> typeForManager(managerPackage)
+                    suPath == null -> RootType.NONE
+                    else -> RootType.UNKNOWN
                 }
-
             return RootStatus(
-                isRooted = isRooted,
+                isRooted = granted,
                 rootType = rootType,
                 suPath = suPath,
-                magiskVersion = getMagiskVersion(),
-                kernelSuVersion = getKernelSUVersion(),
+                // The daemon's own version beats the app's (they can differ after an
+                // update, and the app may be missing entirely on Magisk 31+).
+                magiskVersion = if (rootType == RootType.MAGISK) probe.version ?: packageVersion(RootAccess.MAGISK_PACKAGE) else null,
+                kernelSuVersion = if (rootType == RootType.KERNELSU) packageVersion(RootAccess.KERNELSU_PACKAGE) else null,
+                suAccess = probe.access,
+                managerPackage = managerPackage,
+                hasNetRaw = probe.hasNetRaw,
+                hasNetAdmin = probe.hasNetAdmin,
+                detail = probe.detail,
             )
         }
 
-        fun requestRootAccess(): Boolean =
-            try {
-                val intent =
-                    Intent(ACTION_REQUEST_ROOT)
-                        .setPackage(MAGISK_PACKAGE)
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        /** User-facing fix for whatever [detectRoot] found, or null when root is healthy. */
+        fun guidance(status: RootStatus = detectRoot()): String? = RootAccess.guidance(status)
+
+        /**
+         * Opens the root manager app so the user can grant Indra in its Superuser tab.
+         *
+         * Replaces the old `com.topjohnwu.magisk.action.REQUEST_ROOT` broadcast: that
+         * action never existed, and since Magisk v31 there is no on-demand prompt at
+         * all — the Superuser tab is the only place a grant can be made.
+         *
+         * Some ROMs keep the manager's package out of `PackageManager` even with the
+         * `<queries>` declaration (observed on the moto g60 / Android 16: 379 of 405
+         * packages visible, `com.topjohnwu.magisk` never among them, `QUERY_ALL_PACKAGES`
+         * included). The `su` probe still names the manager, so [status] supplies the
+         * candidate package when the lookup comes up empty; `ACTION_APPLICATION_DETAILS_SETTINGS`
+         * is resolved by the system Settings app, which can see every package.
+         */
+        fun openRootManager(status: RootStatus? = null): Boolean {
+            val type = status?.rootType?.takeIf { it != RootType.UNKNOWN } ?: typeHintFromSuPath(status?.suPath)
+            val candidates =
+                buildList {
+                    status?.managerPackage?.let(::add)
+                    addAll(packagesFor(type))
+                    // Nothing identified the manager (a refused probe reports no type and the
+                    // ROM may hide the package): a blind guess beats a dead button, because the
+                    // details page below still tells the user the truth.
+                    addAll(RootAccess.MANAGER_PACKAGES)
+                }.distinct()
+            return candidates.any(::launchManager)
+        }
+
+        /** KernelSU keeps its `su` in `/data/adb/ksu/bin`, which is visible without root. */
+        private fun typeHintFromSuPath(suPath: String?): RootType? =
+            when {
+                suPath == null -> null
+                suPath.contains("/ksu/") -> RootType.KERNELSU
+                else -> null
+            }
+
+        private fun launchManager(packageName: String): Boolean {
+            val intent =
+                context.packageManager.getLaunchIntentForPackage(packageName)
+                    ?: Intent(
+                        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        Uri.fromParts("package", packageName, null),
+                    )
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            return runCatching {
                 context.startActivity(intent)
                 true
-            } catch (e: Exception) {
-                false
-            }
-
-        fun executeSu(command: String): ProcessResult {
-            val suPath = findSuBinary() ?: return ProcessResult(exitCode = -1, stderr = "su binary not found")
-            return try {
-                val process = Runtime.getRuntime().exec(arrayOf(suPath, "-c", command))
-                val stdout = process.inputStream.bufferedReader().use { it.readText() }
-                val stderr = process.errorStream.bufferedReader().use { it.readText() }
-                val exitCode = process.waitFor()
-                process.destroy()
-                ProcessResult(exitCode = exitCode, stdout = stdout, stderr = stderr)
-            } catch (e: IOException) {
-                ProcessResult(exitCode = -1, stderr = e.message ?: "IOException")
-            } catch (e: InterruptedException) {
-                ProcessResult(exitCode = -1, stderr = e.message ?: "InterruptedException")
-            }
+            }.getOrDefault(false)
         }
 
-        fun isMagiskInstalled(): Boolean =
-            try {
-                context.packageManager.getPackageInfo(MAGISK_PACKAGE, 0)
-                true
-            } catch (e: PackageManager.NameNotFoundException) {
-                false
+        /** Packages that can own root of [type], as reported by the `su` probe. */
+        private fun packagesFor(type: RootType?): List<String> =
+            when (type) {
+                RootType.MAGISK -> listOf(RootAccess.MAGISK_PACKAGE)
+                RootType.KERNELSU -> listOf(RootAccess.KERNELSU_PACKAGE, RootAccess.KERNELSU_NEXT_PACKAGE)
+                RootType.SUPERSU -> listOf(RootAccess.SUPERSU_PACKAGE, RootAccess.SUPERUSER_PACKAGE)
+                else -> emptyList()
             }
 
-        fun isKernelSUInstalled(): Boolean {
-            // KernelSU detection: check for /data/adb/ksu directory or KernelSU manager app
-            return File("/data/adb/ksu").exists() ||
-                try {
-                    context.packageManager.getPackageInfo("me.weishu.kernelsu", 0)
-                    true
-                } catch (e: PackageManager.NameNotFoundException) {
-                    false
-                }
-        }
+        /** Package of the installed root manager, most common first. Needs the <queries> block. */
+        fun findManagerPackage(): String? = RootAccess.MANAGER_PACKAGES.firstOrNull(::isInstalled)
 
-        fun isSuperSUInstalled(): Boolean =
-            try {
-                context.packageManager.getPackageInfo(SUPERSU_PACKAGE, 0)
-                true
-            } catch (e: PackageManager.NameNotFoundException) {
-                try {
-                    context.packageManager.getPackageInfo(SUPERUSER_APK, 0)
-                    true
-                } catch (e2: PackageManager.NameNotFoundException) {
-                    false
-                }
+        private fun isInstalled(packageName: String): Boolean =
+            runCatching { context.packageManager.getPackageInfo(packageName, 0) }.isSuccess
+
+        private fun packageVersion(packageName: String): String? =
+            runCatching { context.packageManager.getPackageInfo(packageName, 0).versionName }.getOrNull()
+
+        private fun typeForManager(packageName: String): RootType =
+            when (packageName) {
+                RootAccess.MAGISK_PACKAGE -> RootType.MAGISK
+                RootAccess.KERNELSU_PACKAGE, RootAccess.KERNELSU_NEXT_PACKAGE -> RootType.KERNELSU
+                RootAccess.SUPERSU_PACKAGE, RootAccess.SUPERUSER_PACKAGE -> RootType.SUPERSU
+                else -> RootType.UNKNOWN
             }
 
-        fun getMagiskVersion(): String? =
-            try {
-                val packageInfo = context.packageManager.getPackageInfo(MAGISK_PACKAGE, 0)
-                packageInfo.versionName
-            } catch (e: PackageManager.NameNotFoundException) {
-                null
-            }
-
-        fun getKernelSUVersion(): String? =
-            try {
-                val packageInfo = context.packageManager.getPackageInfo("me.weishu.kernelsu", 0)
-                packageInfo.versionName
-            } catch (e: PackageManager.NameNotFoundException) {
-                null
-            }
-
-        private fun findSuBinary(): String? {
-            val paths =
-                listOf(
-                    "/system/bin/su",
-                    "/system/xbin/su",
-                    "/sbin/su",
-                    "/su/bin/su",
-                    "/magisk/.core/bin/su",
-                    "/data/adb/magisk/busybox",
-                    "/data/adb/ksu/bin/su",
-                )
-
-            for (path in paths) {
+        private fun findSuBinary(): String? =
+            RootAccess.firstExecutable(RootAccess.suCandidates(System.getenv("PATH"))) { path ->
                 val file = File(path)
-                if (file.exists() && file.canExecute()) {
-                    return path
-                }
-            }
-
-            // Try PATH
-            return try {
-                val process = Runtime.getRuntime().exec("which su")
-                val output = process.inputStream.bufferedReader().use { it.readText().trim() }
-                process.waitFor()
-                process.destroy()
-                if (output.isNotEmpty() && File(output).exists()) output else null
-            } catch (e: Exception) {
-                null
-            }
-        }
-
-        private fun canExecuteSu(suPath: String): Boolean =
-            try {
-                val process = Runtime.getRuntime().exec(arrayOf(suPath, "-c", "echo test"))
-                val exitCode = process.waitFor()
-                process.destroy()
-                exitCode == 0
-            } catch (e: Exception) {
-                false
+                file.exists() && file.canExecute()
             }
 
         /**
-         * su works but no manager package is visible: Magisk hides its package on many
-         * devices (random package name after "Hide the Magisk app", DenyList), so a
-         * PackageManager lookup fails and the old code reported "Unknown root". Fall
-         * back to Magisk's on-disk layout and its own CLI before giving up.
+         * Runs [RootAccess.probeScript] once. `waitFor` comes before the read because the
+         * probe writes a few hundred bytes — far below the pipe buffer — so the child can
+         * never block on a full pipe while we wait for it to exit.
          */
-        // Guard-chains by design (most specific first); detekt's ReturnCount waived.
-        @Suppress("ReturnCount")
-        private fun detectRootTypeFromSu(suPath: String?): RootType {
-            if (suPath == null) return RootType.UNKNOWN
-            // Magisk 24+ keeps its daemon/binaries under /data/adb/magisk; KernelSU's
-            // directory is /data/adb/ksu (already checked via package, this covers KSU
-            // installed without its manager app).
-            if (File("/data/adb/magisk").exists() || File("/data/adb/magisk64").exists()) {
-                return RootType.MAGISK
-            }
-            if (File("/data/adb/ksu").exists()) return RootType.KERNELSU
-            if (File("/sbin/.magisk").exists()) return RootType.MAGISK
+        private fun probeRoot(suPath: String?): RootAccess.Probe {
+            if (suPath == null) return RootAccess.parse(exitCode = -1, output = "", suBinaryPresent = false)
             return try {
-                val process = Runtime.getRuntime().exec(arrayOf(suPath, "-c", "magisk -v"))
-                val stdout = process.inputStream.bufferedReader().use { it.readText() }
-                process.waitFor()
-                process.destroy()
-                if (stdout.contains("MAGISK", ignoreCase = true)) RootType.MAGISK else RootType.UNKNOWN
-            } catch (e: Exception) {
-                RootType.UNKNOWN
+                val process =
+                    ProcessBuilder(suPath, "-c", RootAccess.probeScript())
+                        .redirectErrorStream(true)
+                        .start()
+                if (process.waitFor(PROBE_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+                    val output = process.inputStream.bufferedReader().use { it.readText() }
+                    RootAccess.parse(exitCode = process.exitValue(), output = output.take(MAX_PROBE_OUTPUT))
+                } else {
+                    // Magisk < 31 parks `su` on its grant dialog; destroying the client is
+                    // the only way out, and the daemon sits behind this on the same mutex.
+                    process.destroyForcibly()
+                    RootAccess.parse(exitCode = -1, output = "", timedOut = true)
+                }
+            } catch (e: IOException) {
+                RootAccess.parseExecFailure(e.message.orEmpty())
+            } catch (e: InterruptedException) {
+                Thread.currentThread().interrupt()
+                RootAccess.parse(exitCode = -1, output = e.message.orEmpty())
             }
         }
 
@@ -216,22 +214,20 @@ class RootManager
         /**
          * Whether raw sockets / CAP_NET_RAW are available. Without these, SYN scans,
          * packet capture, MITM and monitor mode cannot work even in rootless mode.
+         * Root can be granted *and* stripped of the capability (Magisk 30.1+), which is
+         * why the probe reads the mask instead of assuming "rooted means raw sockets".
          */
-        fun hasRawSocketCapability(): Boolean =
-            try {
-                // Raw socket creation requires root on Android, so non-rooted => false;
-                // there's no reliable in-process probe without opening a daemon socket.
-                detectRoot().isRooted
-            } catch (e: Exception) {
-                false
-            }
+        fun hasRawSocketCapability(): Boolean {
+            val status = detectRoot()
+            return status.isRooted && status.hasNetRaw != false
+        }
 
-        fun getRootTypeDisplayName(): String =
-            when (detectRoot().rootType) {
-                RootType.MAGISK -> "Magisk"
-                RootType.KERNELSU -> "KernelSU"
+        fun getRootTypeDisplayName(status: RootStatus = detectRoot()): String =
+            when (status.rootType) {
+                RootType.MAGISK -> if (status.magiskVersion != null) "Magisk ${status.magiskVersion}" else "Magisk"
+                RootType.KERNELSU -> if (status.kernelSuVersion != null) "KernelSU ${status.kernelSuVersion}" else "KernelSU"
                 RootType.SUPERSU -> "SuperSU"
-                RootType.UNKNOWN -> "Unknown root"
+                RootType.UNKNOWN -> if (status.isRooted) "Rooted" else "Unknown root"
                 RootType.NONE -> "No root"
             }
     }

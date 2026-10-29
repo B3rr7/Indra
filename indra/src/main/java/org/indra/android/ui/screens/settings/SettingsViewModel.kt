@@ -16,6 +16,7 @@ import org.indra.android.core.system.IndraWorkspace
 import org.indra.android.core.system.Logger
 import org.indra.android.core.system.IndraSystem
 import org.indra.android.core.system.OtaUpdateManager
+import org.indra.android.core.system.RootAccess
 import org.indra.android.core.system.RootManager
 import org.indra.android.core.system.SettingsRepository
 import org.indra.android.core.system.SmartToolBox
@@ -63,6 +64,10 @@ data class SettingsUiState(
     val appUpdateMessage: String? = null,
     val isRooted: Boolean = false,
     val rootType: String = "No root",
+    /** How to obtain/repair root, or null when there is nothing to fix (see RootAccess). */
+    val rootGuidance: String? = null,
+    /** Name of the root manager app that can grant root ("Magisk", "KernelSU", …). */
+    val rootManagerLabel: String = "root manager",
 )
 
 /** Port fields the daemon tools read from [SettingsRepository]. */
@@ -92,6 +97,13 @@ class SettingsViewModel
         private val _uiState = MutableStateFlow(SettingsUiState())
         val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
 
+        /**
+         * Last root probe, kept so [openRootManager] can name a manager whose package
+         * PackageManager hides (the `su` probe still knows it). Written on IO.
+         */
+        @Volatile
+        private var lastRoot: RootManager.RootStatus? = null
+
         init {
             loadSettings()
         }
@@ -104,6 +116,11 @@ class SettingsViewModel
             viewModelScope.launch {
                 withContext(Dispatchers.IO) {
                     val workspace = IndraWorkspace.inspect(IndraWorkspace.root())
+                    // One probe, read three times: detectRoot() shells out to `su` (up to a
+                    // 15 s bound) and used to be called twice per load — once for the flag
+                    // and once more inside getRootTypeDisplayName().
+                    val root = rootManager.detectRoot()
+                    lastRoot = root
                     _uiState.value =
                         _uiState.value.copy(
                             httpProxyPort = settings.httpProxyPort,
@@ -113,8 +130,10 @@ class SettingsViewModel
                             version = "2.0.0",
                             coreVersion = system.getCoreVersion() ?: "Not installed",
                             daemonRunning = coreManager.isDaemonRunning,
-                            isRooted = rootManager.detectRoot().isRooted,
-                            rootType = rootManager.getRootTypeDisplayName(),
+                            isRooted = root.isRooted,
+                            rootType = rootManager.getRootTypeDisplayName(root),
+                            rootGuidance = rootManager.guidance(root),
+                            rootManagerLabel = RootAccess.managerLabelFor(root),
                             otaManifestUrl = settings.otaManifestUrl,
                             otaAllowTestHosts = settings.otaAllowTestHosts,
                             rootlessMode = settings.rootlessMode,
@@ -207,11 +226,10 @@ class SettingsViewModel
                 coreManager
                     .installCore()
                     .onSuccess {
-                        _uiState.value =
-                            _uiState.value.copy(
-                                coreMessage = "Core installed",
-                                coreVersion = coreManager.getCoreInfo().version,
-                            )
+                        // The version comes from refreshCoreState() below, which reads the
+                        // VERSION file on Dispatchers.IO. Reading it here was a
+                        // StrictMode DiskReadViolation on Main.
+                        _uiState.value = _uiState.value.copy(coreMessage = "Core installed")
                     }.onFailure { error ->
                         _uiState.value = _uiState.value.copy(coreMessage = "Install failed: ${error.message}")
                     }
@@ -245,8 +263,24 @@ class SettingsViewModel
             loadSettings()
         }
 
-        fun requestRootAccess() {
-            rootManager.requestRootAccess()
+        /**
+         * Opens the Magisk/KernelSU app so the user can grant Indra in its Superuser tab.
+         * Magisk v31 removed the reactive prompt, so there is nothing to wait for in-app:
+         * the grant has to be made in the manager, then this screen re-probes on resume.
+         */
+        fun openRootManager() {
+            val status = lastRoot
+            viewModelScope.launch {
+                val opened = withContext(Dispatchers.IO) { rootManager.openRootManager(status) }
+                if (!opened) {
+                    _uiState.value =
+                        _uiState.value.copy(
+                            rootGuidance =
+                                "Could not open the ${_uiState.value.rootManagerLabel} app. Open it from the " +
+                                    "app drawer, then enable Indra under Superuser.",
+                        )
+                }
+            }
         }
 
         fun setDebugErrorLogging(enabled: Boolean) {

@@ -88,12 +88,6 @@ class CoreManager
             private const val ALPINE_DIR_NAME = "alpine"
         }
 
-        data class CoreInfo(
-            val version: String,
-            val isInstalled: Boolean,
-            val isInitialized: Boolean,
-        )
-
         val coreDir: File get() = File(system.corePath)
 
         fun nucleiPath(): File = File(coreDir, "tools/nuclei/nuclei")
@@ -459,15 +453,6 @@ class CoreManager
 
         private val daemonMutex = kotlinx.coroutines.sync.Mutex()
 
-        fun getCoreInfo(): CoreInfo {
-            val version = system.getCoreVersion()
-            return CoreInfo(
-                version = version ?: "Not installed",
-                isInstalled = version != null,
-                isInitialized = client.isAuthenticated(),
-            )
-        }
-
         /**
          * Extracts the bundled core archive into [coreDir] and writes the VERSION file.
          */
@@ -592,7 +577,11 @@ class CoreManager
                             File(socketPath).delete()
                         }
 
-                        val rootless = settings.rootlessMode || !rootManager.detectRoot().isRooted
+                        // One probe for the whole start. detectRoot() execs `su`, and this
+                        // block used to run it up to three times (which is 3× the bound on
+                        // a manager that parks the call on a grant dialog).
+                        val root = resolveDaemonPrivilege()
+                        val rootless = root == null || !root.isRooted
                         val command =
                             buildString {
                                 append("cd ").append(shellQuote(coreDir.absolutePath))
@@ -610,7 +599,7 @@ class CoreManager
                                     .redirectErrorStream(true)
                                     .start()
                             } else {
-                                val su = rootManager.detectRoot().suPath ?: error("Root access is not available")
+                                val su = root?.suPath ?: error("Root access is not available")
                                 ProcessBuilder(su, "-c", command)
                                     .redirectErrorStream(true)
                                     .start()
@@ -649,6 +638,24 @@ class CoreManager
                     }
                 }
             }
+
+        /**
+         * Root decision for a daemon start: null means "run the daemon as this app user".
+         *
+         * A refused grant throws instead of silently falling back to rootless: the rootless
+         * daemon cannot SYN-scan, capture packets or MITM, so the misconfiguration would
+         * surface much later as an unrelated tool error. A device with no root at all keeps
+         * the rootless fallback, because that is all it can do.
+         */
+        private fun resolveDaemonPrivilege(): RootManager.RootStatus? {
+            if (settings.rootlessMode) return null
+            val root = rootManager.detectRoot()
+            if (root.suAccess == RootAccess.SuAccess.DENIED) {
+                val fix = rootManager.guidance(root) ?: "Grant Indra root access."
+                error("$fix To run without root instead, turn on rootless mode in Settings.")
+            }
+            return root
+        }
 
         /**
          * Re-attaches the JNI client to a daemon that is already running — it never starts one.
@@ -717,13 +724,14 @@ class CoreManager
          * stale when the peer drops, and killing a healthy daemon is harmless.
          */
         private suspend fun killDaemon() {
-            val rootless = settings.rootlessMode || !rootManager.detectRoot().isRooted
+            val root = if (settings.rootlessMode) null else rootManager.detectRoot()
+            val rootless = root == null || !root.isRooted
             val killScript = "for p in \$(pidof $DAEMON_NAME); do kill \$p; done"
 
             // Root mode needs `su` (the daemon is another uid); rootless runs it as
             // this app user, which may simply kill its own processes.
             val command: List<String> =
-                rootManager.detectRoot().suPath
+                root?.suPath
                     ?.takeIf { !rootless }
                     ?.let { listOf(it, "-c", killScript) }
                     ?: listOf("/system/bin/sh", "-c", killScript)
