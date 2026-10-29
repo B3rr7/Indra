@@ -1,0 +1,9 @@
+{
+  "version": "3.20.0",
+  "url": "https://dl-cdn.alpinelinux.org/alpine/v3.20/releases/{arch}/alpine-minirootfs-{version}-{arch}.tar.gz",
+  "sha256": {
+    "aarch64": "83a79199bf3112c65e62ddf1732b051daf62ed2ddf5a8413c440dc25956116f0",
+    "armv7": "63bcbb89b60cf22067d6c6100929f421b98ccb0a92d8e162830b7ebddc17e93c"
+  },
+  "minAppVersion": 5
+}

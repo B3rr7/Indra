@@ -9,8 +9,9 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
 import org.indra.android.core.client.IndraClient
+import org.indra.android.core.engine.AlpineManifest
+import org.indra.android.core.engine.ChrootEngine
 import org.tukaani.xz.XZInputStream
 import java.io.File
 import java.io.InputStream
@@ -83,10 +84,8 @@ class CoreManager
             private const val EXPLOITDB_DIR_NAME = "exploitdb"
             private const val BETTERCAP_DIR_NAME = "bettercap"
 
-            private const val ALPINE_VERSION = "3.20.0"
+            /** Rootfs directory name; version/URL/checksums live in `assets/alpine.json`. */
             private const val ALPINE_DIR_NAME = "alpine"
-            private const val ALPINE_SHA256_ARM64 = "83a79199bf3112c65e62ddf1732b051daf62ed2ddf5a8413c440dc25956116f0"
-            private const val ALPINE_SHA256_ARM = "63bcbb89b60cf22067d6c6100929f421b98ccb0a92d8e162830b7ebddc17e93c"
         }
 
         data class CoreInfo(
@@ -123,15 +122,28 @@ class CoreManager
         fun isAlpineInstalled(): Boolean = File(alpinePath(), "bin/busybox").canExecute()
 
         /** Downloads + extracts the Alpine minirootfs (musl) for this device's ABI,
-         *  giving the Terminal a real Linux userspace (python3, perl, aircrack-ng,
-         *  ... via `apk add`) so the Python/Perl tools can run natively. */
+         *  giving the Terminal and the chroot-hosted tools a real Linux userspace.
+         *
+         *  The version, URL and per-arch checksums come from `assets/alpine.json`
+         *  ([org.indra.android.core.engine.AlpineManifest]), so bumping the rootfs is an
+         *  asset edit rather than a Kotlin change. Extraction restores mode bits and
+         *  symlinks ([TarExtract]), which is what makes `apk` and `/bin/sh` work without
+         *  the old whole-tree `chmod +x` sweep and hand-made symlink.
+         *
+         *  `resolv.conf` is deliberately **not** written here: the chroot engine writes it at
+         *  use time from the active network's DNS servers (one writer, correct per network). */
         suspend fun installAlpine(onProgress: (Float) -> Unit = {}): Result<Unit> =
             withContext(Dispatchers.IO) {
                 runCatching {
-                    val isArm64 = android.os.Build.SUPPORTED_ABIS.firstOrNull { it == "arm64-v8a" } == "arm64-v8a"
-                    val abi = if (isArm64) "aarch64" else "armv7"
-                    val expectedSha = if (isArm64) ALPINE_SHA256_ARM64 else ALPINE_SHA256_ARM
-                    val url = "https://dl-cdn.alpinelinux.org/alpine/v3.20/releases/$abi/alpine-minirootfs-$ALPINE_VERSION-$abi.tar.gz"
+                    val manifest =
+                        alpineManifest()
+                            ?: error("The bundled Alpine description (assets/alpine.json) is missing or unusable")
+                    val arch = alpineArch()
+                    val expectedSha =
+                        manifest.sha256For(arch)
+                            ?: error("assets/alpine.json has no usable sha256 for $arch")
+                    manifest.requireAppVersion(appVersionCode())?.let { error(it) }
+                    val url = manifest.urlFor(arch)
 
                     val dir = alpinePath()
                     if (!dir.exists() && !dir.mkdirs()) error("Cannot create alpine directory")
@@ -141,7 +153,9 @@ class CoreManager
                     val client = OkHttpClient()
                     val request = Request.Builder().url(url).build()
                     client.newCall(request).execute().use { response ->
-                        if (!response.isSuccessful) error("Download failed: ${response.code}")
+                        if (!response.isSuccessful) {
+                            error("Download failed (HTTP ${response.code}) for $url")
+                        }
                         val body = response.body ?: error("Empty response")
                         val total = body.contentLength()
                         val tmp = File(coreDir, "alpine.tar.gz.tmp")
@@ -157,56 +171,70 @@ class CoreManager
                                 }
                             }
                         }
-                        // Verify SHA-256
-                        val digest = java.security.MessageDigest.getInstance("SHA-256")
-                        tmp.inputStream().use { s ->
-                            val b = ByteArray(8192)
-                            var r: Int
-                            while (s.read(b).also { r = it } != -1) digest.update(b, 0, r)
-                        }
-                        val actual = digest.digest().joinToString("") { "%02x".format(it) }
+
+                        val actual = sha256Of(tmp)
                         if (!actual.equals(expectedSha, ignoreCase = true)) {
                             tmp.delete()
-                            error("SHA-256 mismatch: $actual != $expectedSha")
+                            error("SHA-256 mismatch for Alpine $arch: $actual != $expectedSha")
                         }
-                        // Extract
+
                         val hasContent =
                             tmp.inputStream().use { raw ->
-                                GZIPInputStream(raw).use { gz ->
-                                    extractTar(gz, dir)
-                                }
+                                GZIPInputStream(raw).use { gz -> TarExtract.extract(gz, dir) }
                             }
                         if (!hasContent) error("Alpine archive is empty or unreadable")
                         tmp.delete()
                     }
-                    // The minirootfs tar carries modes, but our extractor does not restore
-                    // the exec bit, so only bin/sh ended up runnable. Make the whole tree
-                    // executable: directories need +x to be traversable and every binary in
-                    // bin/sbin/usr/bin/usr/sbin needs +x. Libs gaining +x is harmless.
-                    dir.walkTopDown().forEach { f ->
-                        f.setExecutable(true, false)
+
+                    // Honest post-check instead of a blanket chmod: the extractor restored the
+                    // archive's own modes, so a non-executable busybox means extraction lost
+                    // them and every later `chroot` would fail with a confusing message.
+                    val busybox = File(dir, "bin/busybox")
+                    if (!busybox.canExecute()) {
+                        error(
+                            "Alpine extracted but ${busybox.absolutePath} is not executable — " +
+                                "the archive's file modes were lost. Reinstall; if it repeats, the " +
+                                "rootfs cannot be written on this device.",
+                        )
                     }
-                    // The extractor skips symlinks, and Alpine's /bin/sh is a symlink to
-                    // busybox — recreate it so the chroot has a working shell.
-                    val shLink = File(dir, "bin/sh")
-                    if (!shLink.exists()) {
-                        runCatching {
-                            java.nio.file.Files.createSymbolicLink(
-                                shLink.toPath(),
-                                java.nio.file.Paths.get("busybox"),
-                            )
-                        }
-                    }
-                    // Alpine's musl resolver reads /etc/resolv.conf; without it, Go binaries
-                    // running inside the chroot (nuclei, gobuster) fall back to 127.0.0.1 and
-                    // fail with "connection refused". Android has no resolv.conf of its own,
-                    // so ship a sane default — the chroot is the only place Go can see one.
-                    val etcDir = File(dir, "etc")
-                    if (!etcDir.exists()) etcDir.mkdirs()
-                    File(etcDir, "resolv.conf").writeText("nameserver 8.8.8.8\nnameserver 1.1.1.1\n")
-                    Logger.i("Alpine $ALPINE_VERSION installed to ${dir.absolutePath}")
+                    Logger.i("Alpine ${manifest.version} ($arch) installed to ${dir.absolutePath}")
                 }
             }
+
+        /** The bundled rootfs description, or null when the asset is missing/corrupt. */
+        fun alpineManifest(): AlpineManifest? =
+            runCatching {
+                context.assets.open(ChrootEngine.ALPINE_ASSET).bufferedReader().use { it.readText() }
+            }.getOrNull()?.let { AlpineManifest.parse(it) }
+
+        /** Alpine's own architecture name for the primary ABI. */
+        fun alpineArch(): String =
+            if (android.os.Build.SUPPORTED_ABIS.firstOrNull { it == "arm64-v8a" } == "arm64-v8a") {
+                "aarch64"
+            } else {
+                "armv7"
+            }
+
+        private fun appVersionCode(): Long =
+            runCatching {
+                val info = context.packageManager.getPackageInfo(context.packageName, 0)
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                    info.longVersionCode
+                } else {
+                    @Suppress("DEPRECATION")
+                    info.versionCode.toLong()
+                }
+            }.getOrDefault(0L)
+
+        private fun sha256Of(file: File): String {
+            val digest = java.security.MessageDigest.getInstance("SHA-256")
+            file.inputStream().use { stream ->
+                val buffer = ByteArray(8192)
+                var read: Int
+                while (stream.read(buffer).also { read = it } != -1) digest.update(buffer, 0, read)
+            }
+            return digest.digest().joinToString("") { "%02x".format(it) }
+        }
 
         /** True when the kernel/chipset can put [iface] into monitor mode (needed for
          *  airodump-ng-style capture). Stock Android rarely supports this; users with
@@ -280,8 +308,8 @@ class CoreManager
                             }
                             val hasContent =
                                 tmp.inputStream().use { raw ->
-                                    if (url.endsWith(".xz")) XZInputStream(raw).use { xz -> extractTar(xz, dir) }
-                                    else extractTar(raw, dir)
+                                    if (url.endsWith(".xz")) XZInputStream(raw).use { xz -> TarExtract.extract(xz, dir) }
+                                    else TarExtract.extract(raw, dir)
                                 }
                             if (!hasContent) error("$title archive is empty or unreadable")
                             tmp.delete()
@@ -462,7 +490,7 @@ class CoreManager
 
                     val hasContent =
                         context.assets.open(coreAssetName()).use { raw ->
-                            XZInputStream(raw).use { xz -> extractTar(xz, dir) }
+                            XZInputStream(raw).use { xz -> TarExtract.extract(xz, dir) }
                         }
                     if (!hasContent) error("Core archive is empty or unreadable")
 
@@ -792,40 +820,6 @@ class CoreManager
             if (!client.loadHandlers()) {
                 Logger.w("Daemon did not report any handlers")
             }
-        }
-
-        private fun extractTar(
-            input: InputStream,
-            destination: File,
-        ): Boolean {
-            val root = destination.canonicalFile
-            var extractedAny = false
-
-            TarArchiveInputStream(input).use { tar ->
-                var entry = tar.nextEntry
-                while (entry != null) {
-                    val target = File(root, entry.name).canonicalFile
-                    if (target != root && !target.path.startsWith(root.path + File.separator)) {
-                        error("Illegal path in core archive: ${entry.name}")
-                    }
-
-                    extractedAny = true
-
-                    when {
-                        entry.isDirectory -> {
-                            if (!target.exists() && !target.mkdirs()) error("Cannot create ${target.path}")
-                        }
-                        entry.isSymbolicLink -> Logger.w("Skipping symlink in core archive: ${entry.name}")
-                        else -> {
-                            target.parentFile?.let { if (!it.exists() && !it.mkdirs()) error("Cannot create ${it.path}") }
-                            target.outputStream().use { output -> tar.copyTo(output) }
-                        }
-                    }
-
-                    entry = tar.nextEntry
-                }
-            }
-            return extractedAny
         }
 
         private fun markExecutables(dir: File) {

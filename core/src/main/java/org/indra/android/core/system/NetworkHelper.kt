@@ -124,6 +124,13 @@ class NetworkHelper
             )
         }
 
+        @Suppress("ReturnCount")
+        fun getActiveInterface(): String? {
+            val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return null
+            val properties = cm.activeNetwork?.let { cm.getLinkProperties(it) } ?: return null
+            return properties.interfaceName?.takeIf { it.isNotBlank() }
+        }
+
         fun getGatewayAddress(): String? {
             val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return null
             val linkProperties = cm.activeNetwork?.let { cm.getLinkProperties(it) } ?: return null
@@ -131,5 +138,27 @@ class NetworkHelper
                 .firstOrNull { it.isDefaultRoute && it.gateway != null }
                 ?.gateway
                 ?.hostAddress
+        }
+
+        /**
+         * The DNS servers this network actually uses.
+         *
+         * Android resolves through `netd` and has no `/etc/resolv.conf`, so the only way to give
+         * a chroot a working resolver is to copy the active network's servers into it. Reading
+         * them here means a network that filters or blocks public resolvers (a captive portal,
+         * a corporate DNS, a hotel) resolves inside the chroot too — a hardcoded `8.8.8.8`
+         * resolved nothing there and quietly sent queries to a third party.
+         *
+         * Link-local IPv6 servers are dropped by [ResolvConf] (their scope id is meaningless
+         * inside a chroot), and an empty list is returned rather than a public fallback.
+         */
+        @Suppress("ReturnCount")
+        fun getDnsServers(): List<String> {
+            val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return emptyList()
+            val network = cm.activeNetwork ?: return emptyList()
+            val properties = cm.getLinkProperties(network) ?: return emptyList()
+            return properties.dnsServers
+                .mapNotNull { it.hostAddress }
+                .filter { !it.isNullOrBlank() }
         }
     }

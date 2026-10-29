@@ -54,6 +54,9 @@ dependencies {
     implementation 'org.tukaani:xz:1.9'
 
     testImplementation 'junit:junit:4.13.2'
+    // commons-compress's TarArchiveOutputStream reaches for org.apache.commons.codec.Charsets
+    // at runtime (the TarExtract tests build archives), and it is not a transitive dependency.
+    testImplementation 'commons-codec:commons-codec:1.16.1'
 }
 
 detekt {
