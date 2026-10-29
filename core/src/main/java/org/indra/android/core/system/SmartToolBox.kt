@@ -14,9 +14,17 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import org.indra.android.core.child.ChildProcess
 import org.indra.android.core.child.ChildProcessManager
 import org.indra.android.core.child.ProcessEvent
 import org.indra.android.core.client.IndraClient
+import org.indra.android.core.engine.Capability
+import org.indra.android.core.engine.CapabilityState
+import org.indra.android.core.engine.ChrootEngine
+import org.indra.android.core.engine.ChrootScript
+import org.indra.android.core.engine.Hashcat
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -32,11 +40,15 @@ private const val PROBE_TTL_NANOS = 1_000_000_000L
 @Singleton
 class SmartToolBox
     @Inject
+    @Suppress("LongParameterList")
     constructor(
         @ApplicationContext private val context: Context,
         private val client: IndraClient,
         private val settings: SettingsRepository,
         private val coreManager: CoreManager,
+        private val childProcessManager: ChildProcessManager,
+        private val chrootEngine: ChrootEngine,
+        private val networkHelper: NetworkHelper,
     ) {
         companion object {
             /** Tools that never emit ChildEnd (long-running daemons) are bounded by this. */
@@ -57,6 +69,9 @@ class SmartToolBox
 
             /** `ip neigh show` returns immediately; a missing daemon must not hang Home. */
             private const val NEIGHBOR_PROBE_TIMEOUT_MS = 10_000L
+
+            /** Chroot preparation: a handful of mkdir/grep/mount calls. */
+            private const val CHROOT_SETUP_TIMEOUT_MS = 30_000L
 
             private const val WORDLIST_PATH = "wordlists/common-passwords.txt"
 
@@ -187,6 +202,16 @@ class SmartToolBox
          * user-pressed Stop on a tool read as a crash.
          */
         private val stoppedPids = java.util.concurrent.ConcurrentHashMap.newKeySet<Int>()
+
+        /**
+         * The `resolv.conf` currently written into the chroot, or null when the chroot has not
+         * been prepared in this process. Comparing the *content* rather than a boolean is what
+         * makes a network switch (different DNS servers) re-write the file.
+         */
+        private val chrootDns = java.util.concurrent.atomic.AtomicReference<String?>(null)
+
+        /** Serialises chroot preparation: two screens opening at once must not mount twice. */
+        private val chrootMutex = Mutex()
 
         init {
             TOOL_SPECS.forEach { spec ->
@@ -389,80 +414,148 @@ class SmartToolBox
          * [Nuclei.parseFindings] reads those lines, and the severity tags are what tells a finding
          * apart from a log message.
          *
-         * It runs through [shell] for one reason: nuclei creates `~/.config/nuclei` before it
-         * reads a single template, and the daemon's `HOME` is `/` (read-only), so every run
-         * died with `mkdir /.config: read-only file system` (`-nc` does not skip the
-         * directory). The script creates a writable `HOME` first — the daemon is root, so it
-         * can — and keeps nuclei's template repo next to it.
+         * It runs inside the Alpine chroot for one reason: nuclei creates `~/.config/nuclei`
+         * before it reads a single template, and the daemon's `HOME` is `/` (read-only), so
+         * every run died with `mkdir /.config: read-only file system` (`-nc` does not skip the
+         * directory). The engine gives it a writable `HOME` and the only `resolv.conf` a Go
+         * resolver can see on Android.
          */
-        fun nuclei(
+        suspend fun nuclei(
             target: String,
             templates: String = "",
         ): Flow<ToolResult> {
-            if (!coreManager.isAlpineInstalled()) {
-                return flow {
-                    emit(
-                        ToolResult(
-                            tool = "nuclei",
-                            success = false,
-                            status = STATUS_FAILED,
-                            error = "Alpine chroot is not installed. " +
-                                "Install it in Settings → Native Core (it gives nuclei a writable HOME and DNS).",
-                            rawOutput = "",
-                        ),
-                    )
-                }
-            }
-            val alpine = shellQuote(coreManager.alpinePath().absolutePath)
-            val tools = shellQuote(coreManager.coreDir.resolve("tools").absolutePath)
-            // Inside the chroot: /etc/resolv.conf makes Go's resolver work (Android has none),
-            // /root is a writable HOME (nuclei creates ~/.config/nuclei), and /tools is a
-            // bind-mount of <core>/tools so the binary lives in one place.
-            val script =
-                "A=$alpine; T=$tools; " +
-                    "mkdir -p \"\$A/etc\" \"\$A/tools\" \"\$A/root/.cache\" \"\$A/root/.config\" " +
-                    "\"\$A/data\" \"\$A/data/user/0/org.indra.android/cache\"; " +
-                    "printf 'nameserver 8.8.8.8\\nnameserver 1.1.1.1\\n' > \"\$A/etc/resolv.conf\"; " +
-                    "mount --bind \"\$T\" \"\$A/tools\" 2>/dev/null || true; " +
-                    "mount --bind \"${context.cacheDir.absolutePath}\" " +
-                    "\"\$A/data/user/0/org.indra.android/cache\" 2>/dev/null || true; " +
-                    "chroot \"\$A\" /bin/busybox env HOME=/root " +
-                    "XDG_CACHE_HOME=/root/.cache /tools/nuclei/nuclei " +
-                    "-silent -nc -u ${shellQuote(target)} $templates"
-            return shell(script, label = "nuclei", timeoutMs = SCAN_TIMEOUT_MS)
+            ensureChroot()?.let { return failure("nuclei", it) }
+            val binary = "/" + ChrootScript.CORE_MOUNT.trimStart('/') + "/tools/nuclei/nuclei"
+            return shell(
+                chrootEngine.wrap("$binary -silent -nc -u ${shellQuote(target)} $templates"),
+                label = "nuclei",
+                timeoutMs = SCAN_TIMEOUT_MS,
+            )
         }
 
         fun aircrack(args: String): Flow<ToolResult> =
             rawCommand("aircrack", "${binary("aircrack-ng")} $args", timeoutMs = LONG_RUNNING_TIMEOUT_MS)
 
-        fun gobuster(args: String): Flow<ToolResult> {
-            if (!coreManager.isAlpineInstalled()) {
-                return flow {
-                    emit(
-                        ToolResult(
-                            tool = "gobuster",
-                            success = false,
-                            status = STATUS_FAILED,
-                            error = "Alpine chroot is not installed. Install it in Settings → Native Core.",
-                            rawOutput = "",
-                        ),
-                    )
+        /**
+         * Runs the Metasploit chroot's self-check and returns the fix when it cannot start, else
+         * null. The screen calls this before building the search command so the failure is the
+         * loader/missing-console sentence instead of `chroot: exec msfconsole: No such file`.
+         */
+        suspend fun msfProblem(root: String): String? {
+            val result =
+                withContext(Dispatchers.IO) {
+                    shell(MsfLaunch.probe(root), label = "msf probe", timeoutMs = CHROOT_SETUP_TIMEOUT_MS).last()
                 }
+            return MsfLaunch.explain(result.rawOutput)
+        }
+
+        /**
+         * Switches [iface] into monitor (or back to managed) mode, preferring the chroot.
+         *
+         * The ROM ships no `iw`, which is what made this a dead end (`exit 127`, and the interface
+         * was left down before the `;`-separated restore was introduced). Alpine can install it, so
+         * when the chroot has both `iw` and `ip` the same script runs inside it; otherwise the host
+         * attempt is still made, because a vendor ROM that does ship `iw` should keep working.
+         * Either way [MonitorMode.script] restores the link.
+         */
+        @Suppress("ReturnCount")
+        suspend fun monitorMode(
+            iface: String,
+            monitor: Boolean,
+        ): Flow<ToolResult> {
+            val script = MonitorMode.script(iface, monitor)
+            val inChroot = chrootEngine.capability(Capability.IW) == CapabilityState.Available
+            if (inChroot) {
+                ensureChroot()?.let { return failure("monitor mode", it) }
+                return shell(
+                    chrootEngine.wrapShell(script),
+                    label = "monitor mode",
+                    timeoutMs = CHROOT_SETUP_TIMEOUT_MS,
+                )
             }
-            val alpine = shellQuote(coreManager.alpinePath().absolutePath)
-            val tools = shellQuote(coreManager.coreDir.resolve("tools").absolutePath)
-            val core = shellQuote(coreManager.coreDir.absolutePath)
-            // The VM passes absolute paths inside <core> (wordlist etc.); rewrite them to the
-            // chroot-relative mount point so gobuster can open them inside the chroot.
-            val rewritten = args.replace(coreManager.coreDir.absolutePath, "/indra")
-            val script =
-                "A=$alpine; T=$tools; C=$core; " +
-                    "mkdir -p \"\$A/etc\" \"\$A/tools\" \"\$A/indra\"; " +
-                    "printf 'nameserver 8.8.8.8\\nnameserver 1.1.1.1\\n' > \"\$A/etc/resolv.conf\"; " +
-                    "mount --bind \"\$T\" \"\$A/tools\" 2>/dev/null || true; " +
-                    "mount --bind \"\$C\" \"\$A/indra\" 2>/dev/null || true; " +
-                    "chroot \"\$A\" /bin/busybox env HOME=/root XDG_CACHE_HOME=/root/.cache /tools/gobuster/gobuster $rewritten"
-            return shell(script, label = "gobuster", timeoutMs = LONG_RUNNING_TIMEOUT_MS)
+            return shell(script, label = "monitor mode", timeoutMs = CHROOT_SETUP_TIMEOUT_MS)
+        }
+
+        /**
+         * Asks the engine whether one capability is present, off the main thread.
+         *
+         * Screens used to gate on "is the chroot installed?", which is true for a rootfs without
+         * hashcat, iw or templates. [CapabilityState] carries the fix, so the screen can say which
+         * `apk add` line is missing instead of a generic "not installed".
+         */
+        suspend fun capability(capability: Capability): CapabilityState =
+            withContext(Dispatchers.IO) { chrootEngine.capability(capability) }
+
+        /**
+         * Cracks a captured WPA handshake with hashcat inside the chroot.
+         *
+         * Both paths must be reachable from inside the chroot, so [capturePath] has to live in the
+         * core directory or the app cache (the VM copies a shared-storage capture into the cache
+         * first rather than handing hashcat a path that cannot exist there). The verdict is
+         * [Hashcat.interpret] on the transcript — hashcat exits 1 on "exhausted", which is a
+         * completed run, not a failure.
+         */
+        @Suppress("ReturnCount")
+        suspend fun crackHandshake(
+            capturePath: String,
+            wordlistPath: String? = null,
+        ): Flow<ToolResult> {
+            ensureChroot()?.let { return failure("hashcat", it) }
+            val capture =
+                chrootEngine.translate(capturePath)
+                    ?: return failure(
+                        "hashcat",
+                        "$capturePath is not reachable inside the Alpine chroot (it must be in the app cache " +
+                            "or the core directory). Copy it into the Indra folder and try again.",
+                    )
+            val wordlistHost = wordlistPath?.takeIf { it.isNotBlank() } ?: defaultWordlist()
+            val wordlist =
+                chrootEngine.translate(wordlistHost)
+                    ?: return failure(
+                        "hashcat",
+                        "$wordlistHost is not reachable inside the Alpine chroot. Use a wordlist from the " +
+                            "Indra folder (the bundled list is ${defaultWordlist()}).",
+                    )
+            return shell(
+                chrootEngine.wrapShell(Hashcat.script(capture, wordlist)),
+                label = "hashcat",
+                timeoutMs = LONG_RUNNING_TIMEOUT_MS,
+            )
+        }
+
+        /**
+         * Downloads/refreshes the nuclei template repository inside the chroot.
+         *
+         * The daemon cannot resolve DNS (no `/etc/resolv.conf` on Android), so this used to be
+         * impossible; the engine now writes one from `ConnectivityManager`, so the Go resolver
+         * works and `-update-templates` can reach GitHub. Templates land in `/root/nuclei-templates`
+         * (HOME=/root), which `ChrootEngine` already checks for the `NUCLEI_TEMPLATES` capability.
+         */
+        suspend fun nucleiUpdateTemplates(): Flow<ToolResult> {
+            ensureChroot()?.let { return failure("nuclei", it) }
+            val binary = "/" + ChrootScript.CORE_MOUNT.trimStart('/') + "/tools/nuclei/nuclei"
+            return shell(
+                chrootEngine.wrap("$binary -update-templates", mapOf("HOME" to "/root", "XDG_CACHE_HOME" to "/root/.cache")),
+                label = "nuclei update-templates",
+                timeoutMs = SCAN_TIMEOUT_MS,
+            )
+        }
+
+        suspend fun gobuster(args: String): Flow<ToolResult> {
+            ensureChroot()?.let { return failure("gobuster", it) }
+            // The VM passes absolute host paths (wordlists, output files); inside the chroot the
+            // core directory has a different path, so translate them rather than passing a path
+            // that cannot exist there.
+            val translated =
+                args
+                    .replace(coreManager.coreDir.absolutePath, ChrootScript.CORE_MOUNT)
+                    .replace(context.cacheDir.absolutePath, "/data/user/0/${context.packageName}/cache")
+            val binary = "/" + ChrootScript.CORE_MOUNT.trimStart('/') + "/tools/gobuster/gobuster"
+            return shell(
+                chrootEngine.wrap("$binary $translated"),
+                label = "gobuster",
+                timeoutMs = LONG_RUNNING_TIMEOUT_MS,
+            )
         }
 
         fun hping3(
@@ -478,12 +571,18 @@ class SmartToolBox
         fun masscan(
             target: String,
             args: String = "",
-        ): Flow<ToolResult> =
-            rawCommand(
+        ): Flow<ToolResult> {
+            // masscan cannot pick an interface on Android ("could not determine default
+            // interface"). If the caller did not name one, pick the active one from the
+            // network stack instead of leaving masscan to fail on its own.
+            val iface = if (args.contains(Regex("(^|\\s)-e(\\s|=)"))) null else networkHelper.getActiveInterface()
+            val ifaceArg = if (iface != null) "-e ${shellQuote(iface)} " else ""
+            return rawCommand(
                 "masscan",
-                "${binary("masscan")} $args ${shellQuote(target)}",
+                "${binary("masscan")} $ifaceArg$args ${shellQuote(target)}",
                 timeoutMs = SCAN_TIMEOUT_MS,
             )
+        }
 
         fun reaver(
             iface: String,
@@ -573,6 +672,7 @@ class SmartToolBox
             stoppedPids += pid
             runCatching { client.kill(pid, 9) }
                 .onFailure { Logger.w("kill($pid) failed: ${it.message}") }
+            childProcessManager.forget(pid)
         }
 
         /**
@@ -610,18 +710,86 @@ class SmartToolBox
             timeoutMs: Long = TOOL_TIMEOUT_MS,
         ): Flow<ToolResult> = execute("raw", command, label, timeoutMs)
 
+        /** One emission saying the tool never ran, with the reason — the `failed` contract. */
+        private fun failure(
+            label: String,
+            message: String,
+        ): Flow<ToolResult> =
+            flow {
+                emit(
+                    ToolResult(
+                        tool = label,
+                        success = false,
+                        status = STATUS_FAILED,
+                        error = message,
+                        rawOutput = "",
+                    ),
+                )
+            }
+
         /** Runs [command] inside the Alpine chroot (real Linux userspace) via the
-         *  daemon's raw handler. Requires [CoreManager.isAlpineInstalled]. */
-        fun chroot(
+         *  daemon's raw handler. Requires the chroot engine to be installed. */
+        suspend fun chroot(
             command: String,
             label: String = "alpine",
             timeoutMs: Long = TOOL_TIMEOUT_MS,
-        ): Flow<ToolResult> =
-            rawCommand(
-                label,
-                "chroot ${shellQuote(coreManager.alpinePath().absolutePath)} /bin/sh -c ${shellQuote(command)}",
-                timeoutMs,
-            )
+        ): Flow<ToolResult> {
+            ensureChroot()?.let { return failure(label, it) }
+            return rawCommand(label, chrootEngine.wrapShell(command), timeoutMs)
+        }
+
+        /**
+         * Makes the chroot usable for this session: creates the directory tree, mounts the
+         * missing namespaces and writes `resolv.conf`, then reports which mounts failed.
+         *
+         * Returns null when the chroot is ready, or the message to show the user.
+         *
+         * Idempotent and cheap after the first call: the mounts are checked against
+         * `/proc/mounts` rather than re-created (the old per-run `mount --bind … || true`
+         * stacked a new mount on every nuclei invocation and never unmounted any), and the
+         * script only re-runs when the network's DNS servers change.
+         */
+        @Suppress("ReturnCount")
+        suspend fun ensureChroot(): String? {
+            val notInstalled =
+                (chrootEngine.capability(Capability.GNU_TOOLS) as? CapabilityState.EngineNotInstalled)
+                    ?.fix
+            if (notInstalled != null) return notInstalled
+
+            val dns = chrootEngine.dnsText()
+            if (chrootDns.get() == dns) return null
+
+            return chrootMutex.withLock {
+                if (chrootDns.get() == dns) return@withLock null
+                val result =
+                    runCatching {
+                        shell(chrootEngine.setupScript(dns), label = "chroot setup", timeoutMs = CHROOT_SETUP_TIMEOUT_MS).last()
+                    }.getOrElse {
+                        return@withLock "Could not prepare the Alpine chroot: ${it.message}"
+                    }
+                if (!result.success) {
+                    return@withLock "Could not prepare the Alpine chroot" + reasonSuffix(result.rawOutput).ifEmpty {
+                        " (setup exited with code 1)"
+                    }
+                }
+                val failed = ChrootScript.failures(result.rawOutput)
+                val fatal = failed.filter { it in chrootEngine.requiredTargets() }
+                if (fatal.isNotEmpty()) {
+                    Logger.w("Chroot mounts failed: ${fatal.joinToString(", ")}")
+                    val message =
+                        "The Alpine chroot could not mount ${fatal.joinToString(", ")} — reinstall it in Settings → Native Core."
+                    return@withLock message
+                }
+                failed.forEach { Logger.w("Chroot mount $it unavailable; the environment still runs without it") }
+                chrootDns.set(dns)
+                null
+            }
+        }
+
+        /** Forces the next [ensureChroot] to re-run (after installing or uninstalling the rootfs). */
+        fun resetChrootState() {
+            chrootDns.set(null)
+        }
 
         /**
          * Runs one command as an argument vector through the daemon's raw handler.
@@ -760,6 +928,10 @@ class SmartToolBox
                     ),
                 )
 
+                // Register it so stopAllRunning() (OTA binary swap) has something to stop.
+                // Nothing ever called track() before this, which made that call a no-op.
+                childProcessManager.track(ChildProcess(id = pid, command = args, handler = tool))
+
                 val output = StringBuilder()
                 val ports = mutableListOf<ToolPort>()
                 val osMatches = mutableListOf<ToolOs>()
@@ -853,6 +1025,7 @@ class SmartToolBox
                         Logger.w("$label (pid $pid) did not finish; killing it")
                         stop(pid)
                     }
+                    childProcessManager.forget(pid)
                     // Do not let a finished execution leave a stale "we killed it" mark
                     // that would mislabel a later crash of the same pid.
                     stoppedPids.remove(pid)
@@ -1009,23 +1182,7 @@ data class ToolResult(
     val parsedData: Map<String, Any>? = null,
     val error: String? = null,
     val timestamp: Long = System.currentTimeMillis(),
-) {
-    fun toJson(): String =
-        com.google.gson
-            .Gson()
-            .toJson(this)
-
-    companion object {
-        fun fromJson(json: String): ToolResult? =
-            try {
-                com.google.gson
-                    .Gson()
-                    .fromJson(json, ToolResult::class.java)
-            } catch (e: Exception) {
-                null
-            }
-    }
-}
+)
 
 /**
  * True for the per-line emissions a child produces while it runs.

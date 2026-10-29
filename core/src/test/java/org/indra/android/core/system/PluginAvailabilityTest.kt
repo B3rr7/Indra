@@ -34,7 +34,6 @@ class PluginAvailabilityTest {
             "terminal",
             "hid",
             "bettercap",
-            "topology",
         ).forEach { id -> assertTrue("Plugin $id should be feasible", PluginAvailability.isFeasibleOnAndroid(id)) }
     }
 

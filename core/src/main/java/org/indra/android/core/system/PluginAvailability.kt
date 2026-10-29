@@ -103,6 +103,6 @@ class PluginAvailability
              * ships no interpreter. Wifite deliberately is NOT here: its screen drives
              * the bundled ip/iw/tcpdump/aircrack-ng binaries, not `wifite.py`.
              */
-            fun isFeasibleOnAndroid(id: String): Boolean = id != "responder"
+            fun isFeasibleOnAndroid(id: String): Boolean = id !in setOf("responder", "topology")
         }
     }

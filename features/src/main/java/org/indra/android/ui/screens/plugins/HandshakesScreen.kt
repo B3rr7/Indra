@@ -9,6 +9,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
@@ -22,7 +23,9 @@ import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.io.File
+import org.indra.android.core.engine.Hashcat
 import org.indra.android.ui.components.FormError
+import org.indra.android.ui.components.LiveOutputCard
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -55,6 +58,41 @@ fun HandshakesScreen(
             },
             dismissButton = {
                 TextButton(onClick = { renamingPath = null }) { Text("Cancel") }
+            },
+        )
+    }
+
+    uiState.crackTarget?.let { path ->
+        var wordlist by remember(path) { mutableStateOf(uiState.wordlist) }
+        AlertDialog(
+            onDismissRequest = { viewModel.closeCrack() },
+            title = { Text("Crack ${File(path).name}") },
+            text = {
+                Column {
+                    Text(
+                        "hashcat runs inside the Alpine environment: the capture is converted with " +
+                            "hcxpcapngtool, then matched against the wordlist.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = wordlist,
+                        onValueChange = {
+                            wordlist = it
+                            viewModel.updateWordlist(it)
+                        },
+                        label = { Text("Wordlist") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { viewModel.startCrack() }) { Text("Start") }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.closeCrack() }) { Text("Cancel") }
             },
         )
     }
@@ -114,6 +152,9 @@ fun HandshakesScreen(
                                 }) {
                                     Icon(Icons.Filled.Edit, contentDescription = "Rename")
                                 }
+                                IconButton(onClick = { viewModel.openCrack(f.path) }) {
+                                    Icon(Icons.Filled.Lock, contentDescription = "Crack")
+                                }
                                 IconButton(onClick = {
                                     val file = File(f.path)
                                     val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
@@ -149,7 +190,89 @@ fun HandshakesScreen(
                     Text("Share ${file.name}")
                 }
             }
+            uiState.gate?.let { FormError(it) }
             uiState.error?.let { FormError(it) }
+            HandshakeCrackPanel(
+                uiState = uiState,
+                onStop = viewModel::stopCrack,
+                modifier = Modifier.weight(1f),
+            )
         }
+    }
+}
+
+/**
+ * The verdict is four states, not two: a capture with no handshake is not a failed crack, and
+ * a wordlist that ran out is not a tool error (hashcat exits 1 when it finds nothing).
+ */
+@Composable
+private fun HandshakeCrackPanel(
+    uiState: HandshakesUiState,
+    onStop: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val verdict = uiState.verdict
+    val visible = uiState.cracking || verdict != null || uiState.lines.isNotEmpty()
+    if (!visible) {
+        if (uiState.finished) {
+            Text(
+                "The crack run produced no output.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        return
+    }
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                if (uiState.cracking) "hashcat · running" else "hashcat",
+                style = MaterialTheme.typography.titleSmall,
+                modifier = Modifier.weight(1f),
+            )
+            if (uiState.cracking) {
+                TextButton(onClick = onStop) { Text("Stop") }
+            }
+        }
+        verdict?.let { VerdictLine(it) }
+        LiveOutputCard(
+            lines = uiState.lines,
+            appendCount = uiState.lineCount,
+            modifier = Modifier.weight(1f),
+            title = "Crack output",
+            placeholder =
+                if (uiState.cracking) {
+                    "Converting the capture…"
+                } else {
+                    "No output"
+                },
+            isRunning = uiState.cracking,
+        )
+    }
+}
+
+@Composable
+private fun VerdictLine(verdict: Hashcat.Verdict) {
+    when (verdict) {
+        is Hashcat.Verdict.Cracked ->
+            Text(
+                "Key found: ${verdict.key}",
+                style = MaterialTheme.typography.titleMedium,
+            )
+        Hashcat.Verdict.NoHandshake ->
+            Text(
+                "This capture has no WPA handshake (hcxpcapngtool found no EAPOL exchange). " +
+                    "A handshake needs a client to connect while capturing — in managed mode you usually " +
+                    "only get normal traffic.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        Hashcat.Verdict.NotCracked ->
+            Text(
+                "The wordlist ran out without a match. The handshake is usable — try a larger wordlist.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        is Hashcat.Verdict.Failed -> FormError(verdict.reason)
     }
 }

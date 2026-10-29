@@ -21,10 +21,16 @@ object MonitorMode {
     private const val MISSING_IW = "iw: inaccessible or not found"
     private const val MISSING_IW_SHORT = "iw: not found"
 
-    /** Shown when the switch failed only because the core has no `iw`. */
+    /**
+     * Shown when the switch failed only because `iw` could not be found.
+     *
+     * Names the fix, because there is one: Alpine in the chroot can install `iw` (and `ip` from
+     * iproute2) even though neither the ROM nor the native core ships it.
+     */
     const val MISSING_IW_MESSAGE =
-        "Monitor mode needs `iw`, which the native core does not ship — the interface was left " +
-            "in its previous mode."
+        "Monitor mode needs `iw`, which neither the ROM nor the native core ships — the interface " +
+            "was left in its previous mode. Install it in the Alpine environment (Terminal with " +
+            "chroot on: `apk add iw iproute2`) and try again."
 
     /**
      * `ip link set … down; iw dev … set type <mode>; ip link set … up; exit <iw status>`
