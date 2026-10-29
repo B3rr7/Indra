@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.indra.android.core.system.MonitorMode
-import org.indra.android.core.system.SmartToolBox
+import org.indra.android.core.system.ToolRunner
 import org.indra.android.core.system.ToolHandle
 import org.indra.android.core.system.streamedLine
 import org.indra.android.core.system.isStreaming
@@ -41,7 +41,7 @@ data class PacketCaptureUiState(
 class PacketCaptureViewModel
     @Inject
     constructor(
-        private val toolBox: SmartToolBox,
+        private val toolBox: ToolRunner,
     ) : ViewModel() {
         private val _uiState =
             MutableStateFlow(
@@ -101,9 +101,10 @@ class PacketCaptureViewModel
                     )
                 return
             }
-            val cmd = MonitorMode.script(iface, enterMonitor)
             viewModelScope.launch {
-                toolBox.shell(cmd).collect { result ->
+                // The engine runs this inside the chroot when `iw` is installed there (the ROM
+                // has none), and falls back to the host binary otherwise.
+                toolBox.monitorMode(iface, enterMonitor).collect { result ->
                     if (!result.isStreaming && !result.success) {
                         _uiState.value =
                             _uiState.value.copy(

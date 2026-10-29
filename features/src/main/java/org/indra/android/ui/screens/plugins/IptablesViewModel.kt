@@ -8,7 +8,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import org.indra.android.core.system.SmartToolBox
+import org.indra.android.core.system.ToolRunner
 import org.indra.android.core.system.ToolHandle
 import org.indra.android.core.system.isStreaming
 import org.indra.android.core.system.streamedLine
@@ -25,7 +25,7 @@ data class IptablesUiState(
 class IptablesViewModel
     @Inject
     constructor(
-        private val toolBox: SmartToolBox,
+        private val toolBox: ToolRunner,
     ) : ViewModel() {
         private val _uiState = MutableStateFlow(IptablesUiState())
         val uiState: StateFlow<IptablesUiState> = _uiState.asStateFlow()

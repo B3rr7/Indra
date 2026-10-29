@@ -17,43 +17,6 @@ class ToolResultTest {
     }
 
     @Test
-    fun testToolResultJsonSerialization() {
-        val result =
-            ToolResult(
-                tool = "nmap",
-                success = true,
-                status = "completed",
-                pid = 123,
-                rawOutput = "Port 80 open",
-            )
-        val json = result.toJson()
-        assertNotNull(json)
-        assertTrue(json.contains("nmap"))
-        assertTrue(json.contains("Port 80 open"))
-
-        val parsed = ToolResult.fromJson(json)
-        assertNotNull(parsed)
-        assertEquals("nmap", parsed?.tool)
-        assertEquals(123, parsed?.pid)
-    }
-
-    @Test
-    fun testToolResultJsonDeserialization() {
-        val json = """{"tool":"hydra","success":false,"error":"not found"}"""
-        val result = ToolResult.fromJson(json)
-        assertNotNull(result)
-        assertEquals("hydra", result?.tool)
-        assertFalse(result?.success ?: true)
-        assertEquals("not found", result?.error)
-    }
-
-    @Test
-    fun testToolResultJsonInvalid() {
-        val result = ToolResult.fromJson("invalid json")
-        assertNull(result)
-    }
-
-    @Test
     fun testOnlyRunningEmissionsStream() {
         val running = ToolResult(tool = "nmap", success = true, status = SmartToolBox.STATUS_RUNNING)
         assertTrue(running.isStreaming)

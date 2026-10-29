@@ -12,6 +12,7 @@ import kotlinx.coroutines.launch
 import org.indra.android.core.system.MonitorMode
 import org.indra.android.core.system.SmartToolBox
 import org.indra.android.core.system.ToolHandle
+import org.indra.android.core.system.ToolRunner
 import org.indra.android.core.system.ToolResult
 import org.indra.android.core.system.isStreaming
 import org.indra.android.core.system.streamedLine
@@ -32,7 +33,7 @@ data class WifiteUiState(
 class WifiteViewModel
     @Inject
     constructor(
-        private val toolBox: SmartToolBox,
+        private val toolBox: ToolRunner,
     ) : ViewModel() {
         private val _uiState = MutableStateFlow(WifiteUiState(wordlist = toolBox.defaultWordlist(), capturePath = toolBox.capturePath()))
         val uiState: StateFlow<WifiteUiState> = _uiState.asStateFlow()
@@ -101,7 +102,7 @@ class WifiteViewModel
                     // Each stage is reported from its child's exit status. The old code
                     // appended "[monitor mode enabled]" / "[capture done]" unconditionally,
                     // so a failure at any step still looked like a completed run.
-                    val monitor = stage("monitor", toolBox.shell(MonitorMode.script(iface, monitor = true)))
+                    val monitor = stage("monitor", toolBox.monitorMode(iface, monitor = true))
                     if (monitor?.success != true) {
                         abort(
                             "Monitor mode could not be enabled",

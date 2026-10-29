@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.indra.android.core.system.NetworkHelper
-import org.indra.android.core.system.SmartToolBox
+import org.indra.android.core.system.ToolRunner
 import org.indra.android.core.system.ToolHandle
 import org.indra.android.core.system.isStreaming
 import org.indra.android.core.system.streamedLine
@@ -30,7 +30,7 @@ data class MasscanUiState(
 class MasscanViewModel
     @Inject
     constructor(
-        private val toolBox: SmartToolBox,
+        private val toolBox: ToolRunner,
         private val networkHelper: NetworkHelper,
         private val networkRepository: NetworkRepository,
     ) : ViewModel() {

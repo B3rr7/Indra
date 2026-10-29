@@ -29,6 +29,12 @@ android {
     composeOptions {
         kotlinCompilerExtensionVersion = '1.5.14'
     }
+
+    testOptions {
+        // ViewModels touch android.util.Log through core helpers; unit tests only need the
+        // stubs to return defaults instead of throwing "not mocked".
+        unitTests.returnDefaultValues = true
+    }
 }
 
 dependencies {
@@ -48,6 +54,14 @@ dependencies {
     implementation 'org.osmdroid:osmdroid-android:6.1.18'
     implementation 'com.google.code.gson:gson:2.10.1'
     kapt 'com.google.dagger:hilt-android-compiler:2.51.1'
+
+    testImplementation 'junit:junit:4.13.2'
+    // Same version as kotlinx-coroutines-android in :core/:indra — a newer test artifact
+    // (1.10+) is compiled against Kotlin 2.x metadata and will not load on this Kotlin 1.9.
+    testImplementation 'org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.0'
+    // The fake builds the real `ToolHandle.Ready` payload, whose type takes a Gson instance;
+    // `:core` declares gson as `implementation`, so it is not on this module's test classpath.
+    testImplementation 'com.google.code.gson:gson:2.10.1'
 }
 
 detekt {

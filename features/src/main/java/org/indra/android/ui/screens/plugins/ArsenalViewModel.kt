@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.indra.android.core.system.ArsenalRepository
 import org.indra.android.core.system.ArsenalTemplate
-import org.indra.android.core.system.SmartToolBox
+import org.indra.android.core.system.ToolRunner
 import org.indra.android.core.system.ToolHandle
 import org.indra.android.core.system.isStreaming
 import org.indra.android.core.system.streamedLine
@@ -35,7 +35,7 @@ class ArsenalViewModel
     @Inject
     constructor(
         private val repo: ArsenalRepository,
-        private val toolBox: SmartToolBox,
+        private val toolBox: ToolRunner,
     ) : ViewModel() {
         private val _uiState = MutableStateFlow(ArsenalUiState(templates = repo.getAll()))
         val uiState: StateFlow<ArsenalUiState> = _uiState.asStateFlow()

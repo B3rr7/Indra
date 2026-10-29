@@ -1,26 +1,21 @@
 package org.indra.android.di
 
+import dagger.Binds
 import dagger.Module
-import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import javax.inject.Qualifier
+import org.indra.android.core.system.SmartToolBoxRunner
+import org.indra.android.core.system.ToolRunner
 import javax.inject.Singleton
-
-@Retention(AnnotationRetention.BINARY)
-@Qualifier
-annotation class ApplicationScope
 
 @Module
 @InstallIn(SingletonComponent::class)
-object AppModule {
-    @Provides
+abstract class AppModule {
+    /**
+     * The seam screens are tested against. Bound here rather than in `:core` so `:core` stays
+     * free of Hilt module policy; `SmartToolBox` itself is unchanged.
+     */
+    @Binds
     @Singleton
-    @ApplicationScope
-    fun provideApplicationScope(): CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-
-    // @ApplicationContext Context is already provided by Hilt, no need to re-provide
+    abstract fun bindToolRunner(runner: SmartToolBoxRunner): ToolRunner
 }

@@ -2,13 +2,6 @@
 <SmellBaseline>
   <ManuallySuppressedIssues/>
   <CurrentIssues>
-    <ID>FunctionNaming:CommonComponents.kt$@Composable fun ConfirmDialog( title: String, message: String, onConfirm: () -&gt; Unit, onDismiss: () -&gt; Unit, confirmText: String = "Confirm", dismissText: String = "Cancel", )</ID>
-    <ID>FunctionNaming:CommonComponents.kt$@Composable fun ErrorMessage( message: String, onRetry: (() -&gt; Unit)? = null, modifier: Modifier = Modifier, )</ID>
-    <ID>FunctionNaming:CommonComponents.kt$@Composable fun InfoDialog( title: String, message: String, onDismiss: () -&gt; Unit, )</ID>
-    <ID>FunctionNaming:CommonComponents.kt$@Composable fun LoadingIndicator( modifier: Modifier = Modifier, message: String = "Loading...", )</ID>
-    <ID>FunctionNaming:CommonComponents.kt$@Composable fun SectionHeader( title: String, modifier: Modifier = Modifier, )</ID>
-    <ID>FunctionNaming:CommonComponents.kt$@Composable fun StatusBadge( text: String, isActive: Boolean, modifier: Modifier = Modifier, )</ID>
-    <ID>FunctionNaming:Theme.kt$@Composable fun IndraTheme( darkTheme: Boolean = true, dynamicColor: Boolean = false, content: @Composable () -&gt; Unit, )</ID>
     <ID>MagicNumber:Color.kt$0xFF000000</ID>
     <ID>MagicNumber:Color.kt$0xFF001D2E</ID>
     <ID>MagicNumber:Color.kt$0xFF001F24</ID>
@@ -54,8 +47,5 @@
     <ID>MagicNumber:Color.kt$0xFFFF9100</ID>
     <ID>MagicNumber:Color.kt$0xFFFFDAD6</ID>
     <ID>MagicNumber:Color.kt$0xFFFFFFFF</ID>
-    <ID>WildcardImport:CommonComponents.kt$import androidx.compose.foundation.layout.*</ID>
-    <ID>WildcardImport:CommonComponents.kt$import androidx.compose.material3.*</ID>
-    <ID>WildcardImport:CommonComponents.kt$import androidx.compose.runtime.*</ID>
   </CurrentIssues>
 </SmellBaseline>

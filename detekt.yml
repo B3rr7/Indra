@@ -23,3 +23,14 @@ style:
     ignoreNumbers: ['-1', '0', '1', '2']
   MaxLineLength:
     maxLineLength: 140
+
+  # Compose ships one namespace with ~40 layout symbols, ~80 Material 3 composables and its
+  # runtime helpers, and every screen needs a dozen of them; the wildcard is the documented
+  # AndroidX style for these three packages. The rule still applies to everything else, where
+  # a wildcard really does hide which class a name comes from (105 baseline entries were these
+  # three imports in 35 screens, i.e. no information was being lost).
+  WildcardImport:
+    excludeImports:
+      - 'androidx.compose.runtime.*'
+      - 'androidx.compose.material3.*'
+      - 'androidx.compose.foundation.layout.*'

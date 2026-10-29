@@ -37,21 +37,8 @@
     <ID>WildcardImport:BottomNavBar.kt$import androidx.compose.material.icons.automirrored.filled.*</ID>
     <ID>WildcardImport:BottomNavBar.kt$import androidx.compose.material.icons.filled.*</ID>
     <ID>WildcardImport:BottomNavBar.kt$import androidx.compose.material.icons.outlined.*</ID>
-    <ID>WildcardImport:BottomNavBar.kt$import androidx.compose.material3.*</ID>
-    <ID>WildcardImport:HomeScreen.kt$import androidx.compose.foundation.layout.*</ID>
     <ID>WildcardImport:HomeScreen.kt$import androidx.compose.material.icons.automirrored.filled.*</ID>
     <ID>WildcardImport:HomeScreen.kt$import androidx.compose.material.icons.filled.*</ID>
-    <ID>WildcardImport:HomeScreen.kt$import androidx.compose.material3.*</ID>
-    <ID>WildcardImport:HomeScreen.kt$import androidx.compose.runtime.*</ID>
-    <ID>WildcardImport:SettingsCards.kt$import androidx.compose.foundation.layout.*</ID>
-    <ID>WildcardImport:SettingsCards.kt$import androidx.compose.material3.*</ID>
-    <ID>WildcardImport:SettingsCards.kt$import androidx.compose.runtime.*</ID>
-    <ID>WildcardImport:SettingsScreen.kt$import androidx.compose.foundation.layout.*</ID>
     <ID>WildcardImport:SettingsScreen.kt$import androidx.compose.material.icons.filled.*</ID>
-    <ID>WildcardImport:SettingsScreen.kt$import androidx.compose.material3.*</ID>
-    <ID>WildcardImport:SettingsScreen.kt$import androidx.compose.runtime.*</ID>
-    <ID>WildcardImport:ToolsScreen.kt$import androidx.compose.foundation.layout.*</ID>
-    <ID>WildcardImport:ToolsScreen.kt$import androidx.compose.material3.*</ID>
-    <ID>WildcardImport:ToolsScreen.kt$import androidx.compose.runtime.*</ID>
   </CurrentIssues>
 </SmellBaseline>

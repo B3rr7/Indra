@@ -10,7 +10,7 @@ import kotlinx.coroutines.launch
 import org.indra.android.core.system.CoreManager
 import org.indra.android.core.system.NetworkHelper
 import org.indra.android.core.system.Nuclei
-import org.indra.android.core.system.SmartToolBox
+import org.indra.android.core.system.ToolRunner
 import org.indra.android.core.system.ToolResult
 import org.indra.android.core.system.isStreaming
 import org.indra.android.core.system.streamedLine
@@ -23,7 +23,7 @@ private const val MAX_CONSOLE_LINES = 500
 class VulnScannerViewModel
     @Inject
     constructor(
-        private val toolBox: SmartToolBox,
+        private val toolBox: ToolRunner,
         private val coreManager: CoreManager,
         private val networkHelper: NetworkHelper,
         private val networkRepository: NetworkRepository,
