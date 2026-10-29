@@ -1,7 +1,5 @@
 package org.indra.android.core.system
 
-import com.google.gson.JsonArray
-import com.google.gson.JsonParser
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.last
 import kotlinx.coroutines.withContext
@@ -53,8 +51,6 @@ class OtaUpdateManager
             private const val TMP_SUFFIX = ".ota-tmp-"
 
             private const val SHA256_PREFIX = "sha256:"
-            private const val SIGNATURE_FIELD = "signature"
-            private const val PAYLOAD_FIELD = "payload"
 
             /**
              * Provisioned at build time (`-Pindra.otaSigningKey=<base64 X.509 SPKI>` or the
@@ -105,18 +101,16 @@ class OtaUpdateManager
 
         /** Verifies the signed manifest envelope ({payload, signature}), then parses the payload. */
         private fun verifyManifestEnvelope(json: String): OtaManifest? {
-            val envelope = JsonParser.parseString(json).asJsonObject ?: return null
-            val signature = envelope.get(SIGNATURE_FIELD)?.asString
-            val payload = envelope.get(PAYLOAD_FIELD)?.asString
-            if (signature == null || payload == null) {
+            val envelope = SignedEnvelope.parse(json)
+            if (envelope == null) {
                 Logger.w("OTA manifest is not a signed envelope; refusing")
                 return null
             }
-            if (!verifyManifestSignature(payload.toByteArray(Charsets.UTF_8), signature)) {
+            if (!verifyManifestSignature(envelope.payloadBytes(), envelope.signatureBase64)) {
                 Logger.w("OTA manifest signature verification failed; refusing payload")
                 return null
             }
-            return parseManifest(payload)
+            return parseManifest(envelope.payload)
         }
 
         /**
@@ -124,7 +118,7 @@ class OtaUpdateManager
          * provisioned). Callers use it to tell "not configured in this build" apart from
          * "the check failed" instead of showing one opaque error for both.
          */
-        fun isSignatureConfigured(): Boolean = !OTA_SIGNING_KEY_SPKI.startsWith("REPLACE_ME")
+        fun isSignatureConfigured(): Boolean = SignedEnvelope.isConfigured(OTA_SIGNING_KEY_SPKI)
 
         /**
          * Fail-closed policy for the "signing key not provisioned" state.
@@ -153,33 +147,16 @@ class OtaUpdateManager
             payload: ByteArray,
             signatureBase64: String,
         ): Boolean {
-            if (OTA_SIGNING_KEY_SPKI.startsWith("REPLACE_ME")) {
+            // One policy for both OTA paths (SignedEnvelope.accepts): verified is always
+            // accepted, unverified only in the explicit dev/test-host mode, rejected never.
+            val verdict = SignedEnvelope.verify(payload, signatureBase64, OTA_SIGNING_KEY_SPKI)
+            if (verdict == SignedEnvelope.Verdict.UNVERIFIED_DEV) {
                 return allowUnverifiedSignature()
             }
-
-            return try {
-                val publicKey =
-                    java.security.KeyFactory
-                        .getInstance("RSA")
-                        .generatePublic(
-                            java.security.spec.X509EncodedKeySpec(
-                                java.util.Base64
-                                    .getDecoder()
-                                    .decode(OTA_SIGNING_KEY_SPKI),
-                            ),
-                        )
-                val verifier = java.security.Signature.getInstance("SHA256withRSA")
-                verifier.initVerify(publicKey)
-                verifier.update(payload)
-                verifier.verify(
-                    java.util.Base64
-                        .getDecoder()
-                        .decode(signatureBase64),
-                )
-            } catch (e: Exception) {
-                Logger.e("OTA signature verification error", e)
-                false
+            if (verdict == SignedEnvelope.Verdict.REJECTED) {
+                Logger.e("OTA signature verification failed for ${payload.size} payload bytes")
             }
+            return SignedEnvelope.accepts(verdict, allowTestHosts())
         }
 
         // ------------------------------------------------------------------

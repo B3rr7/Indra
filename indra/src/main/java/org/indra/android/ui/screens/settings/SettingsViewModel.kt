@@ -227,6 +227,7 @@ class SettingsViewModel
                     .installAlpine { p ->
                         _uiState.value = _uiState.value.copy(alpineMessage = "Installing Alpine Linux… ${(p * 100).toInt()}%")
                     }.onSuccess {
+                        toolBox.resetChrootState()
                         _uiState.value =
                             _uiState.value.copy(
                                 alpineMessage = "Alpine installed",
@@ -258,9 +259,13 @@ class SettingsViewModel
             if (_uiState.value.appUpdateChecking) return
             viewModelScope.launch {
                 _uiState.value = _uiState.value.copy(appUpdateChecking = true, appUpdateMessage = "Checking for app updates…")
-                val info = appUpdateManager.checkForUpdate()
+                val check = appUpdateManager.checkForUpdate()
+                val info = (check as? AppUpdateManager.Check.Found)?.info
                 if (info == null) {
-                    _uiState.value = _uiState.value.copy(appUpdateChecking = false, appUpdateMessage = "Update check failed")
+                    // "Refused" is a fixable state (bad signature / unsigned build) and must
+                    // not read like a network failure.
+                    val message = (check as? AppUpdateManager.Check.Refused)?.reason ?: "Update check failed"
+                    _uiState.value = _uiState.value.copy(appUpdateChecking = false, appUpdateMessage = message)
                 } else if (appUpdateManager.isNewer(info.version)) {
                     _uiState.value = _uiState.value.copy(
                         appUpdateChecking = false,
@@ -285,12 +290,14 @@ class SettingsViewModel
                 // appUpdateChecking doubles as the busy flag: without it a second tap
                 // re-downloaded, and a null manifest left "Downloading update…" forever.
                 _uiState.value = _uiState.value.copy(appUpdateChecking = true, appUpdateMessage = "Downloading update…")
-                val info = appUpdateManager.checkForUpdate()
+                val check = appUpdateManager.checkForUpdate()
+                val info = (check as? AppUpdateManager.Check.Found)?.info
                 if (info == null) {
+                    val message = (check as? AppUpdateManager.Check.Refused)?.reason ?: "Update check failed"
                     _uiState.value =
                         _uiState.value.copy(
                             appUpdateChecking = false,
-                            appUpdateMessage = "Update check failed",
+                            appUpdateMessage = message,
                         )
                     return@launch
                 }

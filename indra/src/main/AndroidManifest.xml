@@ -15,12 +15,8 @@
          capture file and let a capture be pulled off the phone with a file manager. -->
     <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
         tools:ignore="ScopedStorage" />
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
-    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <!-- Root access (Magisk/KernelSU/SuperSU) - granted via root manager, not a standard permission -->
-    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
@@ -72,6 +68,18 @@
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Floating terminal bubble kept above other apps at the user's request" />
+        </service>
+
+        <!-- Keeps a 30-minute scan (nmap/masscan/tcpdump/hashcat) alive with the screen off.
+             Started by LongRunController when the first child is tracked and stopped when the
+             last one ends, so the notification always means "a tool is running". -->
+        <service
+            android:name="org.indra.android.core.longrun.LongRunService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="A network scan or capture the user started keeps running while the screen is off" />
         </service>
 
         <activity
