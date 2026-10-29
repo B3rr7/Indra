@@ -44,6 +44,31 @@ object IndraWorkspace {
     fun dir(name: String): File = File(root(), name)
 
     /**
+     * The one directory packet captures are written to (by the root daemon) and listed
+     * from (by the app). `HandshakesViewModel` used to read `filesDir/captures` while every
+     * writer wrote here, so the screen could never show a real capture.
+     */
+    fun capturesDir(root: File = root()): File = File(root, CAPTURES)
+
+    /**
+     * Where exports (KML, CSV, capture manifests) go: the shared workspace when the app can
+     * read it, otherwise the app-private dir — writing a file the user can never open is
+     * worse than writing one the file manager cannot see.
+     *
+     * [sharedRoot] and [privateFiles] are parameters so this stays testable without
+     * Android's `Environment`.
+     */
+    fun exportDir(
+        sharedRoot: File,
+        privateFiles: File,
+        allFilesAccess: Boolean,
+    ): File {
+        val dir = if (allFilesAccess) File(sharedRoot, OUTPUT) else File(privateFiles, OUTPUT)
+        dir.mkdirs()
+        return dir
+    }
+
+    /**
      * True when this process may read and write shared storage itself (Android 11+ gates
      * `/sdcard` behind "All files access"). The root daemon can always write it.
      */

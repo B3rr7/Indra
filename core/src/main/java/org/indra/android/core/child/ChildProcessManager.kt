@@ -5,6 +5,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import org.indra.android.core.client.IndraClient
+import org.indra.android.core.longrun.LongRunController
 import org.indra.android.core.system.Logger
 import org.indra.android.events.ChildDied
 import org.indra.android.events.ChildEnd
@@ -22,8 +23,10 @@ class ChildProcessManager
     @Inject
     constructor(
         private val client: IndraClient,
+        private val longRun: LongRunController,
     ) {
-        private val processes = java.util.concurrent.ConcurrentHashMap<Int, ChildProcess>()
+        private val registry = ChildRegistry()
+
 
         companion object {
             // Replay keeps recent events available for collectors that subscribe right
@@ -64,19 +67,31 @@ class ChildProcessManager
         }
 
         fun track(process: ChildProcess) {
-            processes[process.id] = process
+            registry.track(process)
+            // A 30-minute scan must survive the screen going off; the foreground service is what
+            // buys that, and the count of tracked children is the only honest trigger for it.
+            longRun.onRunningChanged(registry.size)
         }
 
         fun forget(processId: Int) {
-            processes.remove(processId)
+            registry.forget(processId)
+            longRun.onRunningChanged(registry.size)
         }
 
-        fun get(processId: Int): ChildProcess? = processes[processId]
+        fun get(processId: Int): ChildProcess? = registry.get(processId)
+
+        /** True while at least one tracked child is believed to be running. */
+        fun hasRunning(): Boolean = registry.size > 0
 
         /** Stops every tracked child (used before a binary swap underneath running tools). */
         fun stopAllRunning() {
-            processes.keys.toList().forEach { pid ->
+            registry.ids().forEach { pid ->
                 runCatching { client.kill(pid, 9) }
+                    .onFailure { Logger.w("kill($pid) failed before a binary swap: ${it.message}") }
+                // Forget it either way: a pid that cannot be killed is almost always
+                // already gone, and keeping it would report a phantom running tool forever.
+                registry.forget(pid)
             }
+            longRun.onRunningChanged(registry.size)
         }
     }

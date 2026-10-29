@@ -7,6 +7,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import org.indra.android.core.system.IndraWorkspace
 import java.io.File
 import javax.inject.Inject
 
@@ -62,9 +63,15 @@ class GeoMacViewModel
             _uiState.value = _uiState.value.copy(entries = _uiState.value.entries - e)
         }
 
+        private fun exportDir(): File =
+            IndraWorkspace.exportDir(
+                IndraWorkspace.root(),
+                context.filesDir,
+                IndraWorkspace.hasAllFilesAccess(),
+            )
+
         fun exportKml(): String? {
-            val dir = File(context.filesDir, "captures")
-            dir.mkdirs()
+            val dir = exportDir()
             val f = File(dir, "geomac.kml")
             val sb = StringBuilder()
             sb.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
@@ -79,8 +86,7 @@ class GeoMacViewModel
         }
 
         fun exportCsv(): String? {
-            val dir = File(context.filesDir, "captures")
-            dir.mkdirs()
+            val dir = exportDir()
             val f = File(dir, "geomac.csv")
             val sb = StringBuilder("bssid,lat,lon\n")
             _uiState.value.entries.forEach { e -> sb.append("${e.bssid},${e.lat},${e.lon}\n") }

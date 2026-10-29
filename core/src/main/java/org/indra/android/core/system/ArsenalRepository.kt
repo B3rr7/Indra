@@ -49,9 +49,5 @@ class ArsenalRepository
         fun substitute(
             template: ArsenalTemplate,
             vars: Map<String, String>,
-        ): String {
-            var cmd = template.command
-            vars.forEach { (k, v) -> cmd = cmd.replace("{$k}", v) }
-            return cmd
-        }
+        ): String = ArsenalCommand.substitute(template.command, vars)
     }

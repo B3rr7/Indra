@@ -127,21 +127,6 @@ dependencies {
     implementation 'org.apache.commons:commons-compress:1.26.1'
     implementation 'org.tukaani:xz:1.9'
 
-    // Semver
-    implementation 'com.github.zafarkhaja:java-semver:0.9.0'
-
-    // MsgPack
-    implementation 'org.msgpack:msgpack-core:0.9.3'
-
-    // Charset detection
-    implementation 'com.googlecode.juniversalchardet:juniversalchardet:1.0.3'
-
-    // HTML unescape
-    implementation 'org.unbescape:unbescape:1.1.6.RELEASE'
-
-    // Preferences
-    implementation 'androidx.preference:preference-ktx:1.2.1'
-
     // Splash screen
     implementation 'androidx.core:core-splashscreen:1.0.1'
 
@@ -155,30 +140,215 @@ dependencies {
     debugImplementation 'androidx.compose.ui:ui-test-manifest'
 }
 
-// Bundle the native core produced by `indra/jni/build.sh cores` into assets so
-// CoreManager can install it without a network download.
-def coreDistDir = file("$projectDir/dist")
-tasks.register("bundleCore", Copy) {
-    onlyIf { coreDistDir.exists() }
-    from(coreDistDir) {
-        include "core-v*+android16.armeabi-v7a.tar.xz"
-        include "core-v*+android16.arm64-v8a.tar.xz"
-        rename { name ->
-            // core-vX.Y.Z+androidN.<abi>.tar.xz  ->  core-<abi>.tar.xz
-            def m = (name =~ /core-v[^+]+\+android\d+\.([^.]+)\.tar\.xz/)
-            if (m.matches()) {
-                "core-${m.group(1)}.tar.xz"
-            } else {
-                name
+// ---------------------------------------------------------------------------
+// Native artifacts: the daemon core (assets/core-<abi>.tar.xz) and the JNI
+// bridge (jniLibs/<abi>/libIndra*.so).
+//
+// Both are build outputs and therefore gitignored (`indra/.gitignore`: dist,
+// *.so, *.tar.*). `bundleCore` used to be `onlyIf { dist.exists() }`, so a
+// clean clone silently produced an APK with **no daemon in it** and CI stayed
+// green — the published artifact could not scan anything. A missing artifact
+// now fails the build and names the ways to supply one:
+//
+//   1. build them:      git submodule update --init --recursive
+//                       cd indra/jni && ./build.sh jni && ./build.sh cores
+//   2. point at a dir:  -Pindra.jniLibsDir=… -Pindra.coreArchiveDir=…
+//   3. download:        -Pindra.coreUrl='…/{abi}.tar.xz' -Pindra.coreSha256.<abi>=…
+//                       (checksum required; an unverified download is refused)
+// ---------------------------------------------------------------------------
+def coreAbis = ['arm64-v8a', 'armeabi-v7a']
+
+/** Groovy has no `File.copyTo` — it is a Kotlin extension. Overwrite-copy. */
+def copyFile = { File from, File to ->
+    to.parentFile?.mkdirs()
+    java.nio.file.Files.copy(
+        from.toPath(),
+        to.toPath(),
+        java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+        java.nio.file.StandardCopyOption.COPY_ATTRIBUTES,
+    )
+    to
+}
+
+def coreSourceDirs = {
+    def dirs = []
+    def explicit = findProperty('indra.coreArchiveDir') ?: System.getenv('INDRA_CORE_ARCHIVE_DIR')
+    if (explicit) dirs << file(explicit)
+    dirs << file("$projectDir/dist")
+    dirs
+}
+
+def coreArchivePattern = { String abi ->
+    ~/core-v[^+]+\+android\d+\.${java.util.regex.Pattern.quote(abi)}\.tar\.xz/
+}
+
+/** Newest staged core archive for [abi], or null. Prefers the highest `androidN` build. */
+def findCoreArchive = { String abi ->
+    def pattern = coreArchivePattern(abi)
+    def androidLevel = { String name ->
+        (name =~ /\+android(\d+)\./).with { m -> m.find() ? m.group(1) as int : 0 }
+    }
+    File found = null
+    for (dir in coreSourceDirs()) {
+        if (found != null) break
+        if (!dir.isDirectory()) continue
+        def hits = (dir.listFiles() ?: []).findAll { it.isFile() && it.name ==~ pattern }
+        if (hits) {
+            found = hits.sort { a, b ->
+                def byApi = androidLevel(a.name) <=> androidLevel(b.name)
+                byApi != 0 ? byApi : (a.lastModified() <=> b.lastModified())
+            }.last()
+        }
+    }
+    found
+}
+
+tasks.register('stageNativeCore') {
+    group = 'build'
+    description = 'Stages the native daemon core into assets/ and fails when the JNI bridge is missing.'
+
+    def jniRoot = file("$projectDir/src/main/jniLibs")
+    def assetsDir = file("$projectDir/src/main/assets")
+    def urlTemplate = findProperty('indra.coreUrl') ?: System.getenv('INDRA_CORE_URL')
+
+    inputs.property('coreUrl', urlTemplate ?: '')
+    outputs.upToDateWhen { false } // also re-verifies the JNI bridge on every build
+
+    doLast {
+        // 1. JNI bridge (libIndraClient/libIndraCommon) -------------------------
+        def externalJni = (findProperty('indra.jniLibsDir') ?: System.getenv('INDRA_JNI_LIBS_DIR'))?.with { file(it) }
+        def missingJni = []
+        coreAbis.each { abi ->
+            def target = file("$jniRoot/$abi")
+            def present = new File(target, 'libIndraClient.so').exists() && new File(target, 'libIndraCommon.so').exists()
+            if (!present && externalJni != null) {
+                def source = new File(externalJni, abi)
+                if (new File(source, 'libIndraClient.so').exists()) {
+                    target.mkdirs()
+                    source.listFiles()?.findAll { it.name.endsWith('.so') }?.each { copyFile(it, new File(target, it.name)) }
+                    present = new File(target, 'libIndraClient.so').exists()
+                }
+            }
+            if (!present) missingJni << abi
+        }
+        if (missingJni) {
+            throw new GradleException(
+                "Native JNI bridge missing for ${missingJni.join(', ')}: " +
+                    "jniLibs/<abi>/libIndraClient.so is a build output and is not tracked in git.\n" +
+                    "  build it:   cd indra/jni && ./build.sh jni\n" +
+                    "  or point:   -Pindra.jniLibsDir=/path/to/jniLibs  (with <abi>/ subdirectories)\n" +
+                    "Without it IndraClient cannot load and every tool gate reports the daemon as down.")
+        }
+
+        // 2. Daemon core archive per ABI ---------------------------------------
+        assetsDir.mkdirs()
+        coreAbis.each { abi ->
+            def target = new File(assetsDir, "core-${abi}.tar.xz")
+            if (target.exists() && target.length() > 0) return
+            def staged = findCoreArchive(abi)
+            if (staged == null && urlTemplate) {
+                if (!urlTemplate.contains('{abi}')) {
+                    throw new GradleException("-Pindra.coreUrl must contain {abi} so each ABI downloads its own archive.")
+                }
+                def expected = findProperty("indra.coreSha256.${abi}") ?:
+                    System.getenv('INDRA_CORE_SHA256_' + abi.toUpperCase().replace('-', '_'))
+                if (!expected) {
+                    throw new GradleException("Refusing unverified core download for ${abi}: set -Pindra.coreSha256.${abi}=<sha256>.")
+                }
+                def url = urlTemplate.replace('{abi}', abi)
+                def tmp = new File(assetsDir, "core-${abi}.tar.xz.part")
+                tmp.withOutputStream { out -> new URL(url).withInputStream { it.transferTo(out) } }
+                def actual = java.security.MessageDigest.getInstance('SHA-256').with { md ->
+                    tmp.withInputStream { ins ->
+                        def buf = new byte[8192]
+                        int n
+                        while ((n = ins.read(buf)) > 0) md.update(buf, 0, n)
+                    }
+                    md.digest().collect { String.format('%02x', it) }.join()
+                }
+                if (!actual.equalsIgnoreCase(expected)) {
+                    tmp.delete()
+                    throw new GradleException("Core archive checksum mismatch for ${abi}: ${actual} != ${expected}")
+                }
+                tmp.renameTo(target)
+                staged = target
+            }
+            if (staged == null) {
+                throw new GradleException(
+                    "No daemon core archive for ${abi}: expected dist/core-v*+android*.<abi>.tar.xz.\n" +
+                        "  build it:   cd indra/jni && ./build.sh cores\n" +
+                        "  or point:   -Pindra.coreArchiveDir=/path/to/dist\n" +
+                        "  or download: -Pindra.coreUrl='https://…/{abi}.tar.xz' -Pindra.coreSha256.${abi}=…\n" +
+                        "Without it the app installs a core-less APK: Settings shows no version and every " +
+                        "plugin refuses with \"Native daemon is not running\".")
+            }
+            if (staged.absolutePath != target.absolutePath) {
+                copyFile(staged, target)
             }
         }
     }
-    into file("$projectDir/src/main/assets")
 }
 
 tasks.matching { it.name == 'preBuild' }.configureEach {
-    dependsOn tasks.named('bundleCore')
+    dependsOn tasks.named('stageNativeCore')
 }
+
+/**
+ * Fails when a built APK is missing the native artifacts. Without this the
+ * missing-core regression is invisible: the APK installs, the UI renders and
+ * only a device run reveals that nothing can execute.
+ *
+ * One task per variant, reading the variant's own APK directory. A single task
+ * scanning `outputs/apk` also inspected APKs left over from other variants and
+ * other builds, so `assembleDebug` failed on a stale release APK that had been
+ * built before the core was staged.
+ */
+androidComponents {
+    onVariants(selector().all()) { variant ->
+        def variantName = variant.name.capitalize()
+        // The variant's APK directory. `variant.artifacts.get(SingleArtifact.APK)` would be
+        // the idiomatic source, but in Groovy that reads the nested `SingleArtifact.APK`
+        // type rather than the static field, so the conventional path plus a name-scoped
+        // search in the task body is used instead.
+        def apkDir = file("$buildDir/outputs/apk/${variant.name}")
+
+        def check = tasks.register("checkApkArtifacts${variantName}") {
+            group = 'verification'
+            description = "Asserts the ${variant.name} APK contains libIndra*.so and the core archives."
+
+            doLast {
+                def required = coreAbis.collectMany { abi ->
+                    ["lib/${abi}/libIndraClient.so", "lib/${abi}/libIndraCommon.so", "assets/core-${abi}.tar.xz"]
+                }
+                // GString != String in Groovy: without toString() the Set lookup never matches.
+                .collect { it.toString() }
+                def apks = (apkDir.listFiles() ?: []).findAll { it.name.endsWith('.apk') }
+                if (apks.isEmpty()) {
+                    // Flavour layouts nest the input further; fall back to a scoped search.
+                    apks = fileTree("$buildDir/outputs/apk") {
+                        include "**/${variant.name}/*.apk"
+                    }.files as List
+                }
+                if (apks.isEmpty()) {
+                    throw new GradleException("checkApkArtifacts: no ${variant.name} APK built under $buildDir/outputs/apk")
+                }
+                apks.each { apk ->
+                    def entries = new java.util.zip.ZipFile(apk).withCloseable { zip ->
+                        zip.entries().collect { it.name } as Set
+                    }
+                    def missing = required.findAll { !entries.contains(it) }
+                    if (missing) {
+                        throw new GradleException("${apk.name} is missing native artifacts: ${missing.join(', ')}")
+                    }
+                }
+            }
+        }
+
+        // `named` would fail: the assemble task is created after variants are configured.
+        tasks.matching { it.name == "assemble${variantName}" }.configureEach { finalizedBy(check) }
+    }
+}
+
 
 detekt {
     config.setFrom(files("$rootDir/detekt.yml"))

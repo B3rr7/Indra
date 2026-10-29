@@ -96,4 +96,36 @@ class IndraWorkspaceTest {
         assertEquals(IndraWorkspace.SUBDIRECTORIES.size, IndraWorkspace.SUBDIRECTORIES.toSet().size)
         assertEquals(IndraWorkspace.SUBDIRECTORIES.size + 1, IndraWorkspace.allDirectories(File(temp.root, "Indra")).size)
     }
+
+    @Test
+    fun `captures dir is the same one the writers use`() {
+        // Writers go through capturePath(), which is built from IndraWorkspace.CAPTURES;
+        // the reader used to look in filesDir/captures instead.
+        val root = File(temp.root, "Indra")
+        assertEquals(File(root, IndraWorkspace.CAPTURES), IndraWorkspace.capturesDir(root))
+    }
+
+    @Test
+    fun `exports go to private storage when the app cannot read shared storage`() {
+        val shared = File(temp.root, "shared")
+        val privateFiles = File(temp.root, "private")
+
+        val dir = IndraWorkspace.exportDir(shared, privateFiles, allFilesAccess = false)
+        assertEquals(File(privateFiles, IndraWorkspace.OUTPUT), dir)
+        assertTrue(dir.isDirectory)
+        // Nothing was created under /sdcard: an export the app cannot read back is not
+        // an export, so the no-access path must not touch the shared tree at all.
+        assertFalse(File(shared, IndraWorkspace.OUTPUT).exists())
+    }
+
+    @Test
+    fun `exports go to shared storage when the app has all-files access`() {
+        val shared = File(temp.root, "shared")
+        val privateFiles = File(temp.root, "private")
+
+        val dir = IndraWorkspace.exportDir(shared, privateFiles, allFilesAccess = true)
+        assertEquals(File(shared, IndraWorkspace.OUTPUT), dir)
+        assertTrue(dir.isDirectory)
+        assertFalse(File(privateFiles, IndraWorkspace.OUTPUT).exists())
+    }
 }
