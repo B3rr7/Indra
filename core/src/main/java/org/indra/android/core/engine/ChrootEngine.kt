@@ -161,11 +161,14 @@ class ChrootEngine
                         "Terminal with chroot on: `apk add iw iproute2`. Whether the driver then allows " +
                         "monitor mode is a separate question — some vendor drivers reboot the device."
                 Capability.HASHCAT ->
-                    "hashcat is not installed. In the Terminal with chroot on: `apk add hashcat pocl-opencl` " +
-                        "(pocl is the CPU OpenCL runtime hashcat needs; there is no GPU inside the chroot)."
+                    "hashcat cannot be installed in this Alpine chroot: on aarch64 it exists only in " +
+                        "`edge/testing` (not in this 3.20 rootfs) and Alpine ships no OpenCL runtime, so it " +
+                        "could not run either way. Crack the capture with the bundled aircrack-ng instead — " +
+                        "WiFi Audit takes the same capture and wordlist."
                 Capability.HCXTOOLS ->
-                    "hcxpcapngtool (hcxtools) is not installed, so a capture cannot be converted for hashcat. " +
-                        "In the Terminal with chroot on: `apk add hcxtools`."
+                    "hcxtools (`hcxpcapngtool`) is not packaged by Alpine for any architecture, so a capture " +
+                        "cannot be converted for hashcat here. The bundled aircrack-ng reads `.cap` handshakes " +
+                        "directly — use WiFi Audit with the same capture and wordlist."
                 Capability.NUCLEI_TEMPLATES ->
                     "nuclei templates are not installed. They are downloaded by the app (the chroot's Go " +
                         "resolver cannot fetch them) — install them on the Vulnerability Scanner screen."

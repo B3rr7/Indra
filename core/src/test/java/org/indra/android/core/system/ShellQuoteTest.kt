@@ -1,5 +1,6 @@
 package org.indra.android.core.system
 
+import org.indra.android.core.engine.ChrootScript
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Test
@@ -86,6 +87,19 @@ class ShellQuoteTest {
         // whole script in single quotes and the tokenizer split it at every inner quote.
         val script = "ip link set ${SmartToolBox.shellQuote("wlan0")} down"
         assertNotEquals(listOf(script), parseCmd("/system/bin/sh -c ${SmartToolBox.shellQuote(script)}").drop(2))
+    }
+
+    @Test
+    fun `a chroot command line survives as one argument`() {
+        // `SmartToolBox.chroot()` builds a guest script full of POSIX quotes and runs it through
+        // shell(); giving that line to the raw handler instead let the daemon split it at the
+        // first inner quote, so the Terminal's trailing printf arrived with no arguments
+        // (device: `sh: usage: printf FORMAT [ARGUMENT...]`, exit status and cwd lost).
+        val guest = "cat /etc/alpine-release; printf '%s' \"\$?\""
+        val line = ChrootScript.shell("/data/alpine", guest, mapOf("HOME" to "/root"))
+
+        assertEquals(line, shellArgv(line).last())
+        assertNotEquals(guest, parseCmd(line).last())
     }
 
     /** The argv the daemon would `execvp()` for [script] run through [SmartToolBox.shell]. */

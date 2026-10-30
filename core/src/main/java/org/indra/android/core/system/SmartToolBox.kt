@@ -7,6 +7,7 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.last
 import kotlinx.coroutines.flow.channelFlow
@@ -85,43 +86,15 @@ class SmartToolBox
              * Every user-typed field interpolated into a command must go through this.
              *
              * This quoting is for `sh` *inside* the script. It is not how the script is
-             * handed to the daemon — see [encodeArg].
+             * handed to the daemon — see [encodeArg]. Rules live in [ShellText].
              */
-            fun shellQuote(value: String): String = "'" + value.replace("'", "'\\''") + "'"
+            fun shellQuote(value: String): String = ShellText.quote(value)
 
             /**
-             * Encodes one argument for the daemon's tokenizer (`cSploitClient/command.c:
-             * parse_cmd`), which is *not* a POSIX shell.
-             *
-             * A quote starts a quoted run and the argument **ends at the first closing
-             * quote**: `a 'b c' d` is `a`, `b c`, `d`, but `'a b'c` is `a b` followed by
-             * `c`. So adjacent quoted/unquoted segments cannot be joined into one word,
-             * and POSIX single-quoting a whole script silently splits it — that turned
-             * `sh -c "./tools/tcpdump -i 'nosuchif0' -A …"` into three arguments, `sh`
-             * ran `tcpdump -i`, and the screen reported tcpdump's usage text.
-             *
-             * What the tokenizer does honour is backslash-escaping of space, tab, `'`,
-             * `"` and `\` (`\x` yields `x`, each escape counted and removed). Everything
-             * else — `;`, `|`, `>`, `$`, `?`, `&`, newlines — passes through untouched for
-             * `sh` to interpret.
-             *
-             * Note `start` is only recorded for a plain character, so a *leading* escaped
-             * space/tab/quote/backslash is dropped; [shell] prefixes a newline for those.
+             * Encodes one argument for the daemon's tokenizer, which is *not* a POSIX shell —
+             * see [ShellText.encodeArg] for the rules and the bug they prevent.
              */
-            fun encodeArg(value: String): String =
-                buildString {
-                    value.forEach { c ->
-                        when (c) {
-                            ' ', '\t', '\'', '"', '\\' -> append('\\').append(c)
-                            else -> append(c)
-                        }
-                    }
-                }
-
-            /** True when [value] begins with a character [encodeArg] must escape but the
-             *  tokenizer would drop (it only starts an argument on a plain character). */
-            private fun startsWithDroppedChar(value: String): Boolean =
-                value.isNotEmpty() && value[0] in charArrayOf(' ', '\t', '\'', '"', '\\')
+            fun encodeArg(value: String): String = ShellText.encodeArg(value)
 
             /**
              * Status values carried by [ToolResult].
@@ -464,7 +437,11 @@ class SmartToolBox
             monitor: Boolean,
         ): Flow<ToolResult> {
             val script = MonitorMode.script(iface, monitor)
-            val inChroot = chrootEngine.capability(Capability.IW) == CapabilityState.Available
+            // `capability()`, not `chrootEngine.capability()`: the engine answers by stat-ing
+            // files in the rootfs (`isAlpineInstalled` → `File.canExecute`), and this screen
+            // calls monitorMode from a `viewModelScope.launch` *before* any tool starts, so the
+            // direct call was a Main-thread disk read (7 × `DiskReadViolation` on device).
+            val inChroot = capability(Capability.IW) == CapabilityState.Available
             if (inChroot) {
                 ensureChroot()?.let { return failure("monitor mode", it) }
                 return shell(
@@ -571,18 +548,18 @@ class SmartToolBox
         fun masscan(
             target: String,
             args: String = "",
-        ): Flow<ToolResult> {
-            // masscan cannot pick an interface on Android ("could not determine default
-            // interface"). If the caller did not name one, pick the active one from the
-            // network stack instead of leaving masscan to fail on its own.
-            val iface = if (args.contains(Regex("(^|\\s)-e(\\s|=)"))) null else networkHelper.getActiveInterface()
-            val ifaceArg = if (iface != null) "-e ${shellQuote(iface)} " else ""
-            return rawCommand(
-                "masscan",
-                "${binary("masscan")} $ifaceArg$args ${shellQuote(target)}",
-                timeoutMs = SCAN_TIMEOUT_MS,
-            )
-        }
+            iface: String = "",
+        ): Flow<ToolResult> =
+            flow {
+                // masscan cannot work out an interface on Android, and the one Android calls
+                // active is frequently cellular, which libpcap cannot scan — see [CaptureIface].
+                // Detection reads the kernel's interface list, so it stays off Main.
+                val resolved =
+                    withContext(Dispatchers.IO) {
+                        CaptureIface.masscanArgs(iface, args) { networkHelper.captureInterface() }
+                    }
+                emitAll(rawCommand("masscan", "${binary("masscan")} $resolved ${shellQuote(target)}", timeoutMs = SCAN_TIMEOUT_MS))
+            }
 
         fun reaver(
             iface: String,
@@ -619,7 +596,7 @@ class SmartToolBox
         ): Flow<ToolResult> {
             // A leading escaped space/tab/quote/backslash would be dropped by parse_cmd
             // (it only opens an argument on a plain char); a newline is plain and inert.
-            val script = if (startsWithDroppedChar(command)) "\n$command" else command
+            val script = if (ShellText.startsWithDroppedChar(command)) "\n$command" else command
             return execute("shell", "$SH_BINARY -c ${encodeArg(script)}", label, timeoutMs)
         }
 
@@ -727,15 +704,25 @@ class SmartToolBox
                 )
             }
 
-        /** Runs [command] inside the Alpine chroot (real Linux userspace) via the
-         *  daemon's raw handler. Requires the chroot engine to be installed. */
+        /**
+         * Runs [command] inside the Alpine chroot (real Linux userspace). Requires the chroot
+         * engine to be installed.
+         *
+         * The chroot command line is POSIX shell text (quoted `env` values, a quoted script), so
+         * it must go through [shell] — which hands it to `/system/bin/sh -c` as one token. Passing
+         * it to the `raw` handler instead lets the **daemon's** tokenizer split it, and that
+         * tokenizer ends an argument at its first closing quote: `… busybox sh -c '<script>'`
+         * arrived truncated at the first quote *inside* the script, so the Terminal's trailing
+         * `printf … "$__indra_st" "$PWD"` ran with no arguments (`sh: usage: printf FORMAT …`) and
+         * the exit status/cwd were lost. Found on device with `cat /etc/alpine-release`.
+         */
         suspend fun chroot(
             command: String,
             label: String = "alpine",
             timeoutMs: Long = TOOL_TIMEOUT_MS,
         ): Flow<ToolResult> {
             ensureChroot()?.let { return failure(label, it) }
-            return rawCommand(label, chrootEngine.wrapShell(command), timeoutMs)
+            return shell(chrootEngine.wrapShell(command), label = label, timeoutMs = timeoutMs)
         }
 
         /**
@@ -750,41 +737,46 @@ class SmartToolBox
          * script only re-runs when the network's DNS servers change.
          */
         @Suppress("ReturnCount")
-        suspend fun ensureChroot(): String? {
-            val notInstalled =
-                (chrootEngine.capability(Capability.GNU_TOOLS) as? CapabilityState.EngineNotInstalled)
-                    ?.fix
-            if (notInstalled != null) return notInstalled
+        suspend fun ensureChroot(): String? =
+            // Everything below runs off Main: `capability()` stats files in the rootfs and
+            // `setupScript()`/`requiredTargets()` read `context.cacheDir` (which creates the
+            // directory), so calling them from a `viewModelScope.launch` was a Main-thread disk
+            // read — 10 `DiskReadViolation`s on device when Packet Capture enabled monitor mode.
+            withContext(Dispatchers.IO) {
+                val notInstalled =
+                    (chrootEngine.capability(Capability.GNU_TOOLS) as? CapabilityState.EngineNotInstalled)
+                        ?.fix
+                if (notInstalled != null) return@withContext notInstalled
 
-            val dns = chrootEngine.dnsText()
-            if (chrootDns.get() == dns) return null
+                val dns = chrootEngine.dnsText()
+                if (chrootDns.get() == dns) return@withContext null
 
-            return chrootMutex.withLock {
-                if (chrootDns.get() == dns) return@withLock null
-                val result =
-                    runCatching {
-                        shell(chrootEngine.setupScript(dns), label = "chroot setup", timeoutMs = CHROOT_SETUP_TIMEOUT_MS).last()
-                    }.getOrElse {
-                        return@withLock "Could not prepare the Alpine chroot: ${it.message}"
+                chrootMutex.withLock {
+                    if (chrootDns.get() == dns) return@withLock null
+                    val result =
+                        runCatching {
+                            shell(chrootEngine.setupScript(dns), label = "chroot setup", timeoutMs = CHROOT_SETUP_TIMEOUT_MS).last()
+                        }.getOrElse {
+                            return@withLock "Could not prepare the Alpine chroot: ${it.message}"
+                        }
+                    if (!result.success) {
+                        return@withLock "Could not prepare the Alpine chroot" + reasonSuffix(result.rawOutput).ifEmpty {
+                            " (setup exited with code 1)"
+                        }
                     }
-                if (!result.success) {
-                    return@withLock "Could not prepare the Alpine chroot" + reasonSuffix(result.rawOutput).ifEmpty {
-                        " (setup exited with code 1)"
+                    val failed = ChrootScript.failures(result.rawOutput)
+                    val fatal = failed.filter { it in chrootEngine.requiredTargets() }
+                    if (fatal.isNotEmpty()) {
+                        Logger.w("Chroot mounts failed: ${fatal.joinToString(", ")}")
+                        val message =
+                            "The Alpine chroot could not mount ${fatal.joinToString(", ")} — reinstall it in Settings → Native Core."
+                        return@withLock message
                     }
+                    failed.forEach { Logger.w("Chroot mount $it unavailable; the environment still runs without it") }
+                    chrootDns.set(dns)
+                    null
                 }
-                val failed = ChrootScript.failures(result.rawOutput)
-                val fatal = failed.filter { it in chrootEngine.requiredTargets() }
-                if (fatal.isNotEmpty()) {
-                    Logger.w("Chroot mounts failed: ${fatal.joinToString(", ")}")
-                    val message =
-                        "The Alpine chroot could not mount ${fatal.joinToString(", ")} — reinstall it in Settings → Native Core."
-                    return@withLock message
-                }
-                failed.forEach { Logger.w("Chroot mount $it unavailable; the environment still runs without it") }
-                chrootDns.set(dns)
-                null
             }
-        }
 
         /** Forces the next [ensureChroot] to re-run (after installing or uninstalling the rootfs). */
         fun resetChrootState() {

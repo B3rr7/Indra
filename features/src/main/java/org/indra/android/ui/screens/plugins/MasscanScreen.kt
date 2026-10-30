@@ -75,6 +75,17 @@ fun MasscanScreen(
                     enabled = !uiState.isRunning,
                 )
             }
+            OutlinedTextField(
+                value = uiState.iface,
+                onValueChange = { viewModel.updateIface(it) },
+                label = { Text("Interface (optional)") },
+                supportingText = {
+                    Text("Blank picks an Ethernet-framed interface (wlan0); cellular (rmnet) cannot be scanned by masscan.")
+                },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                enabled = !uiState.isRunning,
+            )
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),

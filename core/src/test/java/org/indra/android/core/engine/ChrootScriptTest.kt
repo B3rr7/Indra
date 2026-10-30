@@ -89,22 +89,36 @@ class ChrootScriptTest {
     }
 
     @Test
-    fun `exec passes env after busybox env and keeps the argv intact`() {
+    fun `exec passes PATH first, then env, and keeps the argv intact`() {
         val command = ChrootScript.exec(root, "/indra/tools/nuclei/nuclei -u 'example.com'", mapOf("HOME" to "/root"))
 
         assertEquals(
-            "chroot '/data/data/org.indra.android/files/alpine' /bin/busybox env HOME='/root' " +
+            "chroot '/data/data/org.indra.android/files/alpine' /bin/busybox env " +
+                "PATH='/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin' HOME='/root' " +
                 "/indra/tools/nuclei/nuclei -u 'example.com'",
             command,
         )
     }
 
     @Test
-    fun `exec without env does not leave a dangling env`() {
+    fun `exec without env still sets PATH`() {
+        // `chroot` does not reset the environment, so the guest inherited Android's PATH and
+        // every applet in the rootfs answered "not found" on a complete Alpine tree (device
+        // finding). The plain argv is the last field, so this must not become `env /bin/tool`.
         assertEquals(
-            "chroot '/r' /bin/tool --flag",
+            "chroot '/r' /bin/busybox env " +
+                "PATH='/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin' /bin/tool --flag",
             ChrootScript.exec("/r", "/bin/tool --flag"),
         )
+    }
+
+    @Test
+    fun `PATH is Alpine's own, not Android's`() {
+        val path = ChrootScript.DEFAULT_ENV["PATH"].orEmpty()
+
+        assertEquals("/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin", path)
+        assertFalse("no Android bin dirs inside the rootfs", path.contains("system/bin"))
+        assertFalse("no APEX dirs inside the rootfs", path.contains("apex"))
     }
 
     @Test
@@ -119,14 +133,16 @@ class ChrootScriptTest {
     fun `shell quotes the whole script so separators survive as script text`() {
         val command = ChrootScript.shell("/r", "cd /indra && ls > out.txt")
 
-        assertTrue(command.startsWith("chroot '/r' /bin/busybox sh -c '"))
+        assertTrue(command.startsWith("chroot '/r' /bin/busybox env PATH="))
+        assertTrue(command.contains(" /bin/busybox sh -c '"))
         assertTrue(command.contains("cd /indra && ls > out.txt"))
     }
 
     @Test
     fun `a single quote in a value cannot escape the quoting`() {
         val command = ChrootScript.exec("/r", "/bin/echo", mapOf("MSG" to "a'b; id"))
-        assertEquals("chroot '/r' /bin/busybox env MSG='a'\\''b; id' /bin/echo", command)
+        assertTrue(command.startsWith("chroot '/r' /bin/busybox env PATH="))
+        assertTrue(command.endsWith(" MSG='a'\\''b; id' /bin/echo"))
     }
 
     @Test

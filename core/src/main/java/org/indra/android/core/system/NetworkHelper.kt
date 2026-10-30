@@ -7,6 +7,7 @@ import android.net.wifi.WifiInfo
 import android.net.wifi.WifiManager
 import android.os.Build
 import dagger.hilt.android.qualifiers.ApplicationContext
+import java.net.Inet4Address
 import java.net.NetworkInterface
 import java.util.Locale
 import javax.inject.Inject
@@ -130,6 +131,34 @@ class NetworkHelper
             val properties = cm.activeNetwork?.let { cm.getLinkProperties(it) } ?: return null
             return properties.interfaceName?.takeIf { it.isNotBlank() }
         }
+
+        /**
+         * Interface names that are up, not loopback, and carry an IPv4 address.
+         *
+         * `NetworkInterface` is the only Android API that also lists an interface the platform
+         * does not treat as a Network at all: the Wi-Fi **AP** (`wlan0`) while the phone is
+         * tethering. `ConnectivityManager` reports only the client side (here: cellular), which
+         * is the wrong device to point a capture tool at.
+         *
+         * Reads the kernel's device list, so call it off Main.
+         */
+        fun upInterfaces(): List<String> =
+            runCatching {
+                NetworkInterface.getNetworkInterfaces()
+                    ?.toList()
+                    .orEmpty()
+                    .filter { it.isUp && !it.isLoopback && it.inetAddresses.toList().any { address -> address is Inet4Address } }
+                    .map { it.name }
+            }.getOrDefault(emptyList())
+
+        /**
+         * The interface to hand a capture tool (`masscan -e`, `tcpdump -i`).
+         *
+         * Android's "active" interface is often cellular, which libpcap can only open as a cooked
+         * `LINUX_SLL` socket — see [CaptureIface] — so the decision is made by that pure rule
+         * rather than by "whatever ConnectivityManager named".
+         */
+        fun captureInterface(): String? = CaptureIface.pick(getActiveInterface(), upInterfaces())
 
         fun getGatewayAddress(): String? {
             val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return null

@@ -45,6 +45,7 @@ interface ToolRunner {
     fun masscan(
         target: String,
         args: String = "",
+        iface: String = "",
     ): Flow<ToolResult>
 
     fun tcpdump(

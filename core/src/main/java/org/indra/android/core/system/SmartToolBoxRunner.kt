@@ -39,7 +39,8 @@ class SmartToolBoxRunner
         override fun masscan(
             target: String,
             args: String,
-        ): Flow<ToolResult> = box.masscan(target, args)
+            iface: String,
+        ): Flow<ToolResult> = box.masscan(target, args, iface)
 
         override fun tcpdump(
             iface: String,

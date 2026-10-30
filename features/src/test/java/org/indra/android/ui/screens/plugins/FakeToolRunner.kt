@@ -84,7 +84,8 @@ class FakeToolRunner : ToolRunner {
     override fun masscan(
         target: String,
         args: String,
-    ): Flow<ToolResult> = record("masscan", "masscan $args $target")
+        iface: String,
+    ): Flow<ToolResult> = record("masscan", "masscan ${if (iface.isBlank()) "" else "-e $iface "}$args $target")
 
     override fun tcpdump(
         iface: String,

@@ -14,13 +14,23 @@ enum class Capability(val label: String) {
     /** `python3`, for the Python tooling (sqlmap-class work). */
     PYTHON("Python 3"),
 
-    /** `hashcat`, for GPU/CPU hash cracking. */
+    /**
+     * `hashcat`, for GPU/CPU hash cracking.
+     *
+     * Alpine packages it for aarch64 only in `edge/testing` and ships **no OpenCL runtime**, so
+     * this capability is not satisfiable inside the shipped 3.20 rootfs (checked against the
+     * v3.18 … edge indexes on 2026-10-29). The fix text therefore points at the bundled
+     * aircrack-ng path instead of a command that cannot work.
+     */
     HASHCAT("hashcat"),
 
     /**
      * `hcxpcapngtool` (hcxtools), which turns a packet capture into the `22000` format hashcat
      * reads. It is a separate capability because hashcat without it cannot open a `.cap` at all —
      * "hashcat is installed" alone would be a half-truth the Handshakes screen then hits.
+     *
+     * Alpine packages neither hcxtools nor pocl for **any** architecture, so on device this is a
+     * permanent "not available" and the fix names the working alternative (aircrack-ng).
      */
     HCXTOOLS("hcxtools"),
 

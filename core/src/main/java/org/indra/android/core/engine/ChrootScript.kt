@@ -120,6 +120,11 @@ object ChrootScript {
      * `/bin/busybox` rather than `/bin/sh` on purpose: `/bin/sh` is a symlink to busybox in
      * the Alpine tree, and relying on it meant the installer had to re-create the symlink by
      * hand. busybox is a real file and always present.
+     *
+     * [DEFAULT_ENV] is always applied: `chroot` does not reset the environment, so a guest
+     * command inherited Android's `PATH` and *nothing* in the rootfs resolved by name —
+     * `cat`, `apk`, `iw` and `hashcat` all answered "not found" on a perfectly good rootfs
+     * (found on device).
      */
     fun exec(
         root: String,
@@ -128,16 +133,11 @@ object ChrootScript {
     ): String {
         require(argv.isNotBlank()) { "argv must not be blank" }
         val envPart =
-            env.entries
+            (DEFAULT_ENV + env)
+                .entries
                 .onEach { (name, _) -> require(ENV_NAME.matches(name)) { "invalid env name: $name" } }
                 .joinToString("") { (name, value) -> " $name=${quote(value)}" }
-        // `/bin/busybox` is only needed to run `env`; a command without env runs directly
-        // so the binary path in [argv] is not mistaken for a busybox applet.
-        return if (envPart.isEmpty()) {
-            "chroot ${quote(root)} $argv"
-        } else {
-            "chroot ${quote(root)} /bin/busybox env$envPart $argv"
-        }
+        return "chroot ${quote(root)} /bin/busybox env$envPart $argv"
     }
 
     /** `chroot <root> /bin/busybox sh -c <script>` — for the Terminal and multi-command work. */
@@ -146,6 +146,15 @@ object ChrootScript {
         script: String,
         env: Map<String, String> = emptyMap(),
     ): String = exec(root, "/bin/busybox sh -c ${quote(script)}", env)
+
+    /**
+     * What every guest command inherits.
+     *
+     * PATH is Alpine's own (`/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin`);
+     * without it the inherited Android PATH makes every applet in the rootfs invisible.
+     */
+    val DEFAULT_ENV: Map<String, String> =
+        mapOf("PATH" to "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin")
 
     private val ENV_NAME = Regex("[A-Za-z_][A-Za-z0-9_]*")
 }

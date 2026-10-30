@@ -20,6 +20,7 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import org.indra.android.core.system.terminal.Ansi
 
 private const val CONSOLE_PADDING = 8
 private const val HEADER_HORIZONTAL_PADDING = 12
@@ -100,7 +101,10 @@ fun LiveOutputCard(
                 ) {
                     items(lines) { line ->
                         Text(
-                            text = line,
+                            // Tools that draw progress bars emit ANSI cursor control
+                            // (`.[23C00 00 …`), and a console is not a terminal: aircrack-ng
+                            // printed its whole key-progress meter as escape noise here.
+                            text = Ansi.strip(line),
                             style = MaterialTheme.typography.bodySmall,
                             fontFamily = FontFamily.Monospace,
                         )

@@ -20,6 +20,7 @@ data class MasscanUiState(
     val target: String = "",
     val ports: String = "1-65535",
     val rate: String = "1000",
+    val iface: String = "",
     val isRunning: Boolean = false,
     val output: List<String> = emptyList(),
     val error: String? = null,
@@ -62,6 +63,10 @@ class MasscanViewModel
             _uiState.value = _uiState.value.copy(rate = v)
         }
 
+        fun updateIface(v: String) {
+            _uiState.value = _uiState.value.copy(iface = v)
+        }
+
         private var job: Job? = null
         private var pid = -1
 
@@ -83,7 +88,7 @@ class MasscanViewModel
                         return@launch
                     }
                     _uiState.value = _uiState.value.copy(isRunning = true, error = null, output = emptyList())
-                    toolBox.masscan(target, "-p $ports --rate=$rate").collect { result ->
+                    toolBox.masscan(target, "-p $ports --rate=$rate", st.iface.trim()).collect { result ->
                         if (result.pid > 0) pid = result.pid
                         result.streamedLine?.let { line ->
                             _uiState.value = _uiState.value.copy(output = _uiState.value.output + line)
