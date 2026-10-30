@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import org.indra.android.core.system.Masscan
 import org.indra.android.core.system.NetworkHelper
 import org.indra.android.core.system.ToolRunner
 import org.indra.android.core.system.ToolHandle
@@ -96,7 +97,13 @@ class MasscanViewModel
                         if (!result.isStreaming) {
                             _uiState.value = _uiState.value.copy(isRunning = false)
                             pid = -1
-                            if (!result.success) _uiState.value = _uiState.value.copy(error = result.error)
+                            // masscan's own failure block ends with desktop advice ("try
+                            // --interface eth0") and hides the cause; explain the real one.
+                            val explained = Masscan.explain(result.rawOutput)
+                            _uiState.value =
+                                _uiState.value.copy(
+                                    error = explained ?: result.error.takeUnless { result.success },
+                                )
                         }
                     }
                 }
