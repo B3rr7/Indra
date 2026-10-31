@@ -27,6 +27,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.indra.android.BuildConfig
+import org.indra.android.core.system.NativeCoreState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -172,7 +173,6 @@ fun SettingsScreen(
                 }
             }
 
-            // ── Native Core ──────────────────────────────────────────────
             // ── Root Access ──────────────────────────────────────────────
             item {
                 SettingsSection(
@@ -199,7 +199,8 @@ fun SettingsScreen(
                 SettingsCard {
                     SettingsSwitchItem(
                         title = "Rootless mode",
-                        subtitle = "Run daemon as app user (no root). Disables raw-socket features.",
+                        subtitle = "Run the daemon as the app user. Android 10+ blocks this, " +
+                            "so the daemon must run as root there.",
                         checked = uiState.rootlessMode,
                         onCheckedChange = { viewModel.setRootlessMode(it) },
                         icon = Icons.Default.Security,
@@ -326,6 +327,8 @@ fun SettingsScreen(
 @Composable
 private fun StatusHeroCard(uiState: SettingsUiState) {
     // Graceful fallback when the settings UiState lacks fancy fields — values are read directly.
+    val coreState = uiState.coreState
+    val accent = heroAccent(coreState)
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
@@ -356,17 +359,14 @@ private fun StatusHeroCard(uiState: SettingsUiState) {
                         Modifier
                             .size(52.dp)
                             .clip(CircleShape)
-                            .background(
-                                (if (uiState.daemonRunning) SettingsPalette.Running else SettingsPalette.Stopped)
-                                    .copy(alpha = 0.2f),
-                            ),
+                            .background(accent.copy(alpha = 0.2f)),
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
-                        imageVector = if (uiState.daemonRunning) Icons.Default.CheckCircle else Icons.Default.Error,
+                        imageVector = heroIcon(coreState),
                         contentDescription = null,
                         modifier = Modifier.size(28.dp),
-                        tint = if (uiState.daemonRunning) SettingsPalette.Running else SettingsPalette.Stopped,
+                        tint = accent,
                     )
                 }
                 Column(
@@ -374,7 +374,9 @@ private fun StatusHeroCard(uiState: SettingsUiState) {
                     verticalArrangement = Arrangement.spacedBy(3.dp),
                 ) {
                     Text(
-                        text = if (uiState.daemonRunning) "Daemon running" else "Daemon stopped",
+                        // Says the same thing as the Native Core card: "daemon stopped" is wrong
+                        // when there is no core on disk to stop.
+                        text = heroHeadline(coreState),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                     )
@@ -388,6 +390,27 @@ private fun StatusHeroCard(uiState: SettingsUiState) {
         }
     }
 }
+
+private fun heroHeadline(state: NativeCoreState): String =
+    when (state) {
+        NativeCoreState.NotInstalled -> "Core not installed"
+        NativeCoreState.InstalledStopped -> "Daemon stopped"
+        NativeCoreState.Running -> "Daemon running"
+    }
+
+private fun heroAccent(state: NativeCoreState): Color =
+    when (state) {
+        NativeCoreState.NotInstalled -> SettingsPalette.Stopped
+        NativeCoreState.InstalledStopped -> SettingsPalette.WakeLock
+        NativeCoreState.Running -> SettingsPalette.Running
+    }
+
+private fun heroIcon(state: NativeCoreState): ImageVector =
+    when (state) {
+        NativeCoreState.NotInstalled -> Icons.Default.Download
+        NativeCoreState.InstalledStopped -> Icons.Default.Stop
+        NativeCoreState.Running -> Icons.Default.CheckCircle
+    }
 
 @Composable
 private fun SettingsCard(content: @Composable ColumnScope.() -> Unit) {

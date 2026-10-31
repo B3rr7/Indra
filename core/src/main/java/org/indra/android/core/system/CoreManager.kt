@@ -630,7 +630,7 @@ class CoreManager
                         val output = captured.toString().trim()
 
                         if (exitCode != 0 || !File(socketPath).exists()) {
-                            error("Daemon failed to start (exit=$exitCode)${if (output.isNotEmpty()) ": $output" else ""}")
+                            error(DaemonStartFailure.explain(exitCode, output, rootless))
                         }
 
                         connectAndLogin()

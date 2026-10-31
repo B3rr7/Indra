@@ -1,5 +1,6 @@
 package org.indra.android.core.system
 
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -36,6 +37,22 @@ class RootManager
 
             /** /proc/self/status is a few hundred bytes; anything longer is not ours. */
             private const val MAX_PROBE_OUTPUT = 8 * 1024
+
+            /**
+             * Launcher activity of each supported manager, used as an explicit component.
+             *
+             * An explicit component start is not filtered by package visibility, which is the
+             * only route left when `PackageManager` refuses to report the manager at all (moto
+             * g60 / Android 16 hides `com.topjohnwu.magisk` even with the `<queries>` block and
+             * `QUERY_ALL_PACKAGES`). A name that does not exist on another version is harmless:
+             * the start throws and the caller moves on to the next route.
+             */
+            private val LAUNCHER_ACTIVITIES =
+                mapOf(
+                    RootAccess.MAGISK_PACKAGE to "com.topjohnwu.magisk.ui.MainActivity",
+                    RootAccess.KERNELSU_PACKAGE to "me.weishu.kernelsu.ui.MainActivity",
+                    RootAccess.KERNELSU_NEXT_PACKAGE to "com.rifsxd.ksunext.ui.MainActivity",
+                )
         }
 
         enum class RootType {
@@ -129,19 +146,45 @@ class RootManager
                 else -> null
             }
 
+        /**
+         * Launches [packageName]'s app, most reliable route first.
+         *
+         * On this ROM `PackageManager` never reports `com.topjohnwu.magisk` (see
+         * [openRootManager]), so `getLaunchIntentForPackage` answers null and the old code fell
+         * straight to the system "App info" page — which has no Superuser tab, i.e. the one
+         * screen that cannot grant root was the only one it ever opened. An **explicit
+         * component** start is not filtered by package visibility, so the known launcher
+         * activity is tried before giving up, and only a genuinely unlaunchable manager ends on
+         * the details page.
+         */
         private fun launchManager(packageName: String): Boolean {
-            val intent =
-                context.packageManager.getLaunchIntentForPackage(packageName)
-                    ?: Intent(
-                        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                        Uri.fromParts("package", packageName, null),
-                    )
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            return runCatching {
-                context.startActivity(intent)
-                true
-            }.getOrDefault(false)
+            val routes =
+                listOfNotNull(
+                    context.packageManager.getLaunchIntentForPackage(packageName),
+                    Intent(Intent.ACTION_MAIN)
+                        .addCategory(Intent.CATEGORY_LAUNCHER)
+                        .setPackage(packageName),
+                    LAUNCHER_ACTIVITIES[packageName]?.let { activity ->
+                        Intent(Intent.ACTION_MAIN)
+                            .addCategory(Intent.CATEGORY_LAUNCHER)
+                            .setComponent(ComponentName(packageName, activity))
+                    },
+                )
+            if (routes.any(::startQuietly)) return true
+            // Last resort: Settings resolves this for us and can see every package, so the user
+            // at least gets a page that names the manager and offers "Open".
+            return startQuietly(
+                Intent(
+                    Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    Uri.fromParts("package", packageName, null),
+                ),
+            )
         }
+
+        private fun startQuietly(intent: Intent): Boolean =
+            runCatching {
+                context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            }.isSuccess
 
         /** Packages that can own root of [type], as reported by the `su` probe. */
         private fun packagesFor(type: RootType?): List<String> =

@@ -10,7 +10,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AdminPanelSettings
-import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material3.*
 import android.content.Intent
 import androidx.compose.runtime.*
@@ -439,111 +438,6 @@ internal fun shareFiles(
     runCatching { context.startActivity(Intent.createChooser(intent, chooserTitle)) }
 }
 
-@Composable
-internal fun NativeCoreCard(
-    uiState: SettingsUiState,
-    viewModel: SettingsViewModel,
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors =
-            CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-            ),
-    ) {
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Box(
-                    modifier =
-                        Modifier
-                            .size(40.dp)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(SettingsPalette.Core.copy(alpha = 0.18f)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Memory,
-                        contentDescription = null,
-                        modifier = Modifier.size(21.dp),
-                        tint = SettingsPalette.Core,
-                    )
-                }
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
-                ) {
-                    Text(
-                        text = "indra daemon",
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.Medium,
-                    )
-                    Text(
-                        text = "Installed version ${uiState.coreVersion}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                StatusPill(
-                    text = if (uiState.daemonRunning) "Running" else "Stopped",
-                    color = if (uiState.daemonRunning) SettingsPalette.Running else SettingsPalette.Stopped,
-                )
-            }
+// The Native Core card moved to NativeCoreSection.kt: it is now a single-button lifecycle
+// card driven by core.system.NativeCoreState instead of three separate controls.
 
-            if (uiState.coreBusy) {
-                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-            }
-
-            uiState.coreMessage?.let { message ->
-                Text(
-                    text = message,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                FilledTonalButton(
-                    onClick = viewModel::installCore,
-                    enabled = !uiState.coreBusy,
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Text("Install")
-                }
-                if (uiState.daemonRunning) {
-                    OutlinedButton(
-                        onClick = viewModel::stopDaemon,
-                        enabled = !uiState.coreBusy,
-                        modifier = Modifier.weight(1f),
-                        colors =
-                            ButtonDefaults.outlinedButtonColors(
-                                contentColor = SettingsPalette.Stopped,
-                            ),
-                    ) {
-                        Text("Stop")
-                    }
-                } else {
-                    Button(
-                        onClick = viewModel::startDaemon,
-                        enabled = !uiState.coreBusy,
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        Text("Start")
-                    }
-                }
-            }
-        }
-    }
-}

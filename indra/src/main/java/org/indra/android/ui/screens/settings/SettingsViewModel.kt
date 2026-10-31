@@ -15,6 +15,8 @@ import org.indra.android.core.system.CrashReporter
 import org.indra.android.core.system.IndraWorkspace
 import org.indra.android.core.system.Logger
 import org.indra.android.core.system.IndraSystem
+import org.indra.android.core.system.NativeCoreAction
+import org.indra.android.core.system.NativeCoreState
 import org.indra.android.core.system.OtaUpdateManager
 import org.indra.android.core.system.RootAccess
 import org.indra.android.core.system.RootManager
@@ -35,8 +37,13 @@ data class SettingsUiState(
     val version: String = "2.0.0",
     val coreVersion: String = "Not installed",
     val daemonRunning: Boolean = false,
-    val coreBusy: Boolean = false,
+    /** The one state the Native Core card draws, and the source of its single button's action. */
+    val coreState: NativeCoreState = NativeCoreState.NotInstalled,
+    /** Action currently in flight, or null when the lifecycle button is idle. */
+    val coreBusyAction: NativeCoreAction? = null,
     val coreMessage: String? = null,
+    /** A failed lifecycle step. Kept apart from [coreMessage] so it renders as an error, not a note. */
+    val coreError: String? = null,
     val otaChecking: Boolean = false,
     val otaUpdating: Boolean = false,
     val otaUpdateAvailable: Boolean = false,
@@ -121,6 +128,11 @@ class SettingsViewModel
                     // and once more inside getRootTypeDisplayName().
                     val root = rootManager.detectRoot()
                     lastRoot = root
+                    // One probe pair feeds three fields: the version text, the hero's boolean and
+                    // the single-button state the Native Core card draws. Reading them twice was
+                    // how the card could say "Running" while the hero said "stopped".
+                    val coreVersion = system.getCoreVersion()
+                    val coreRunning = coreManager.isDaemonRunning
                     _uiState.value =
                         _uiState.value.copy(
                             httpProxyPort = settings.httpProxyPort,
@@ -128,8 +140,9 @@ class SettingsViewModel
                             httpsRedirectorPort = settings.httpsRedirectorPort,
                             msfRpcPort = settings.msfRpcPort,
                             version = "2.0.0",
-                            coreVersion = system.getCoreVersion() ?: "Not installed",
-                            daemonRunning = coreManager.isDaemonRunning,
+                            coreVersion = coreVersion ?: "Not installed",
+                            daemonRunning = coreRunning,
+                            coreState = NativeCoreState.of(installed = coreVersion != null, running = coreRunning),
                             isRooted = root.isRooted,
                             rootType = rootManager.getRootTypeDisplayName(root),
                             rootGuidance = rootManager.guidance(root),
@@ -219,22 +232,103 @@ class SettingsViewModel
             loadSettings()
         }
 
-        fun installCore() {
-            if (_uiState.value.coreBusy) return
-            viewModelScope.launch {
-                _uiState.value = _uiState.value.copy(coreBusy = true, coreMessage = "Installing native core…")
-                coreManager
-                    .installCore()
-                    .onSuccess {
-                        // The version comes from refreshCoreState() below, which reads the
-                        // VERSION file on Dispatchers.IO. Reading it here was a
-                        // StrictMode DiskReadViolation on Main.
-                        _uiState.value = _uiState.value.copy(coreMessage = "Core installed")
-                    }.onFailure { error ->
-                        _uiState.value = _uiState.value.copy(coreMessage = "Install failed: ${error.message}")
-                    }
-                refreshCoreState()
+        /**
+         * The single lifecycle entry point behind the Native Core card's one button.
+         *
+         * The caller never picks the step — [NativeCoreState] does — so the UI cannot offer an
+         * action the core cannot take, and the three handlers below cannot drift apart the way
+         * the old Install/Start/Stop triple did.
+         */
+        fun onCoreAction() {
+            when (_uiState.value.coreState.action) {
+                NativeCoreAction.INSTALL -> installCore()
+                NativeCoreAction.START -> startDaemon()
+                NativeCoreAction.STOP -> stopDaemon()
             }
+        }
+
+        /** Installs the bundled archive and starts the daemon in the same tap. */
+        fun installCore() = runCoreAction(NativeCoreAction.INSTALL) { installThenStart() }
+
+        fun startDaemon() = runCoreAction(NativeCoreAction.START) { startCoreDaemon() }
+
+        fun stopDaemon() = runCoreAction(NativeCoreAction.STOP) { stopCoreDaemon() }
+
+        /**
+         * Runs one lifecycle step inside a single busy window: the button stays disabled from
+         * the tap until the state has been re-probed on IO, so it never re-enables against a
+         * stale state (the previous code cleared its busy flag *before* probing, which is how a
+         * running daemon could briefly offer "Start" again).
+         */
+        private fun runCoreAction(
+            action: NativeCoreAction,
+            step: suspend () -> Unit,
+        ) {
+            if (_uiState.value.coreBusyAction != null) return
+            _uiState.value = _uiState.value.copy(coreBusyAction = action, coreMessage = null, coreError = null)
+            viewModelScope.launch {
+                // `finally` so a thrown step cannot leave the button spinning forever.
+                try {
+                    step()
+                } finally {
+                    refreshCoreState()
+                }
+            }
+        }
+
+        /**
+         * Install, then start. A freshly extracted core is inert until `indrad` runs, so asking
+         * for a second tap would only be asking the user to finish our job. `CoreManager`
+         * already stops a running daemon before it overwrites the archive, so a reinstall from
+         * the Running state also comes back up.
+         */
+        private suspend fun installThenStart() {
+            val install = coreManager.installCore()
+            if (install.isFailure) {
+                setCoreOutcome(error = "Install failed: ${install.exceptionOrNull()?.message}")
+                return
+            }
+            // Move the busy marker on so the button says what is happening *now*.
+            _uiState.value = _uiState.value.copy(coreBusyAction = NativeCoreAction.START)
+            val start = coreManager.startDaemon()
+            if (start.isSuccess) {
+                setCoreOutcome(message = "Core installed · daemon running")
+            } else {
+                // The install itself worked, so the state is now "installed, stopped"; the error
+                // line carries only why the start failed (no double prefix).
+                setCoreOutcome(error = start.exceptionOrNull()?.message ?: "Core installed, but the daemon did not start")
+            }
+        }
+
+        private suspend fun startCoreDaemon() {
+            val start = coreManager.startDaemon()
+            if (start.isSuccess) {
+                setCoreOutcome(message = "Daemon running")
+            } else {
+                // CoreManager's message already names the failure ("Daemon failed to start
+                // (exit=126): …"), so it is shown verbatim instead of being prefixed twice.
+                setCoreOutcome(error = start.exceptionOrNull()?.message ?: "The daemon did not start")
+            }
+        }
+
+        private suspend fun stopCoreDaemon() {
+            val stop = coreManager.stopDaemon()
+            if (stop.isSuccess) {
+                setCoreOutcome(message = "Daemon stopped")
+            } else {
+                setCoreOutcome(error = "Stop failed: ${stop.exceptionOrNull()?.message}")
+            }
+        }
+
+        /**
+         * Records what the last step did. [coreMessage] is informational, [coreError] renders in
+         * the error colour — a failed install must not read like a normal status note.
+         */
+        private fun setCoreOutcome(
+            message: String? = null,
+            error: String? = null,
+        ) {
+            _uiState.value = _uiState.value.copy(coreMessage = message, coreError = error)
         }
 
         fun installAlpine() {
@@ -365,36 +459,6 @@ class SettingsViewModel
 
         fun getDebugLogFile(): java.io.File? = crashReporter.getLogFile()
 
-        fun startDaemon() {
-            if (_uiState.value.coreBusy) return
-            viewModelScope.launch {
-                _uiState.value = _uiState.value.copy(coreBusy = true, coreMessage = "Starting daemon…")
-                coreManager
-                    .startDaemon()
-                    .onSuccess {
-                        _uiState.value = _uiState.value.copy(coreMessage = "Daemon running")
-                    }.onFailure { error ->
-                        _uiState.value = _uiState.value.copy(coreMessage = "Daemon failed: ${error.message}")
-                    }
-                refreshCoreState()
-            }
-        }
-
-        fun stopDaemon() {
-            if (_uiState.value.coreBusy) return
-            viewModelScope.launch {
-                _uiState.value = _uiState.value.copy(coreBusy = true, coreMessage = "Stopping daemon…")
-                coreManager
-                    .stopDaemon()
-                    .onSuccess {
-                        _uiState.value = _uiState.value.copy(coreMessage = "Daemon stopped")
-                    }.onFailure { error ->
-                        _uiState.value = _uiState.value.copy(coreMessage = "Stop failed: ${error.message}")
-                    }
-                refreshCoreState()
-            }
-        }
-
         fun checkOtaUpdates() {
             if (_uiState.value.otaChecking || _uiState.value.otaUpdating) return
             viewModelScope.launch {
@@ -497,19 +561,31 @@ class SettingsViewModel
             }
         }
 
+        /**
+         * Re-probes the core on IO and only then lets the lifecycle button out of its busy state.
+         *
+         * Order matters twice here:
+         * - `reload()` runs **before** the handler probes, so the tool list describes the daemon
+         *   that was just started/stopped instead of the previous one (`isAvailable()` answers
+         *   from a 1 s cache that install/start/stop is exactly the event to invalidate).
+         * - the busy marker clears **after** the probe, so the next tap is answered from a state
+         *   that was just read. Clearing it first (as this used to) let the button re-enable
+         *   against the old state for the length of a JNI round-trip.
+         */
         private fun refreshCoreState() {
-            // Release the busy flag immediately (as before), then probe off Main:
-            // version probe + 17 handler checks (JNI) + reload() all block.
-            _uiState.value = _uiState.value.copy(coreBusy = false)
             viewModelScope.launch {
                 withContext(Dispatchers.IO) {
+                    toolBox.reload()
+                    val coreVersion = system.getCoreVersion()
+                    val running = coreManager.isDaemonRunning
                     _uiState.value =
                         _uiState.value.copy(
-                            coreVersion = system.getCoreVersion() ?: "Not installed",
-                            daemonRunning = coreManager.isDaemonRunning,
+                            coreVersion = coreVersion ?: "Not installed",
+                            daemonRunning = running,
+                            coreState = NativeCoreState.of(installed = coreVersion != null, running = running),
+                            coreBusyAction = null,
                             toolStatus = toolBox.getAllTools().map { ToolStatus(it.name, it.isAvailable()) },
                         )
-                    toolBox.reload()
                 }
             }
         }
