@@ -69,7 +69,10 @@ class GobusterViewModel
         fun install() {
             if (_uiState.value.isInstalling) return
             val url = _uiState.value.installUrl.trim()
-            if (url.isBlank()) { _uiState.value = _uiState.value.copy(error = "Set a gobuster binary URL in Settings/here first"); return }
+            if (url.isBlank()) {
+                _uiState.value = _uiState.value.copy(error = "Set a gobuster binary URL first (install card above)")
+                return
+            }
             viewModelScope.launch {
                 _uiState.value = _uiState.value.copy(isInstalling = true, installProgress = 0f, error = null)
                 coreManager.installGobuster(url) { p -> _uiState.value = _uiState.value.copy(installProgress = p) }

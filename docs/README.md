@@ -17,12 +17,25 @@ Dated execution plans live in `docs/plan/` — newest first:
 ## Native core
 - Bundled as `assets/core-<abi>.tar.xz` (arm64-v8a + armeabi-v7a).
 - `CoreManager.installCore()` extracts to `filesDir`, sets exec bits, writes VERSION.
-- Daemon runs as root via Magisk `su` (or as app user in rootless mode).
+- Daemon runs as root via Magisk `su`. There is no app-user fallback: see Rootless mode below.
 
 ## Rootless mode
-- Toggle in Settings → Native Core. Runs `indrad` as app user (no `su`).
-- Disables raw-socket features (MITM, packet capture, ARP spoof, WiFi audit, monitor mode, packet forger, network radar).
-- nmap uses `-sT` (TCP connect) instead of SYN scan.
+- Toggle in Settings → General. **There is no daemon in rootless mode**: `indrad` lives in
+  app storage and Android 10+ denies `untrusted_app` execute on `app_data_file`, so a rootless
+  start is a guaranteed exit 126. `CoreManager.startDaemon()` and `ensureDaemon()` therefore
+  refuse outright in that mode instead of attempting the exec, and `NativeCoreState.Rootless`
+  keeps the Settings card from offering a Start that cannot work.
+- What works without root is the platform-API subset listed in `core/system/Rootless.kt`:
+  Port Scanner (TCP connect scan via `java.net.Socket`, i.e. nmap's `-sT` equivalent),
+  WiFi Scanner (`WifiManager`), WhisperPair (BLE), Password Auditor, and the Terminal.
+- The Terminal in rootless mode runs `/system/bin/sh` as the app's own uid (`LocalShell`), so it
+  gets toybox and the app's files — no bundled binary, no root, and no Alpine chroot (`chroot(2)`
+  and `mount(2)` need `CAP_SYS_ADMIN`; `TerminalTransport` refuses the combination rather than
+  silently running the command outside the guest).
+- Everything that runs a bundled binary — MITM/ARP spoof, packet capture, monitor mode, the
+  Alpine chroot, hydra/nuclei/gobuster, iptables, HID — is gated as `NEEDS_ROOT`.
+- `RootlessTest` pins the supported set and checks every id against `PluginManager`'s registry;
+  `PortScanTest` pins the range parser and the bounded connect scan.
 
 ## OTA
 - Manifest fetched over pinned HTTPS, envelope verified (SHA256withRSA).

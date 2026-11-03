@@ -1,25 +1,28 @@
 package org.indra.android.ui.screens.settings
 
-import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -28,6 +31,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -79,15 +83,15 @@ internal fun CardHeader(
     }
 }
 
-/** Busy bar + status line shared by every action card in Settings. */
+/**
+ * Status line shared by every action card in Settings.
+ *
+ * The busy state lives on [UpdateCardButton] itself (spinner + "Installing…"), so this only
+ * carries the outcome copy — one place to look while an action runs, exactly like the Native
+ * Core card.
+ */
 @Composable
-internal fun CardStatus(
-    busy: Boolean,
-    message: String?,
-) {
-    if (busy) {
-        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-    }
+internal fun CardStatus(message: String?) {
     message?.let { text ->
         Text(
             text = text,
@@ -97,35 +101,65 @@ internal fun CardStatus(
     }
 }
 
-/** The Check / Update button pair shared by the OTA and App Update cards. */
+/**
+ * The single adaptive action button used by the OTA and App Update cards.
+ *
+ * Mirrors [NativeCoreCard.CoreActionButton]: one button whose label, icon and colour derive from
+ * the card's state. While an action is in flight the button is disabled and shows a spinner plus
+ * the busy copy — there is never a second "Check" / "Update" button competing for attention.
+ */
 @Composable
-private fun CheckUpdateButtons(
-    checkEnabled: Boolean,
-    updateEnabled: Boolean,
-    onCheck: () -> Unit,
-    onUpdate: () -> Unit,
-    updateLabel: String = "Update",
+internal fun UpdateCardButton(
+    busy: Boolean,
+    label: String,
+    busyLabel: String,
+    onClick: () -> Unit,
+    accent: Color,
+    icon: ImageVector? = null,
+    modifier: Modifier = Modifier,
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    Button(
+        onClick = onClick,
+        enabled = !busy,
+        modifier = modifier.height(52.dp),
+        shape = RoundedCornerShape(14.dp),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp),
+        colors =
+            ButtonDefaults.buttonColors(
+                containerColor = accent,
+                contentColor = contentColorOn(accent),
+                disabledContainerColor = accent.copy(alpha = 0.20f),
+                disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            ),
     ) {
-        Button(
-            onClick = onCheck,
-            enabled = checkEnabled,
-            modifier = Modifier.weight(1f),
-        ) {
-            Text("Check")
-        }
-        FilledTonalButton(
-            onClick = onUpdate,
-            enabled = updateEnabled,
-            modifier = Modifier.weight(1f),
-        ) {
-            Text(updateLabel)
+        if (!busy) {
+            if (icon != null) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                )
+                Spacer(Modifier.width(10.dp))
+            }
+            Text(text = label, fontWeight = FontWeight.SemiBold, maxLines = 1)
+        } else {
+            CircularProgressIndicator(
+                modifier = Modifier.size(18.dp),
+                strokeWidth = 2.dp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.width(10.dp))
+            Text(text = busyLabel, fontWeight = FontWeight.SemiBold, maxLines = 1)
         }
     }
 }
+
+/** Above this luminance the accent is bright enough to need black content (green, red, teal). */
+private const val CONTENT_LUMINANCE_THRESHOLD = 0.45f
+
+/** `onPrimary` can't be reused across fixed accent colours; pick black or white from luminance. */
+private fun contentColorOn(container: Color): Color =
+    if (container.luminance() > CONTENT_LUMINANCE_THRESHOLD) Color.Black else Color.White
 
 @Composable
 internal fun AlpineCard(
@@ -166,16 +200,18 @@ internal fun AlpineCard(
                 )
             }
 
-            CardStatus(busy = uiState.alpineBusy, message = uiState.alpineMessage)
+            CardStatus(message = uiState.alpineMessage)
 
             if (!uiState.alpineInstalled) {
-                Button(
+                UpdateCardButton(
+                    busy = uiState.alpineBusy,
+                    label = "Install",
+                    busyLabel = "Installing…",
                     onClick = viewModel::installAlpine,
-                    enabled = !uiState.alpineBusy,
+                    accent = SettingsPalette.Core,
+                    icon = Icons.Default.Download,
                     modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(if (uiState.alpineBusy) "Installing…" else "Install")
-                }
+                )
             }
         }
     }
@@ -207,15 +243,22 @@ internal fun OtaCard(
                 icon = Icons.Default.CloudDownload,
                 accent = SettingsPalette.Ota,
             )
-            CardStatus(
-                busy = uiState.otaChecking || uiState.otaUpdating,
-                message = uiState.otaMessage,
-            )
-            CheckUpdateButtons(
-                checkEnabled = !uiState.otaChecking && !uiState.otaUpdating,
-                updateEnabled = !uiState.otaChecking && !uiState.otaUpdating && uiState.otaUpdateAvailable,
-                onCheck = viewModel::checkOtaUpdates,
-                onUpdate = viewModel::installOtaUpdates,
+            CardStatus(message = uiState.otaMessage)
+            val busy = uiState.otaChecking || uiState.otaUpdating
+            UpdateCardButton(
+                busy = busy,
+                label = if (uiState.otaUpdateAvailable) "Install update" else "Check for updates",
+                busyLabel = if (uiState.otaUpdating) "Installing updates…" else "Checking…",
+                onClick = {
+                    if (uiState.otaUpdateAvailable) {
+                        viewModel.installOtaUpdates()
+                    } else {
+                        viewModel.checkOtaUpdates()
+                    }
+                },
+                accent = SettingsPalette.Ota,
+                icon = Icons.Default.CloudDownload,
+                modifier = Modifier.fillMaxWidth(),
             )
         }
     }
@@ -226,10 +269,9 @@ internal fun AppUpdateCard(
     uiState: SettingsUiState,
     viewModel: SettingsViewModel,
 ) {
-    // This card used to repeat the binary-OTA buttons verbatim (the previous
-    // copy-paste bug class that also produced the headerless Alpine card), so the
-    // APK self-update plumbing in SettingsViewModel.checkAppUpdate()/installAppUpdate()
-    // never had a caller. Now it checks and installs the app itself.
+    // Single adaptive button: "Check for updates" when nothing is known / up to date,
+    // "Install update" when an update is available. The busy state (checking or downloading)
+    // disables the button and shows a spinner, so there is never a Check / Update pair.
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -245,39 +287,28 @@ internal fun AppUpdateCard(
                     .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                CardHeader(
-                    title = "App update",
-                    subtitle = "Current APK version ${uiState.version}",
-                    icon = Icons.Default.SystemUpdate,
-                    accent = SettingsPalette.Ota,
-                    modifier = Modifier.weight(1f),
-                )
-                StatusPill(
-                    text =
-                        when {
-                            uiState.appUpdateChecking -> "Checking"
-                            uiState.appUpdateAvailable -> "Update available"
-                            else -> "Up to date"
-                        },
-                    color =
-                        when {
-                            uiState.appUpdateChecking -> SettingsPalette.Ota
-                            uiState.appUpdateAvailable -> SettingsPalette.WakeLock
-                            else -> SettingsPalette.Running
-                        },
-                )
-            }
-            CardStatus(
-                busy = uiState.appUpdateChecking,
-                message = uiState.appUpdateMessage,
+            CardHeader(
+                title = "App update",
+                subtitle = "Current APK version ${uiState.version}",
+                icon = Icons.Default.SystemUpdate,
+                accent = SettingsPalette.AppUpdate,
             )
-            CheckUpdateButtons(
-                checkEnabled = !uiState.appUpdateChecking,
-                updateEnabled = uiState.appUpdateAvailable && !uiState.appUpdateChecking,
-                onCheck = viewModel::checkAppUpdate,
-                onUpdate = viewModel::installAppUpdate,
-                updateLabel = "Install update",
+            CardStatus(message = uiState.appUpdateMessage)
+            val busy = uiState.appUpdateChecking
+            UpdateCardButton(
+                busy = busy,
+                label = if (uiState.appUpdateAvailable) "Install update" else "Check for updates",
+                busyLabel = if (uiState.appUpdateAvailable) "Downloading update…" else "Checking…",
+                onClick = {
+                    if (uiState.appUpdateAvailable) {
+                        viewModel.installAppUpdate()
+                    } else {
+                        viewModel.checkAppUpdate()
+                    }
+                },
+                accent = SettingsPalette.AppUpdate,
+                icon = Icons.Default.SystemUpdate,
+                modifier = Modifier.fillMaxWidth(),
             )
         }
     }

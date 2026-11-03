@@ -1,9 +1,5 @@
 package org.indra.android.ui.screens.home
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -19,18 +15,23 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.indra.android.ui.theme.StatusCyan
 import org.indra.android.ui.theme.StatusGreen
 import org.indra.android.ui.theme.StatusOrange
+import org.indra.android.ui.theme.Flat
 import org.indra.android.ui.theme.StatusRed
+import org.indra.android.ui.theme.flatEdge
+import org.indra.android.ui.theme.flatSurfaceColor
+
+/** How visible the section rule is: a separator, not a border. */
+private const val RULE_ALPHA = 0.18f
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -92,33 +93,21 @@ fun HomeScreen(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
-            // Hero Network Status Card
+            // Hero Network Status Card — rendered directly; an always-visible AnimatedVisibility
+            // allocates an animation scope every composition for an animation that never runs.
             item {
-                AnimatedVisibility(
-                    visible = true,
-                    enter =
-                        fadeIn(animationSpec = tween(600)) +
-                            slideInVertically(
-                                animationSpec = tween(600),
-                                initialOffsetY = { -40 },
-                            ),
-                ) {
-                    NetworkStatusHeroCard(
-                        networkName = uiState.networkName,
-                        networkDetail = uiState.networkDetail,
-                        isConnected = uiState.isConnected,
-                        targetCount = uiState.targetCount,
-                        onClick = onNavigateToNetworkRadar,
-                    )
-                }
+                NetworkStatusHeroCard(
+                    networkName = uiState.networkName,
+                    networkDetail = uiState.networkDetail,
+                    isConnected = uiState.isConnected,
+                    targetCount = uiState.targetCount,
+                    onClick = onNavigateToNetworkRadar,
+                )
             }
 
             // Quick Actions
             item {
-                SectionTitle(
-                    title = "Quick Actions",
-                    icon = Icons.Default.Bolt,
-                )
+                SectionTitle(title = "Quick Actions")
             }
 
             item {
@@ -174,7 +163,6 @@ fun HomeScreen(
             item {
                 SectionTitle(
                     title = "Security Tools",
-                    icon = Icons.Default.Build,
                     // Not "N modules available": with the daemon stopped that count is false.
                     // Cards carry their own status label, so this only counts modules.
                     subtitle = "${uiState.plugins.size} modules",
@@ -241,22 +229,16 @@ fun NetworkStatusHeroCard(
             modifier =
                 Modifier
                     .fillMaxWidth()
+                    // Flat 2.0: a tonal fill, not a gradient. A gradient is a depth cue from the
+                    // same era as the shadow — it implies a light source the rest of the app does
+                    // not have. The connected/disconnected state is carried by the accent colour
+                    // on the icon and the headline, which is a stronger signal than a colour ramp.
                     .background(
-                        brush =
-                            Brush.horizontalGradient(
-                                colors =
-                                    if (isConnected) {
-                                        listOf(
-                                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.8f),
-                                            MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f),
-                                        )
-                                    } else {
-                                        listOf(
-                                            MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.8f),
-                                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                                        )
-                                    },
-                            ),
+                        if (isConnected) {
+                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = Flat.SURFACE_ALPHA)
+                        } else {
+                            MaterialTheme.colorScheme.errorContainer.copy(alpha = Flat.SURFACE_ALPHA)
+                        },
                     ).padding(24.dp),
         ) {
             Row(
@@ -356,34 +338,51 @@ private fun TargetCountRow(targetCount: Int?) {
     }
 }
 
+/**
+ * A section subheading: the label, an optional count on the right, and a hairline rule.
+ *
+ * This used to take an `icon: ImageVector` and draw it in the primary colour, which made the two
+ * headings on this screen ("Quick Actions", "Security Tools") the loudest things on it — a 24dp
+ * accent-coloured glyph next to every title, competing with the hero card and the tool cards that
+ * are the actual content. A subheading's job is to separate sections, not to attract attention, so
+ * the icon is gone and the rule does that work instead.
+ *
+ * The count moved to the right end of the rule: it is metadata about the section, and left-aligned
+ * under the title it read as a second line of the heading.
+ */
 @Composable
 fun SectionTitle(
     title: String,
-    icon: ImageVector,
     subtitle: String? = null,
     modifier: Modifier = Modifier,
 ) {
-    Row(
+    Column(
         modifier = modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(24.dp),
-        )
-        Column {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
             Text(
                 text = title,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            // The rule fills whatever space the title leaves, so short and long titles both end
+            // at the same right edge.
+            HorizontalDivider(
+                modifier = Modifier.weight(1f),
+                thickness = 1.dp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = RULE_ALPHA),
             )
             if (subtitle != null) {
                 Text(
                     text = subtitle,
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -443,14 +442,18 @@ fun ModernToolCard(
         modifier =
             modifier
                 .fillMaxWidth()
-                .heightIn(min = 132.dp),
-        shape = RoundedCornerShape(16.dp),
+                .heightIn(min = 132.dp)
+                // Flat 2.0: the hairline is what gives the card a boundary now that the shadow is
+                // gone. It is drawn inside the same shape the card clips to, so the edge and the
+                // fill agree at the corners.
+                .flatEdge(),
+        shape = Flat.shape,
         colors =
             CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                containerColor = flatSurfaceColor(),
                 disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f),
             ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = Flat.elevation),
     ) {
         Column(
             modifier =
@@ -548,6 +551,7 @@ fun getToolIcon(id: String): ImageVector =
         "traceroute" -> Icons.Default.Timeline
         "mitm" -> Icons.Default.SyncAlt
         "exploit_finder" -> Icons.Default.BugReport
+        "msf" -> Icons.Default.Terminal
         "login_cracker" -> Icons.Default.Lock
         "packet_forger" -> Icons.AutoMirrored.Filled.Send
         "router_pwn" -> Icons.Default.Router
@@ -596,6 +600,7 @@ fun getToolColor(id: String): Color {
         "traceroute" -> Color(0xFF7C4DFF) // violet
         "mitm" -> Color(0xFFFF5252) // red
         "exploit_finder" -> Color(0xFFFF9800) // orange
+        "msf" -> Color(0xFFDD2C00) // deep red — Metasploit's own accent
         "login_cracker" -> Color(0xFFFFC107) // amber
         "packet_forger" -> Color(0xFFE040FB) // magenta
         "router_pwn" -> Color(0xFFFF4081) // pink

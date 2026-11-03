@@ -15,6 +15,7 @@ import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -31,12 +32,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import org.indra.android.core.system.terminal.TerminalInputMode
 import org.indra.android.core.system.terminal.TerminalSession
 import org.indra.android.terminal.TerminalOverlayService
 import org.indra.android.ui.screens.terminal.TerminalConsole
@@ -49,6 +52,22 @@ import org.indra.android.ui.screens.terminal.TerminalPalette
  * leaving for another tool (or backgrounding the app with the bubble on) does not kill the
  * shell. Re-entering re-renders the same transcript.
  */
+/**
+ * Everything the top bar and its menu can do, in one object.
+ *
+ * Bundled rather than passed as eight callbacks: the bar and the menu both need most of them, and
+ * a nine-parameter composable is a signature nobody reads.
+ */
+private data class TerminalActions(
+    val onNavigateBack: () -> Unit,
+    val onToggleBubble: () -> Unit,
+    val onClear: () -> Unit,
+    val onToggleChroot: () -> Unit,
+    val onSelectInputMode: (TerminalInputMode) -> Unit,
+    val onToggleSymbolKeys: () -> Unit,
+    val onAllowOverlay: () -> Unit,
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TerminalScreen(
@@ -72,11 +91,18 @@ fun TerminalScreen(
             TerminalTopBar(
                 state = state,
                 canOverlay = canOverlay,
-                onNavigateBack = onNavigateBack,
-                onToggleBubble = { session.setBubbleVisible(!state.bubbleVisible) },
-                onClear = session::clear,
-                onToggleChroot = { session.setChroot(!state.chroot) },
-                onAllowOverlay = { context.startActivity(TerminalOverlayService.permissionIntent(context)) },
+                actions =
+                    TerminalActions(
+                        onNavigateBack = onNavigateBack,
+                        onToggleBubble = { session.setPreferences(bubbleVisible = !state.bubbleVisible) },
+                        onClear = session::clear,
+                        onToggleChroot = { session.setChroot(!state.chroot) },
+                        onSelectInputMode = { mode -> session.setPreferences(mode = mode) },
+                        onToggleSymbolKeys = { session.setPreferences(symbolKeys = !state.symbolKeys) },
+                        onAllowOverlay = {
+                            context.startActivity(TerminalOverlayService.permissionIntent(context))
+                        },
+                    ),
             )
         },
     ) { padding ->
@@ -103,11 +129,7 @@ fun TerminalScreen(
 private fun TerminalTopBar(
     state: TerminalSession.State,
     canOverlay: Boolean,
-    onNavigateBack: () -> Unit,
-    onToggleBubble: () -> Unit,
-    onClear: () -> Unit,
-    onToggleChroot: () -> Unit,
-    onAllowOverlay: () -> Unit,
+    actions: TerminalActions,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     TopAppBar(
@@ -124,12 +146,12 @@ private fun TerminalTopBar(
             }
         },
         navigationIcon = {
-            IconButton(onClick = onNavigateBack) {
+            IconButton(onClick = actions.onNavigateBack) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
             }
         },
         actions = {
-            IconButton(onClick = onToggleBubble) {
+            IconButton(onClick = actions.onToggleBubble) {
                 Icon(
                     Icons.Outlined.Terminal,
                     contentDescription = if (state.bubbleVisible) "Hide bubble" else "Show bubble",
@@ -141,40 +163,105 @@ private fun TerminalTopBar(
                         },
                 )
             }
-            TextButton(onClick = onClear, enabled = !state.running) {
+            TextButton(onClick = actions.onClear, enabled = !state.running) {
                 Text("Clear")
             }
             IconButton(onClick = { menuOpen = true }) {
                 Icon(Icons.Default.Menu, contentDescription = "More")
             }
-            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                DropdownMenuItem(
-                    text = { Text(if (state.chroot) "Run in Alpine chroot: on" else "Run in Alpine chroot: off") },
-                    enabled = state.alpineInstalled && !state.running,
-                    onClick = {
-                        menuOpen = false
-                        onToggleChroot()
-                    },
-                )
-                if (!state.alpineInstalled) {
-                    DropdownMenuItem(
-                        text = { Text("Install Alpine in Settings → optional artifacts") },
-                        enabled = false,
-                        onClick = {},
-                    )
-                }
-                if (!canOverlay) {
-                    DropdownMenuItem(
-                        text = { Text("Allow floating over other apps…") },
-                        onClick = {
-                            menuOpen = false
-                            onAllowOverlay()
-                        },
-                    )
-                }
-            }
+            TerminalMenu(
+                state = state,
+                canOverlay = canOverlay,
+                actions = actions,
+                onDismiss = { menuOpen = false },
+                expanded = menuOpen,
+            )
         },
     )
+}
+
+/**
+ * The terminal's "more" menu.
+ *
+ * Extracted from [TerminalTopBar] because it grew past a readable length once the input type and
+ * the symbol row moved in — and the top bar's own job is a title and three buttons.
+ */
+@Composable
+private fun TerminalMenu(
+    state: TerminalSession.State,
+    canOverlay: Boolean,
+    actions: TerminalActions,
+    onDismiss: () -> Unit,
+    expanded: Boolean,
+) {
+    DropdownMenu(expanded = expanded, onDismissRequest = { onDismiss() }) {
+        DropdownMenuItem(
+            text = { Text(if (state.chroot) "Run in Alpine chroot: on" else "Run in Alpine chroot: off") },
+            // Rootless mode cannot enter the guest at all (chroot/mount need
+            // CAP_SYS_ADMIN), so the item is disabled with the reason rather than
+            // offered and then refused on the first command.
+            enabled = state.alpineInstalled && !state.running && !state.rootless,
+            onClick = {
+                onDismiss()
+                actions.onToggleChroot()
+            },
+        )
+        if (state.rootless) {
+            DropdownMenuItem(
+                text = { Text("Alpine chroot needs root (rootless mode)") },
+                enabled = false,
+                onClick = {},
+            )
+        }
+        if (!state.alpineInstalled) {
+            DropdownMenuItem(
+                text = { Text("Install Alpine in Settings → optional artifacts") },
+                enabled = false,
+                onClick = {},
+            )
+        }
+        if (!canOverlay) {
+            DropdownMenuItem(
+                text = { Text("Allow floating over other apps…") },
+                onClick = {
+                    onDismiss()
+                    actions.onAllowOverlay()
+                },
+            )
+        }
+        HorizontalDivider()
+        // Input type: the IME contract for a shell. A chat-style keyboard rewrites `-la`
+        // and capitalises `ls`, so this is the setting that stops it.
+        TerminalInputMode.entries.forEach { mode ->
+            DropdownMenuItem(
+                text = {
+                    Column {
+                        Text(
+                            text = if (mode == state.inputMode) "✓ ${mode.label}" else "   ${mode.label}",
+                            fontFamily = FontFamily.Monospace,
+                        )
+                        Text(
+                            text = mode.description,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                },
+                onClick = {
+                    onDismiss()
+                    actions.onSelectInputMode(mode)
+                },
+            )
+        }
+        HorizontalDivider()
+        DropdownMenuItem(
+            text = { Text(if (state.symbolKeys) "Symbol keys: on" else "Symbol keys: off") },
+            onClick = {
+                onDismiss()
+                actions.onToggleSymbolKeys()
+            },
+        )
+    }
 }
 
 @Composable
@@ -216,6 +303,16 @@ private fun TerminalContent(
         if (state.chroot) {
             Text(
                 text = "chroot: Alpine /bin/sh — Android's own binaries are not visible inside",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+            )
+        } else if (state.rootless) {
+            // Say which shell this is. "Rootless" alone would not explain why `nmap` is missing,
+            // and the honest answer is that this shell is the app's own, not the daemon's.
+            Text(
+                text = "rootless: /system/bin/sh as the app user — Android's own tools only, " +
+                    "no bundled binaries, no root",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),

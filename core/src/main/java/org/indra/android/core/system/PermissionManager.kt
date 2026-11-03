@@ -1,6 +1,5 @@
 package org.indra.android.core.system
 
-import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
@@ -15,43 +14,18 @@ class PermissionManager
     constructor(
         @ApplicationContext private val context: Context,
     ) {
-        fun getRequiredPermissions(): Array<String> {
-            val permissions =
-                mutableListOf(
-                    Manifest.permission.ACCESS_NETWORK_STATE,
-                    Manifest.permission.ACCESS_WIFI_STATE,
-                    Manifest.permission.CHANGE_WIFI_STATE,
-                    Manifest.permission.INTERNET,
-                    Manifest.permission.ACCESS_FINE_LOCATION,
-                    Manifest.permission.ACCESS_COARSE_LOCATION,
-                    Manifest.permission.VIBRATE,
-                    Manifest.permission.WAKE_LOCK,
-                    Manifest.permission.FOREGROUND_SERVICE,
-                )
+        /**
+         * The runtime permissions this build has to ask for on this API level.
+         *
+         * The list lives in [RuntimePermissions] (pure, unit-tested) because two of its
+         * properties are easy to get wrong and invisible at runtime: normal permissions are
+         * never requestable, and a permission past its manifest `maxSdkVersion` is an
+         * undeclared request the platform auto-denies without a dialog.
+         */
+        fun getRequiredPermissions(): Array<String> =
+            RuntimePermissions.requested(Build.VERSION.SDK_INT).toTypedArray()
 
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                permissions.add(Manifest.permission.POST_NOTIFICATIONS)
-                permissions.add(Manifest.permission.NEARBY_WIFI_DEVICES)
-            } else {
-                permissions.add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
-                permissions.add(Manifest.permission.READ_EXTERNAL_STORAGE)
-            }
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                permissions.add(Manifest.permission.FOREGROUND_SERVICE_SPECIAL_USE)
-            }
-
-            // Both are declared in the manifest but were never requested, so WhisperPair's
-            // BLE scan threw SecurityException on API 31+ while the code "handled" it with
-            // @SuppressLint("MissingPermission").
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                permissions.add(Manifest.permission.BLUETOOTH_SCAN)
-                permissions.add(Manifest.permission.BLUETOOTH_CONNECT)
-            }
-
-            return permissions.toTypedArray()
-        }
-
+        /** Reads the grant now; never cache the result — a permission can be revoked anytime. */
         fun checkPermission(permission: String): Boolean =
             ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
 

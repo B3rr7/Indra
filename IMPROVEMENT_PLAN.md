@@ -151,17 +151,34 @@ Currently WiFi Audit needs an external pcap; capture needs monitor-mode dump.
 
 ---
 
-## Phase 5 — Rootless mode (P2) 🔄 IN PROGRESS (core scaffold done)
+## Phase 5 — Rootless mode (P2) ✅ DONE as a daemon-free subset (2026-10-31)
 
-Indra's tools are already native Android binaries (NDK/bionic), so no chroot/QEMU/rootfs needed (unlike Stryker). Rootless = run daemon as app user + disable root-only features.
+**The daemon cannot run without root.** `indrad` and the bundled tools live in app-private
+storage, and since Android 10 SELinux denies `untrusted_app` the execute permission on
+`app_data_file`, so a rootless start dies with exit 126 (`DaemonStartFailure` explains it).
+Rootless is therefore *not* "run the daemon as the app user": it is the set of plugins that
+have an implementation on platform APIs (`core/system/Rootless.kt`), and everything that needs
+a bundled binary is gated as `NEEDS_ROOT`.
 
-- [x] **RootManager extension**: `canRunRootless()` + `hasRawSocketCapability()` added.
+- [x] **Rootless subset**: Port Scanner (TCP connect scan, `PortScan` + `java.net.Socket`),
+  WiFi Scanner (`WifiManager`), WhisperPair (BLE) and Password Auditor. `RootlessTest` pins the set.
 - [x] **Settings toggle**: `rootlessMode` in SettingsRepository + SettingsViewModel + SettingsScreen switch.
-- [x] **CoreManager.startDaemon()**: runs daemon directly as app user when rootless (no su); handles stale socket removal.
-- [x] **Capability gating**: disable raw-socket features (MITM, packet capture, ARP spoof, WiFi audit, monitor mode, packet forger, network radar) when rootless via `requiresRoot` flag on Plugin + availability gating in Home/Tools ViewModels.
-- [x] **TCP-connect fallback**: nmap uses `-sT` when rootless mode is on.
-- [x] **Graceful EPERM handling**: appends a hint when "Permission denied"/"Operation not permitted"/"EPERM" detected in tool output.
-- Acceptance: app functions (nmap TCP scan, hydra, nuclei, masscan connect) on a non-rooted device.
+- [x] **Card gating**: `PluginAvailability.pluginStatus` answers rootless before any daemon question —
+  supported plugins are `AVAILABLE` with no daemon, every other plugin is `NEEDS_ROOT` (card disabled).
+- [x] **Port Scanner rootless path**: range parsing (`1-1000`, `22,80,443`), bounded 128-way connect
+  scan, live per-port output, zero-open-ports is an empty state not an error (`PortScanTest`).
+- [x] **WiFi Scanner rootless path**: `WifiManager.startScan()` + scan table, location-permission and
+  Wi-Fi-off errors name the fix; `WifiScan.describeAccessPoint` formats the same two-line rows.
+- [ ] **Removed/stale claims**: `hasRawSocketCapability()` and `canRunRootless()` still have no
+  callers; `Plugin.requiresRoot` is no longer what gates rootless (the daemon's absence is).
+  The `[hint] This feature requires root…` line in `SmartToolBox` still fires in root mode.
+- Acceptance: with no root and no daemon, a port scan finds a listening port and the Wi-Fi screen
+  reports its real state. Device-verified 2026-10-31 (moto g60, `adb reverse tcp:9999` →
+  `Discovered open port 9999/tcp`; Wi-Fi off → "Wi-Fi is turned off — enable Wi-Fi to scan for
+  networks."). The Wi-Fi *listing* path is not device-verified: this phone is a hotspot, so
+  enabling client Wi-Fi takes the hotspot down.
+- **Not achievable without root** (and deliberately not attempted): SYN scans, packet capture,
+  ARP spoof/MITM, monitor mode, hping3, iptables/DNS spoofing, HID, `cmd wifi`, the Alpine chroot.
 
 ---
 

@@ -112,4 +112,30 @@ class WifiScanTest {
         assertEquals("", hidden[0].ssid)
         assertTrue(hidden[0].describe().startsWith(HIDDEN_SSID))
     }
+
+    @Test
+    fun `describeAccessPoint formats a WifiManager ScanResult like a scan row`() {
+        // Rootless mode reads WifiManager's own table; ScanResult.capabilities uses the same
+        // bracketed flag form as `cmd wifi`, so the security label comes from the same rule.
+        val text =
+            WifiScan.describeAccessPoint(
+                ssid = "Home 5G",
+                bssid = "3C:5A:B4:00:11:22",
+                frequencyMhz = 5180,
+                rssiDbm = -47,
+                capabilities = "[WPA2-PSK-CCMP][RSN-PSK+SAE-CCMP][ESS]",
+            )
+        assertEquals("Home 5G", text.lines()[0])
+        assertTrue(text.lines()[1].contains("ch36"))
+        assertTrue(text.lines()[1].contains("-47dBm"))
+        assertTrue(text.lines()[1].contains("WPA2/WPA3"))
+        assertTrue(text.lines()[1].contains("3c:5a:b4:00:11:22"))
+    }
+
+    @Test
+    fun `describeAccessPoint names a hidden ssid and an open network`() {
+        val open = WifiScan.describeAccessPoint(null, null, 2412, -80, "[ESS]")
+        assertTrue(open.startsWith(HIDDEN_SSID))
+        assertTrue(open.contains("Open"))
+    }
 }

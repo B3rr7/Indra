@@ -15,19 +15,21 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.indra.android.BuildConfig
 import org.indra.android.core.system.NativeCoreState
+import org.indra.android.ui.theme.Flat
+import org.indra.android.ui.theme.flatEdge
+import org.indra.android.ui.theme.flatSurfaceColor
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -173,6 +175,16 @@ fun SettingsScreen(
                 }
             }
 
+            // ── Appearance ───────────────────────────────────────────────
+            item {
+                SettingsSection(
+                    title = "Appearance",
+                    icon = Icons.Default.Wallpaper,
+                    accent = SettingsPalette.Wallpaper,
+                )
+            }
+            item { WallpaperCard(uiState, viewModel) }
+
             // ── Root Access ──────────────────────────────────────────────
             item {
                 SettingsSection(
@@ -199,8 +211,9 @@ fun SettingsScreen(
                 SettingsCard {
                     SettingsSwitchItem(
                         title = "Rootless mode",
-                        subtitle = "Run the daemon as the app user. Android 10+ blocks this, " +
-                            "so the daemon must run as root there.",
+                        subtitle = "No daemon, no root: only the platform-API tools run " +
+                            "(port scan, Wi-Fi scan, BLE, password audit). Everything bundled " +
+                            "needs root.",
                         checked = uiState.rootlessMode,
                         onCheckedChange = { viewModel.setRootlessMode(it) },
                         icon = Icons.Default.Security,
@@ -234,7 +247,7 @@ fun SettingsScreen(
                 SettingsSection(
                     title = "App Update",
                     icon = Icons.Default.SystemUpdate,
-                    accent = SettingsPalette.Ota,
+                    accent = SettingsPalette.AppUpdate,
                 )
             }
             item { AppUpdateCard(uiState, viewModel) }
@@ -254,7 +267,7 @@ fun SettingsScreen(
                 SettingsSection(
                     title = "Logs & Reports",
                     icon = Icons.Default.BugReport,
-                    accent = SettingsPalette.About,
+                    accent = SettingsPalette.DebugLog,
                 )
             }
             item { LogsCard(uiState, viewModel, onNavigateToLogs) }
@@ -339,14 +352,10 @@ private fun StatusHeroCard(uiState: SettingsUiState) {
             modifier =
                 Modifier
                     .fillMaxWidth()
+                    // Flat 2.0: tonal fill instead of a gradient, matching the Home hero. The
+                    // status colour is on the icon and the headline.
                     .background(
-                        brush =
-                            Brush.horizontalGradient(
-                                listOf(
-                                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f),
-                                    MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
-                                ),
-                            ),
+                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = Flat.SURFACE_ALPHA),
                     ).padding(20.dp),
         ) {
             Row(
@@ -396,6 +405,7 @@ private fun heroHeadline(state: NativeCoreState): String =
         NativeCoreState.NotInstalled -> "Core not installed"
         NativeCoreState.InstalledStopped -> "Daemon stopped"
         NativeCoreState.Running -> "Daemon running"
+        NativeCoreState.Rootless -> "Rootless mode"
     }
 
 private fun heroAccent(state: NativeCoreState): Color =
@@ -403,6 +413,7 @@ private fun heroAccent(state: NativeCoreState): Color =
         NativeCoreState.NotInstalled -> SettingsPalette.Stopped
         NativeCoreState.InstalledStopped -> SettingsPalette.WakeLock
         NativeCoreState.Running -> SettingsPalette.Running
+        NativeCoreState.Rootless -> SettingsPalette.WakeLock
     }
 
 private fun heroIcon(state: NativeCoreState): ImageVector =
@@ -410,17 +421,22 @@ private fun heroIcon(state: NativeCoreState): ImageVector =
         NativeCoreState.NotInstalled -> Icons.Default.Download
         NativeCoreState.InstalledStopped -> Icons.Default.Stop
         NativeCoreState.Running -> Icons.Default.CheckCircle
+        NativeCoreState.Rootless -> Icons.Default.Security
     }
 
 @Composable
 private fun SettingsCard(content: @Composable ColumnScope.() -> Unit) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .flatEdge(),
+        shape = Flat.shape,
         colors =
             CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                containerColor = flatSurfaceColor(),
             ),
+        elevation = CardDefaults.cardElevation(defaultElevation = Flat.elevation),
     ) {
         Column(content = content)
     }

@@ -3,10 +3,14 @@ package org.indra.android.ui.screens.plugins
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.indra.android.core.system.CoreManager
 import org.indra.android.core.system.NetworkHelper
 import org.indra.android.core.system.Nuclei
@@ -28,11 +32,22 @@ class VulnScannerViewModel
         private val networkHelper: NetworkHelper,
         private val networkRepository: NetworkRepository,
     ) : ViewModel() {
-        private val _uiState = MutableStateFlow(VulnScannerUiState(nucleiInstalled = coreManager.isNucleiInstalled()))
+        private val _uiState = MutableStateFlow(VulnScannerUiState())
         val uiState: StateFlow<VulnScannerUiState> = _uiState.asStateFlow()
+
+        private var job: Job? = null
+        private var pid = -1
 
         init {
             refreshSuggestions()
+            // `isNucleiInstalled()` stats the core directory, and a ViewModel constructor runs on
+            // Main: reading it there was a `DiskReadViolation` on the device (Exploit Finder had
+            // the same shape with `isMsfInstalled`). The state starts null = "not known yet", so
+            // the screen cannot claim "not installed" before the answer arrives.
+            viewModelScope.launch {
+                val installed = withContext(Dispatchers.IO) { coreManager.isNucleiInstalled() }
+                _uiState.value = _uiState.value.copy(nucleiInstalled = installed)
+            }
             viewModelScope.launch { networkRepository.discoveredHosts.collect { refreshSuggestions() } }
         }
 
@@ -78,36 +93,108 @@ class VulnScannerViewModel
          * knows that nuclei exits 1 when it *found* something, so findings never read as a crash.
          */
         fun scan() {
-            viewModelScope.launch {
-                // Gate before flipping the running state: a scan that cannot start must not look
-                // like one that is running.
-                if (!coreManager.isNucleiInstalled()) {
+            if (job?.isActive == true) return
+            job =
+                viewModelScope.launch {
+                    // Gate before flipping the running state: a scan that cannot start must not look
+                    // like one that is running.
+                    if (!withContext(Dispatchers.IO) { coreManager.isNucleiInstalled() }) {
+                        _uiState.value =
+                            _uiState.value.copy(
+                                isLoading = false,
+                                error = "Nuclei is not installed. Tap \"Install Nuclei\" first.",
+                            )
+                        return@launch
+                    }
                     _uiState.value =
                         _uiState.value.copy(
-                            isLoading = false,
-                            error = "Nuclei is not installed. Tap \"Install Nuclei\" first.",
+                            isLoading = true,
+                            error = null,
+                            finished = false,
+                            findings = emptyList(),
+                            lines = emptyList(),
+                            lineCount = 0,
+                            transcript = "",
                         )
-                    return@launch
-                }
-                _uiState.value =
-                    _uiState.value.copy(
-                        isLoading = true,
-                        error = null,
-                        finished = false,
-                        findings = emptyList(),
-                        lines = emptyList(),
-                        lineCount = 0,
-                        transcript = "",
-                    )
-                try {
-                    toolBox.nuclei(_uiState.value.target).collect { result ->
-                        collectLine(result)
-                        if (!result.isStreaming) finish(result)
-                    }
+                    try {
+                        toolBox.nuclei(_uiState.value.target).collect { result ->
+                            if (result.pid > 0) pid = result.pid
+                            collectLine(result)
+                            if (!result.isStreaming) {
+                                pid = -1
+                                finish(result)
+                            }
+                        }
+                    } catch (e: CancellationException) {
+                    // stop()/onCleared cancelled the collector: that is not a scan failure, and
+                    // reporting it was one ("StandaloneCoroutine was cancelled" in the error line).
+                    throw e
                 } catch (e: Exception) {
-                    _uiState.value = _uiState.value.copy(isLoading = false, error = e.message)
+                        pid = -1
+                        _uiState.value = _uiState.value.copy(isLoading = false, error = e.message)
+                    }
                 }
-            }
+        }
+
+        /**
+         * Ends a scan the user no longer wants.
+         *
+         * A full template run is bounded by `SCAN_TIMEOUT_MS` — 15 minutes — and the console has no
+         * other control, so leaving the screen used to be the only way out (and it left nuclei
+         * running until the daemon's bound expired).
+         */
+        fun stop() {
+            if (pid > 0) toolBox.stop(pid)
+            job?.cancel()
+            job = null
+            pid = -1
+            _uiState.value = _uiState.value.copy(isLoading = false)
+        }
+
+        /**
+         * Fetches the template repository up front (`nuclei -update-templates` inside the chroot).
+         *
+         * nuclei downloads them itself on the first scan, so this is not required — but that run
+         * spends minutes with nothing to show, and a chroot whose resolver is broken would fail
+         * there with `no templates provided for scan`. Doing it here keeps the fix inside the
+         * screen that needs it.
+         */
+        fun refreshTemplates() {
+            if (job?.isActive == true) return
+            job =
+                viewModelScope.launch {
+                    _uiState.value =
+                        _uiState.value.copy(
+                            isUpdatingTemplates = true,
+                            error = null,
+                            finished = false,
+                            lines = emptyList(),
+                            lineCount = 0,
+                            transcript = "",
+                        )
+                    try {
+                        toolBox.nucleiUpdateTemplates().collect { result ->
+                            if (result.pid > 0) pid = result.pid
+                            collectLine(result)
+                            if (!result.isStreaming) {
+                                pid = -1
+                                _uiState.value =
+                                    _uiState.value.copy(
+                                        isUpdatingTemplates = false,
+                                        transcript = result.rawOutput,
+                                        error = result.error.takeUnless { result.success },
+                                    )
+                            }
+                        }
+                    } catch (e: CancellationException) {
+                    // stop()/onCleared cancelled the collector: that is not a scan failure, and
+                    // reporting it was one ("StandaloneCoroutine was cancelled" in the error line).
+                    throw e
+                } catch (e: Exception) {
+                        pid = -1
+                        _uiState.value = _uiState.value.copy(isUpdatingTemplates = false, error = e.message)
+                    }
+                }
         }
 
         private fun collectLine(result: ToolResult) {

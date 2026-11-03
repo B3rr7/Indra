@@ -22,8 +22,17 @@ object CaptureIface {
      * Prefixes of devices libpcap can open: Wi-Fi in client *or* AP mode (the tethering setup),
      * USB/RNDIS tethering, and wired Ethernet. Deliberately no `rmnet`/`ccmni`/`pdp`/`clat`:
      * those are the cellular stack's LINUX_SLL devices.
+     *
+     * Extended with vendor-specific AP interface names observed in the wild.
      */
-    private val USABLE_PREFIXES = listOf("wlan", "swlan", "ap", "softap", "eth", "rndis", "usb")
+    private val USABLE_PREFIXES = listOf(
+        "wlan", "swlan", "ap", "softap", "eth", "rndis", "usb",
+        "wlan0_ap", "wlan1_ap",       // Qualcomm AP interfaces
+        "wifi0", "wifi1",             // MediaTek
+        "apcli0", "apcli1",           // Ralink/MediaTek AP client
+        "p2p0", "p2p1",               // Wi-Fi Direct
+        "wl0", "wl1",                 // Broadcom
+    )
 
     /** masscan's interface flag, so a caller's free-form `-e …` is not overridden. */
     private val IFACE_FLAG = Regex("(^|\\s)-e(\\s|=)")

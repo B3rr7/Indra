@@ -62,6 +62,9 @@ interface ToolRunner {
         templates: String = "",
     ): Flow<ToolResult>
 
+    /** Downloads the nuclei template repository inside the chroot. */
+    suspend fun nucleiUpdateTemplates(): Flow<ToolResult>
+
     @Suppress("LongParameterList")
     suspend fun crackHandshake(
         capturePath: String,

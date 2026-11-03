@@ -5,9 +5,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.indra.android.core.system.Nuclei
 import org.indra.android.core.system.NucleiFinding
@@ -57,22 +58,16 @@ fun VulnScannerScreen(
                 onSelect = viewModel::updateTarget,
             )
 
-            Button(
-                onClick = { viewModel.scan() },
-                enabled = !uiState.isLoading && uiState.target.isNotBlank(),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                if (uiState.isLoading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(20.dp),
-                        color = MaterialTheme.colorScheme.onPrimary,
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                }
-                Text(if (uiState.isLoading) "Scanning..." else "Scan Vulnerabilities")
-            }
+            // One row so a running scan can be stopped: a full template run is bounded by the
+            // engine's 15-minute scan budget and used to leave the user with no way out.
+            ScanControls(
+                uiState = uiState,
+                onScan = viewModel::scan,
+                onStop = viewModel::stop,
+                onRefreshTemplates = viewModel::refreshTemplates,
+            )
 
-            if (!uiState.nucleiInstalled) {
+            if (uiState.nucleiInstalled == false) {
                 NucleiInstallCard(
                     uiState = uiState,
                     onInstall = { viewModel.installNuclei() },
@@ -93,6 +88,47 @@ fun VulnScannerScreen(
 
             uiState.error?.let { FormError(it) }
         }
+    }
+}
+
+@Composable
+private fun ScanControls(
+    uiState: VulnScannerUiState,
+    onScan: () -> Unit,
+    onStop: () -> Unit,
+    onRefreshTemplates: () -> Unit,
+) {
+    val running = uiState.isLoading || uiState.isUpdatingTemplates
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Button(
+            onClick = onScan,
+            enabled = !running && uiState.target.isNotBlank(),
+            modifier = Modifier.weight(1f),
+        ) {
+            if (uiState.isLoading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    color = MaterialTheme.colorScheme.onPrimary,
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+            }
+            Text(if (uiState.isLoading) "Scanning..." else "Scan Vulnerabilities")
+        }
+        if (running) {
+            OutlinedButton(onClick = onStop) { Text("Stop") }
+        }
+    }
+    // nuclei fetches the template repository itself on the first scan (several minutes); doing it
+    // up front keeps that wait out of a scan the user is watching.
+    TextButton(
+        onClick = onRefreshTemplates,
+        enabled = !running && uiState.nucleiInstalled != false,
+    ) {
+        Text(if (uiState.isUpdatingTemplates) "Updating templates…" else "Refresh templates")
     }
 }
 
@@ -157,7 +193,7 @@ private fun FindingsHeader(uiState: VulnScannerUiState) {
 
 private fun consolePlaceholder(uiState: VulnScannerUiState): String =
     when {
-        uiState.isLoading -> "Waiting for output…"
+        uiState.isLoading || uiState.isUpdatingTemplates -> "Waiting for output…"
         uiState.finished -> "No output"
         else -> "Run a scan to see live output"
     }
@@ -174,8 +210,11 @@ data class VulnScannerUiState(
     val transcript: String = "",
     val finished: Boolean = false,
     val error: String? = null,
-    val nucleiInstalled: Boolean = false,
+    /** Null until the off-Main probe answers, so "not installed" is never shown speculatively. */
+    val nucleiInstalled: Boolean? = null,
     val isInstalling: Boolean = false,
     val installProgress: Float = 0f,
+    /** True while `nuclei -update-templates` runs, so the console says what is happening. */
+    val isUpdatingTemplates: Boolean = false,
     val suggestions: List<String> = emptyList(),
 )

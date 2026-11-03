@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.io.File
 import java.util.concurrent.atomic.AtomicLong
 import org.indra.android.core.system.CoreManager
 import org.indra.android.core.system.SettingsRepository
@@ -18,6 +19,10 @@ import org.indra.android.core.system.isStreaming
 import org.indra.android.core.system.streamedLine
 import javax.inject.Inject
 import javax.inject.Singleton
+
+/** Default floating-panel size (fraction of the available space); persisted in SettingsRepository. */
+private const val DEFAULT_PANEL_WIDTH = 0.94f
+private const val DEFAULT_PANEL_HEIGHT = 0.45f
 
 /**
  * The one terminal session of the app.
@@ -60,9 +65,19 @@ class TerminalSession
             val history: List<String> = emptyList(),
             val chroot: Boolean = false,
             val alpineInstalled: Boolean = false,
+            /** Rootless mode: commands run as the app uid, and the chroot toggle is refused. */
+            val rootless: Boolean = false,
+            /** How the command field treats the IME (see [TerminalInputMode]). */
+            val inputMode: TerminalInputMode = TerminalInputMode.DEFAULT,
+            /** Whether the Termux-style symbol row is shown. */
+            val symbolKeys: Boolean = true,
             /** Floating bubble requested (it renders in-app, or over other apps with the
              *  overlay permission). */
             val bubbleVisible: Boolean = false,
+            /** Floating panel width, as a fraction of the available width (0..1). */
+            val panelWidth: Float = DEFAULT_PANEL_WIDTH,
+            /** Floating panel height, as a fraction of the available height (0..1). */
+            val panelHeight: Float = DEFAULT_PANEL_HEIGHT,
         ) {
             /** `~/tools $` — the tail of the cwd is plenty for a phone-width prompt. */
             val prompt: String
@@ -103,17 +118,69 @@ class TerminalSession
             scope.launch {
                 val alpine = coreManager.isAlpineInstalled()
                 val bubble = settings.terminalBubbleEnabled
-                _state.update { it.copy(alpineInstalled = alpine, bubbleVisible = bubble) }
+                val rootless = settings.rootlessMode
+                val mode = TerminalInputMode.fromStored(settings.terminalInputMode)
+                val symbols = settings.terminalSymbolKeys
+                val panelWidth = settings.terminalPanelWidth
+                val panelHeight = settings.terminalPanelHeight
+                _state.update {
+                    it.copy(
+                        alpineInstalled = alpine,
+                        bubbleVisible = bubble,
+                        rootless = rootless,
+                        inputMode = mode,
+                        symbolKeys = symbols,
+                        panelWidth = panelWidth,
+                        panelHeight = panelHeight,
+                        // Rootless mode cannot enter the guest, so a chroot left on from a rooted
+                        // session must not survive the switch: every command would fail on a
+                        // transport that cannot work. Turning it off here keeps the menu honest.
+                        chroot = it.chroot && !rootless,
+                    )
+                }
             }
         }
 
-        fun setChroot(enabled: Boolean) {
-            _state.update { it.copy(chroot = enabled) }
+        /**
+         * Persists the terminal's own preferences and applies them immediately.
+         *
+         * One entry point rather than three setters: the class is already at detekt's function
+         * limit, and these are all the same kind of thing — a display/input choice the user makes
+         * from the terminal's own menu, which has to survive a restart.
+         */
+        fun setPreferences(
+            mode: TerminalInputMode? = null,
+            symbolKeys: Boolean? = null,
+            bubbleVisible: Boolean? = null,
+            panelWidth: Float? = null,
+            panelHeight: Float? = null,
+        ) {
+            mode?.let { settings.terminalInputMode = it.name }
+            symbolKeys?.let { settings.terminalSymbolKeys = it }
+            bubbleVisible?.let { settings.terminalBubbleEnabled = it }
+            panelWidth?.let { settings.terminalPanelWidth = it }
+            panelHeight?.let { settings.terminalPanelHeight = it }
+            _state.update {
+                it.copy(
+                    inputMode = mode ?: it.inputMode,
+                    symbolKeys = symbolKeys ?: it.symbolKeys,
+                    bubbleVisible = bubbleVisible ?: it.bubbleVisible,
+                    panelWidth = panelWidth ?: it.panelWidth,
+                    panelHeight = panelHeight ?: it.panelHeight,
+                )
+            }
         }
-
-        fun setBubbleVisible(visible: Boolean) {
-            settings.terminalBubbleEnabled = visible
-            _state.update { it.copy(bubbleVisible = visible) }
+        fun setChroot(enabled: Boolean) {
+            // Entering Alpine needs CAP_SYS_ADMIN; in rootless mode the toggle is refused rather
+            // than stored, so the menu can never show an "on" state that cannot run.
+            if (enabled && _state.value.rootless) {
+                append(
+                    Kind.ERROR,
+                    "Alpine chroot needs root — rootless mode runs commands as the app user.",
+                )
+                return
+            }
+            _state.update { it.copy(chroot = enabled) }
         }
 
         fun run(rawCommand: String) {
@@ -124,7 +191,7 @@ class TerminalSession
                     append(Kind.INFO, "[busy] '$command' not run — a command is still running")
                 command == "clear" -> clear()
                 handleExport(command) -> Unit
-                _state.value.chroot && !coreManager.isAlpineInstalled() ->
+                _state.value.chroot && !_state.value.rootless && !coreManager.isAlpineInstalled() ->
                     append(Kind.ERROR, "Alpine is not installed — install it in Settings, or turn chroot off.")
                 else -> {
                     val current = _state.value
@@ -142,6 +209,8 @@ class TerminalSession
         }
 
         fun stop() {
+            // The daemon path kills by pid. The local transport has no daemon pid (-1), so its
+            // child is killed by cancelling the coroutine — `LocalShell.run`'s `finally` does it.
             if (pid > 0) toolBox.stop(pid)
             job?.cancel()
             job = null
@@ -161,20 +230,22 @@ class TerminalSession
             command: String,
             chroot: Boolean,
         ) {
-            val gate = toolBox.requireTool("shell")
-            if (gate !is ToolHandle.Ready) {
-                append(Kind.ERROR, gate.message)
+            // Which shell runs this is a decision, not a constant: rootless mode has no daemon,
+            // so it gets the app's own `/system/bin/sh` instead (see TerminalTransport).
+            val state = _state.value
+            val outcome =
+                TerminalRunner.resolve(
+                    transport = TerminalTransport.of(rootless = settings.rootlessMode, chroot = chroot),
+                    toolBox = toolBox,
+                    script = TerminalScript.build(command, TerminalScript.State(state.cwd, state.env)),
+                    cwd = state.cwd,
+                )
+            if (outcome is TerminalRunner.Outcome.Failure) {
+                append(Kind.ERROR, outcome.message)
                 return
             }
-            val state = _state.value
             _state.update { it.copy(running = true) }
-            val script = TerminalScript.build(command, TerminalScript.State(state.cwd, state.env))
-            val flow =
-                if (chroot) {
-                    toolBox.chroot(script, "terminal", TerminalScript.TIMEOUT_MS)
-                } else {
-                    toolBox.shell(script, "terminal", TerminalScript.TIMEOUT_MS)
-                }
+            val flow = (outcome as TerminalRunner.Outcome.Ready).flow
             var sentinel: TerminalScript.Sentinel? = null
             var failure: String? = null
             try {

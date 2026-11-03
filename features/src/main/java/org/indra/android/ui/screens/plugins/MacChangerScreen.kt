@@ -10,8 +10,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.indra.android.ui.components.LiveOutputCard
 import org.indra.android.ui.components.FormError
@@ -44,6 +45,41 @@ fun MacChangerScreen(
                     .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            // Current MAC display
+            if (uiState.currentMac.isNotEmpty()) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHighest
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column {
+                            Text(
+                                text = "Current MAC",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Text(
+                                uiState.currentMac,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontFamily = FontFamily.Monospace,
+                            )
+                        }
+                        if (uiState.originalMac.isNotEmpty() && uiState.originalMac != uiState.currentMac) {
+                            OutlinedButton(
+                                onClick = { viewModel.restoreOriginal() },
+                                enabled = !uiState.isRunning,
+                            ) { Text("Restore Original") }
+                        }
+                    }
+                }
+            }
+
             OutlinedTextField(
                 value = uiState.iface,
                 onValueChange = { viewModel.updateIface(it) },

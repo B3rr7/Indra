@@ -1,6 +1,10 @@
 // Extracted from SettingsScreen.kt (2026-10-24 code-health sprint): the palette
 // and the self-contained cards (native core, tools status, OTA, OTA test host)
 // so the main file stays about screen structure, not card internals.
+//
+// The palette is a table of accent colours, so every literal below is a hue by design.
+@file:Suppress("MagicNumber")
+
 package org.indra.android.ui.screens.settings
 
 import androidx.compose.foundation.background
@@ -32,11 +36,13 @@ internal object SettingsPalette {
     val WakeLock = Color(0xFFFF9800) // orange
     val DebugLog = Color(0xFFC6FF00) // lime
     val Core = Color(0xFF1DE9B6) // teal
-    val Ota = Color(0xFF00B0FF) // sky
+    val Ota = Color(0xFF69F0AE) // mint — native binary hot-swap
+    val AppUpdate = Color(0xFFB388FF) // lavender — APK update, deliberately not another blue
     val About = Color(0xFFFF4081) // pink
     val License = Color(0xFFFFD600) // yellow
     val Running = Color(0xFF00E676) // green
     val Stopped = Color(0xFFFF5252) // red
+    val Wallpaper = Color(0xFF40C4FF) // sky — the app's own background image
 }
 
 @Composable
@@ -237,15 +243,14 @@ internal fun OtaTestHostCard(
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
             )
-            Row(
+            UpdateCardButton(
+                busy = false,
+                label = "Apply URL",
+                busyLabel = "",
+                onClick = { viewModel.setOtaManifestUrl(url) },
+                accent = SettingsPalette.DebugLog,
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                FilledTonalButton(
-                    onClick = { viewModel.setOtaManifestUrl(url) },
-                    modifier = Modifier.weight(1f),
-                ) { Text("Apply URL") }
-            }
+            )
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -311,60 +316,68 @@ private fun LogsActions(
     onViewLog: () -> Unit,
 ) {
     val context = LocalContext.current
-    Row(
+    Column(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Button(
+        // Primary action — same single-button style as the OTA / App Update cards.
+        UpdateCardButton(
+            busy = false,
+            label = "View log",
+            busyLabel = "",
             onClick = onViewLog,
-            modifier = Modifier.weight(1f),
+            accent = SettingsPalette.DebugLog,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text("View log")
+            OutlinedButton(
+                onClick = {
+                    shareFiles(
+                        context = context,
+                        files = listOfNotNull(viewModel.getDebugLogFile()),
+                        chooserTitle = "Share Indra log",
+                    )
+                },
+                enabled = uiState.debugLogSizeBytes > 0,
+                modifier = Modifier.weight(1f),
+            ) {
+                Text("Share log")
+            }
+            OutlinedButton(
+                onClick = {
+                    shareFiles(
+                        context = context,
+                        files = viewModel.getCrashLogFiles(),
+                        chooserTitle = "Share Indra crash reports",
+                    )
+                },
+                enabled = uiState.crashLogCount > 0,
+                modifier = Modifier.weight(1f),
+            ) {
+                Text("Share crashes")
+            }
         }
-        FilledTonalButton(
-            onClick = {
-                shareFiles(
-                    context = context,
-                    files = listOfNotNull(viewModel.getDebugLogFile()),
-                    chooserTitle = "Share Indra log",
-                )
-            },
-            enabled = uiState.debugLogSizeBytes > 0,
-            modifier = Modifier.weight(1f),
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text("Share log")
-        }
-    }
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        TextButton(
-            onClick = {
-                shareFiles(
-                    context = context,
-                    files = viewModel.getCrashLogFiles(),
-                    chooserTitle = "Share Indra crash reports",
-                )
-            },
-            enabled = uiState.crashLogCount > 0,
-            modifier = Modifier.weight(1f),
-        ) {
-            Text("Share crashes")
-        }
-        TextButton(
-            onClick = viewModel::clearDebugLog,
-            enabled = uiState.debugLogSizeBytes > 0,
-            modifier = Modifier.weight(1f),
-        ) {
-            Text("Clear log")
-        }
-        TextButton(
-            onClick = viewModel::clearCrashLogs,
-            enabled = uiState.crashLogCount > 0,
-            modifier = Modifier.weight(1f),
-        ) {
-            Text("Clear crashes")
+            OutlinedButton(
+                onClick = viewModel::clearDebugLog,
+                enabled = uiState.debugLogSizeBytes > 0,
+                modifier = Modifier.weight(1f),
+            ) {
+                Text("Clear log")
+            }
+            OutlinedButton(
+                onClick = viewModel::clearCrashLogs,
+                enabled = uiState.crashLogCount > 0,
+                modifier = Modifier.weight(1f),
+            ) {
+                Text("Clear crashes")
+            }
         }
     }
 }

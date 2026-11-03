@@ -51,6 +51,9 @@ class AppUpdateManager
             private const val SHA256_HEX_LENGTH = 64
             private const val HEX_DIGITS = "0123456789abcdef"
 
+            /** Cache subdirectory exposed through the FileProvider (see `file_paths.xml`). */
+            private const val UPDATES_DIR = "updates"
+
             /** Same build-time key as the binary OTA, so one signature model, one secret. */
             private val SIGNING_KEY_SPKI: String = BuildConfig.OTA_SIGNING_KEY_SPKI
         }
@@ -190,7 +193,12 @@ class AppUpdateManager
 
                     val client = OkHttpClient()
                     val request = Request.Builder().url(info.url).build()
-                    val apkFile = File(context.cacheDir, "indra-update.apk")
+                    // A dedicated folder, not the cache root: the FileProvider path that
+                    // exposes the downloaded APK should not expose payload files or staged
+                    // captures that happen to live next to it.
+                    val updatesDir = File(context.cacheDir, UPDATES_DIR)
+                    updatesDir.mkdirs()
+                    val apkFile = File(updatesDir, "indra-update.apk")
                     client.newCall(request).execute().use { response ->
                         if (!response.isSuccessful) error("Download failed: ${response.code}")
                         val body = response.body ?: error("Empty response")
@@ -226,6 +234,13 @@ class AppUpdateManager
             }
 
         private fun installApk(apkFile: File) {
+            // "Install unknown apps" is a special access, not a runtime permission: without
+            // it the platform refuses the package installer, and the old code reported that
+            // as an unexplained failure. `require` (not an `if`) keeps the download routine
+            // below detekt's complexity threshold — the message is the same either way.
+            require(context.packageManager.canRequestPackageInstalls()) {
+                "Install permission is not granted — allow \"Install unknown apps\" for Indra, then retry"
+            }
             val authority = "${context.packageName}.fileprovider"
             val uri = FileProvider.getUriForFile(context, authority, apkFile)
             val intent = Intent(Intent.ACTION_VIEW).apply {

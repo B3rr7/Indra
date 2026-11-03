@@ -109,6 +109,27 @@ object WifiScan {
         )
     }
 
+    /**
+     * One row from Android's `WifiManager` scan table, formatted like the `cmd wifi` rows.
+     *
+     * Rootless mode reads that table instead of shelling out (no daemon, no binary), and
+     * `ScanResult.capabilities` uses the same `[FLAG][FLAG]` form, so [securityOf] applies as-is.
+     */
+    fun describeAccessPoint(
+        ssid: String?,
+        bssid: String?,
+        frequencyMhz: Int,
+        rssiDbm: Int,
+        capabilities: String?,
+    ): String =
+        WifiNetwork(
+            ssid = ssid.orEmpty(),
+            bssid = bssid.orEmpty().lowercase(),
+            frequencyMhz = frequencyMhz,
+            rssiDbm = rssiDbm,
+            security = securityOf(capabilities.orEmpty()),
+        ).describe()
+
     /** "WPA2/WPA3", "WPA3", "WPA2", "WPA", "WEP", "OWE" (encrypted open) or "Open". */
     fun securityOf(flags: String): String {
         val f = flags.uppercase()

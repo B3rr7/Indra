@@ -8,11 +8,11 @@ plugins {
 
 android {
     namespace 'org.indra.android.data'
-    compileSdk 35
+    compileSdk 36
 
     defaultConfig {
         minSdk 26
-        targetSdk 35
+        targetSdk 36
     }
 
     compileOptions {
@@ -26,9 +26,9 @@ android {
 
 dependencies {
     implementation project(':core')
-    implementation 'androidx.core:core-ktx:1.12.0'
-    implementation 'com.google.dagger:hilt-android:2.51.1'
-    kapt 'com.google.dagger:hilt-android-compiler:2.51.1'
+    implementation 'androidx.core:core-ktx:1.17.0'
+    implementation 'com.google.dagger:hilt-android:2.57.2'
+    kapt 'com.google.dagger:hilt-android-compiler:2.57.2'
     implementation 'com.google.code.gson:gson:2.10.1'
 }
 

@@ -45,7 +45,6 @@ class SmartToolBox
     constructor(
         @ApplicationContext private val context: Context,
         private val client: IndraClient,
-        private val settings: SettingsRepository,
         private val coreManager: CoreManager,
         private val childProcessManager: ChildProcessManager,
         private val chrootEngine: ChrootEngine,
@@ -264,10 +263,14 @@ class SmartToolBox
         fun nmap(
             target: String,
             ports: String = "1-1000",
-        ): Flow<ToolResult> {
-            val scanType = if (settings.rootlessMode) "-sT" else "-sS"
-            return execute("nmap", "$scanType -sV -v -p ${shellQuote(ports)} ${shellQuote(target)}")
-        }
+        ): Flow<ToolResult> =
+            // Always `-sS`: this runs through the root daemon, so CAP_NET_RAW is there. The old
+            // `if (settings.rootlessMode) "-sT"` branch was unreachable — rootless mode has no
+            // daemon to spawn nmap at all, and the rootless Port Scanner returns before it ever
+            // calls this (it uses `PortScan`'s connect scan instead). A silent `-sT` here only
+            // suggested a rootless nmap path that does not exist, and it was the only reader of
+            // the injected `settings`, so both are gone.
+            execute("nmap", "-sS -sV -v -p ${shellQuote(ports)} ${shellQuote(target)}")
 
         /** XML output: the handler's XML parser is the only one reporting service versions. */
         fun nmapXml(
@@ -399,8 +402,13 @@ class SmartToolBox
         ): Flow<ToolResult> {
             ensureChroot()?.let { return failure("nuclei", it) }
             val binary = "/" + ChrootScript.CORE_MOUNT.trimStart('/') + "/tools/nuclei/nuclei"
-            return shell(
-                chrootEngine.wrap("$binary -silent -nc -u ${shellQuote(target)} $templates"),
+            // `-silent` swallowed *everything* but findings, and a full template set takes minutes
+            // on a phone — the console sat on "Waiting for output…" for five of them, which reads
+            // exactly like a hang. `-stats` prints nuclei's own progress on stderr (which the raw
+            // handler forwards) and `parseFindings` matches `[severity]` case-sensitively, so the
+            // `[INF]` banner/stats lines never become findings.
+            return execInChroot(
+                chrootEngine.wrap("$binary -nc -stats -si 10 -u ${shellQuote(target)} $templates"),
                 label = "nuclei",
                 timeoutMs = SCAN_TIMEOUT_MS,
             )
@@ -511,7 +519,7 @@ class SmartToolBox
         suspend fun nucleiUpdateTemplates(): Flow<ToolResult> {
             ensureChroot()?.let { return failure("nuclei", it) }
             val binary = "/" + ChrootScript.CORE_MOUNT.trimStart('/') + "/tools/nuclei/nuclei"
-            return shell(
+            return execInChroot(
                 chrootEngine.wrap("$binary -update-templates", mapOf("HOME" to "/root", "XDG_CACHE_HOME" to "/root/.cache")),
                 label = "nuclei update-templates",
                 timeoutMs = SCAN_TIMEOUT_MS,
@@ -528,7 +536,7 @@ class SmartToolBox
                     .replace(coreManager.coreDir.absolutePath, ChrootScript.CORE_MOUNT)
                     .replace(context.cacheDir.absolutePath, "/data/user/0/${context.packageName}/cache")
             val binary = "/" + ChrootScript.CORE_MOUNT.trimStart('/') + "/tools/gobuster/gobuster"
-            return shell(
+            return execInChroot(
                 chrootEngine.wrap("$binary $translated"),
                 label = "gobuster",
                 timeoutMs = LONG_RUNNING_TIMEOUT_MS,
@@ -558,6 +566,22 @@ class SmartToolBox
                     withContext(Dispatchers.IO) {
                         CaptureIface.masscanArgs(iface, args) { networkHelper.captureInterface() }
                     }
+                // If no -e flag was added (empty resolved prefix), masscan will fail with
+                // "could not determine default interface". Fail early with a clear message.
+                if (!resolved.trimStart().startsWith("-e")) {
+                    emit(
+                        ToolResult(
+                            tool = "masscan",
+                            success = false,
+                            status = STATUS_FAILED,
+                            error =
+                                "No suitable network interface for masscan (need Wi-Fi, Ethernet, or " +
+                                    "USB tethering). Cellular interfaces (rmnet*) are not supported by libpcap.",
+                            rawOutput = "",
+                        ),
+                    )
+                    return@flow
+                }
                 emitAll(rawCommand("masscan", "${binary("masscan")} $resolved ${shellQuote(target)}", timeoutMs = SCAN_TIMEOUT_MS))
             }
 
@@ -602,6 +626,25 @@ class SmartToolBox
 
         /** Path (relative to the core dir, the daemon's cwd) of a bundled tool binary. */
         private fun binary(name: String): String = "./tools/$name/$name"
+
+        /**
+         * Runs ONE guest command so the daemon's child *becomes* the tool.
+         *
+         * `shell()` hands the daemon a `/system/bin/sh -c` wrapper, and that shell **forks** the
+         * guest command instead of exec'ing it (mksh does, even for a single simple command). So
+         * `stop(pid)` killed the wrapper and left the real tool running as **root**, with no
+         * timeout applying to it any more — verified on device: after Stop, `ps` showed
+         * `nuclei` reparented to init at 700 MB, still scanning.
+         *
+         * `exec` collapses that chain (`sh` → `chroot` → `env` all exec), so the pid the daemon
+         * reports is the tool's own pid and killing it ends the run. Only for single-command
+         * lines: `exec a; b` never runs `b`, so multi-step scripts stay on [shell].
+         */
+        private fun execInChroot(
+            line: String,
+            label: String,
+            timeoutMs: Long,
+        ): Flow<ToolResult> = shell("exec $line", label = label, timeoutMs = timeoutMs)
 
         /** Bundled password list used when a screen does not supply one. */
         fun defaultWordlist(): String = File(context.filesDir, WORDLIST_PATH).absolutePath
@@ -749,6 +792,11 @@ class SmartToolBox
                 if (notInstalled != null) return@withContext notInstalled
 
                 val dns = chrootEngine.dnsText()
+                if (dns.isBlank()) {
+                    return@withContext "No DNS servers available on the active network. " +
+                        "Connect to a network with DNS, or configure a custom resolver. " +
+                        "Go tools (nuclei, gobuster) require a working resolver."
+                }
                 if (chrootDns.get() == dns) return@withContext null
 
                 chrootMutex.withLock {

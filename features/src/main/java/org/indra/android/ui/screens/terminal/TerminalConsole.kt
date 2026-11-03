@@ -47,13 +47,19 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.indra.android.core.system.terminal.AnsiStyle
+import org.indra.android.core.system.terminal.TerminalInputMode
+import org.indra.android.core.system.terminal.TerminalKeys
 import org.indra.android.core.system.terminal.TerminalSession
 import org.indra.android.ui.components.AutoFollowScrollEffect
 import org.indra.android.ui.components.rememberAutoFollowState
@@ -67,6 +73,8 @@ private const val PAD_NORMAL = 8
 private const val PAD_COMPACT = 6
 private const val ICON_NORMAL = 22
 private const val ICON_COMPACT = 16
+private const val KEY_FONT = 13
+private const val KEY_FONT_COMPACT = 11
 private const val DIM_ALPHA = 0.65f
 private const val SNIPPET_ALPHA = 0.35f
 
@@ -89,6 +97,9 @@ fun TerminalConsole(
 ) {
     var input by remember { mutableStateOf("") }
     var historyIndex by remember { mutableIntStateOf(NO_HISTORY) }
+    // The cursor is tracked here rather than left to the field: the symbol row inserts *at* the
+    // cursor, and a BasicTextField's own selection is not readable from outside it.
+    var cursor by remember { mutableIntStateOf(0) }
     val listState = rememberLazyListState()
     val follow = rememberAutoFollowState(listState)
     // The transcript is capped at 4000 lines, so "how many lines are missing from the head"
@@ -105,6 +116,14 @@ fun TerminalConsole(
         if (command.isEmpty() || state.running) return
         onRun(command)
         input = ""
+        cursor = 0
+        historyIndex = NO_HISTORY
+    }
+
+    /** Applies a key-row edit and puts the cursor where the edit left it. */
+    fun apply(edit: TerminalKeys.Edit) {
+        input = edit.text
+        cursor = edit.cursor
         historyIndex = NO_HISTORY
     }
 
@@ -124,23 +143,49 @@ fun TerminalConsole(
             SnippetRow(
                 enabled = !state.running,
                 chroot = state.chroot,
-                onPick = { input = it },
+                onPick = { picked ->
+                    input = picked
+                    cursor = picked.length
+                },
+            )
+        }
+        if (state.symbolKeys) {
+            SymbolKeyRow(
+                enabled = !state.running,
+                compact = compact,
+                onKey = { symbol ->
+                    apply(TerminalKeys.insert(input, cursor, cursor, symbol.text))
+                },
+                onMove = { delta -> cursor = TerminalKeys.moveCursor(input, cursor, delta) },
+                onBackspace = {
+                    // Delete the character before the cursor, not the last character of the line:
+                    // with a cursor in the middle those are different characters.
+                    if (cursor > 0) {
+                        apply(TerminalKeys.insert(input, cursor - 1, cursor, ""))
+                    }
+                },
             )
         }
         InputRow(
             state = state,
-            input = input,
+            field =
+                InputState(
+                    text = input,
+                    cursor = cursor,
+                    onTextChange = { text, newCursor ->
+                        input = text
+                        cursor = newCursor
+                        historyIndex = NO_HISTORY
+                    },
+                    onRecall = { step ->
+                        val (index, text) = recall(state.history, historyIndex, step)
+                        historyIndex = index
+                        input = text
+                        cursor = text.length
+                    },
+                    onSubmit = ::submit,
+                ),
             compact = compact,
-            onInputChange = {
-                input = it
-                historyIndex = NO_HISTORY
-            },
-            onRecall = { step ->
-                val (index, text) = recall(state.history, historyIndex, step)
-                historyIndex = index
-                input = text
-            },
-            onSubmit = ::submit,
             onStop = onStop,
         )
     }
@@ -175,7 +220,11 @@ private fun Transcript(
                 )
             }
         }
-        items(state.lines, key = { it.id }) { line ->
+        items(
+            items = state.lines,
+            key = { it.id },
+            contentType = { "terminal-line" },
+        ) { line ->
             LineRow(line, compact)
         }
         if (state.running) {
@@ -204,18 +253,31 @@ private fun LineRow(
     )
 }
 
+/** The command field's own state: the text, the caret, and what to do with them. */
+private data class InputState(
+    val text: String,
+    val cursor: Int,
+    val onTextChange: (String, Int) -> Unit,
+    val onRecall: (Int) -> Unit,
+    val onSubmit: () -> Unit,
+)
+
 @Composable
 private fun InputRow(
     state: TerminalSession.State,
-    input: String,
+    field: InputState,
     compact: Boolean,
-    onInputChange: (String) -> Unit,
-    onRecall: (Int) -> Unit,
-    onSubmit: () -> Unit,
     onStop: () -> Unit,
 ) {
     val font = (if (compact) FONT_COMPACT else FONT_NORMAL).sp
     val iconSize = (if (compact) ICON_COMPACT else ICON_NORMAL).dp
+    val input = field.text
+    // The field owns its selection so a tap-to-place-cursor works, but every change is reported
+    // upward: the symbol row edits the text from outside and needs to know where the caret is.
+    val fieldValue =
+        remember(input, field.cursor) {
+            TextFieldValue(input, selection = TextRange(field.cursor.coerceIn(0, input.length)))
+        }
     Row(
         modifier =
             Modifier
@@ -233,10 +295,10 @@ private fun InputRow(
             maxLines = 1,
         )
         BasicTextField(
-            value = input,
-            onValueChange = onInputChange,
+            value = fieldValue,
+            onValueChange = { value -> field.onTextChange(value.text, value.selection.end) },
             modifier = Modifier.weight(1f),
-            singleLine = true,
+            singleLine = state.inputMode != TerminalInputMode.PLAIN,
             enabled = !state.running,
             textStyle =
                 LocalTextStyle.current.copy(
@@ -245,8 +307,8 @@ private fun InputRow(
                     fontSize = font,
                 ),
             cursorBrush = SolidColor(TerminalPalette.accent),
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-            keyboardActions = KeyboardActions(onSend = { onSubmit() }),
+            keyboardOptions = state.inputMode.keyboardOptions(),
+            keyboardActions = KeyboardActions(onSend = { field.onSubmit() }, onDone = { field.onSubmit() }),
             decorationBox = { field ->
                 if (input.isEmpty() && !state.running) {
                     Text(
@@ -264,12 +326,30 @@ private fun InputRow(
             canRecall = state.history.isNotEmpty(),
             canSubmit = input.isNotBlank(),
             iconSize = iconSize,
-            onRecall = onRecall,
-            onSubmit = onSubmit,
+            onRecall = field.onRecall,
+            onSubmit = field.onSubmit,
             onStop = onStop,
         )
     }
 }
+
+/**
+ * The IME contract for a shell.
+ *
+ * `SHELL` turns off autocorrect, suggestions and capitalisation and maps Return to Send. That is
+ * the whole point: a phone IME will otherwise rewrite `-la` into a dictionary word and capitalise
+ * `ls`, and a shell is case-sensitive. `PLAIN` keeps the keyboard quiet but lets Return insert a
+ * newline, for a multi-line script typed by hand. `SYSTEM` hands control back to the IME.
+ */
+private fun TerminalInputMode.keyboardOptions(): KeyboardOptions =
+    KeyboardOptions(
+        // Compose 1.6 (BOM 2024.02.02) names this `autoCorrect`; it becomes `autoCorrectEnabled`
+        // in 1.7. Rename it when the BOM moves.
+        autoCorrect = autoCorrect,
+        capitalization = if (autoCorrect) KeyboardCapitalization.Sentences else KeyboardCapitalization.None,
+        keyboardType = KeyboardType.Ascii,
+        imeAction = if (returnSubmits) ImeAction.Send else ImeAction.Default,
+    )
 
 @Composable
 private fun InputActions(
@@ -331,6 +411,64 @@ private fun InputActions(
             )
         }
     }
+}
+
+/**
+ * The Termux-style key row: the punctuation a shell needs, plus cursor movement and backspace.
+ *
+ * Termux leads with CTRL, ALT, ESC and TAB. Those are deliberately not here — see
+ * [TerminalKeys] for why they would be lies in this app (no pty, no stdin, nothing to send a
+ * control byte to). What is here is the part that genuinely helps on a phone: the symbols that
+ * are two taps deep on an IME, and a way to move the caret without tapping a 12sp target.
+ */
+@Composable
+private fun SymbolKeyRow(
+    enabled: Boolean,
+    compact: Boolean,
+    onKey: (TerminalKeys.Symbol) -> Unit,
+    onMove: (Int) -> Unit,
+    onBackspace: () -> Unit,
+) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                // Scrolls instead of clipping: 31 symbols never fit a phone, and a clipped key is
+                // a key the user cannot press.
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = if (compact) 4.dp else 8.dp, vertical = 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        KeyChip(label = "←", enabled = enabled, compact = compact) { onMove(-1) }
+        KeyChip(label = "→", enabled = enabled, compact = compact) { onMove(1) }
+        KeyChip(label = "⌫", enabled = enabled, compact = compact) { onBackspace() }
+        TerminalKeys.SYMBOLS.forEach { symbol ->
+            KeyChip(label = symbol.label, enabled = enabled, compact = compact) { onKey(symbol) }
+        }
+    }
+}
+
+/** One key. A `Surface` rather than a Material button: 31 buttons would each carry their own
+ *  minimum touch target and the row would be taller than the transcript. */
+@Composable
+private fun KeyChip(
+    label: String,
+    enabled: Boolean,
+    compact: Boolean,
+    onClick: () -> Unit,
+) {
+    Text(
+        text = label,
+        color = if (enabled) TerminalPalette.foreground else TerminalPalette.info.copy(alpha = DIM_ALPHA),
+        fontFamily = FontFamily.Monospace,
+        fontSize = (if (compact) KEY_FONT_COMPACT else KEY_FONT).sp,
+        modifier =
+            Modifier
+                .clip(RoundedCornerShape(5.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = SNIPPET_ALPHA))
+                .clickable(enabled = enabled) { onClick() }
+                .padding(horizontal = if (compact) 7.dp else 9.dp, vertical = 5.dp),
+    )
 }
 
 /** The commands worth one tap on a phone keyboard: nothing to type, and no `sudo` needed. */

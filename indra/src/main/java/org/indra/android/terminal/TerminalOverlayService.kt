@@ -45,16 +45,25 @@ import org.indra.android.R
 import org.indra.android.core.system.terminal.TerminalSession
 import org.indra.android.ui.screens.terminal.TerminalBubble
 import org.indra.android.ui.screens.terminal.TerminalBubblePanel
+import org.indra.android.ui.screens.terminal.TerminalPanelActions
 import org.indra.android.ui.theme.IndraTheme
 import javax.inject.Inject
 
 private const val CHANNEL_ID = "terminal_bubble"
 private const val NOTIFICATION_ID = 4711
-private const val PANEL_WIDTH_DP = 340
-private const val PANEL_HEIGHT_DP = 400
 private const val COLLAPSED_SIZE_DP = 64
 private const val EDGE_MARGIN_DP = 12
 private const val VERTICAL_ANCHOR = 0.55f
+
+/** Smallest the expanded panel may be shrunk to, as a fraction of the usable size. */
+private const val MIN_PANEL_FRACTION = 0.35f
+
+/** Floor for the expanded panel in dp, so it can never collapse past usefulness. */
+private const val MIN_PANEL_DP = 180
+
+/** Fallback panel size before the session has loaded the persisted one. */
+private const val DEFAULT_PANEL_WIDTH_FRACTION = 0.94f
+private const val DEFAULT_PANEL_HEIGHT_FRACTION = 0.45f
 
 /**
  * Draws the terminal bubble above every other app.
@@ -65,6 +74,7 @@ private const val VERTICAL_ANCHOR = 0.55f
  * inherit them from) rendering the exact same panel the in-app bubble uses, and the command
  * itself lives in the [TerminalSession] singleton — this service is only a surface.
  */
+@Suppress("TooManyFunctions") // window lifecycle + resize + notification + owner plumbing
 @AndroidEntryPoint
 class TerminalOverlayService : Service() {
     @Inject
@@ -77,6 +87,11 @@ class TerminalOverlayService : Service() {
 
     // Compose state: changing these from the service (tap handlers) must re-render the view.
     private var expanded by mutableStateOf(false)
+
+    // Expanded panel size as a fraction of the screen, so a pinch/grip resize can be applied to
+    // the window params and remembered (shared with the in-app bubble through the session).
+    private var panelWidthFraction = DEFAULT_PANEL_WIDTH_FRACTION
+    private var panelHeightFraction = DEFAULT_PANEL_HEIGHT_FRACTION
 
     override fun onCreate() {
         super.onCreate()
@@ -125,13 +140,23 @@ class TerminalOverlayService : Service() {
                         OverlayContent(
                             session = session,
                             expanded = expanded,
-                            onToggle = { applyExpanded(!expanded) },
-                            onCollapse = { applyExpanded(false) },
-                            onClose = {
-                                session.setBubbleVisible(false)
-                                stopSelf()
-                            },
-                            onDrag = ::dragBy,
+                            actions =
+                                OverlayActions(
+                                    onToggle = { applyExpanded(!expanded) },
+                                    onMove = ::dragBy,
+                                    panel =
+                                        TerminalPanelActions(
+                                            onRun = session::run,
+                                            onStop = session::stop,
+                                            onCollapse = { applyExpanded(false) },
+                                            onClose = {
+                                                session.setPreferences(bubbleVisible = false)
+                                                stopSelf()
+                                            },
+                                            onZoom = ::zoomBy,
+                                            onResizeBy = { offset -> resizeBy(offset.x, offset.y) },
+                                        ),
+                                ),
                         )
                     }
                 }
@@ -153,26 +178,71 @@ class TerminalOverlayService : Service() {
         expanded = value
         val metrics = resources.displayMetrics
         if (value) {
-            params.width = minOf(dp(PANEL_WIDTH_DP), metrics.widthPixels - dp(EDGE_MARGIN_DP))
-            params.height = minOf(dp(PANEL_HEIGHT_DP), (metrics.heightPixels - bottomInset()) / 2)
+            // Pick up whatever size was last chosen (it may have been set from the in-app bubble).
+            val saved = session.state.value
+            panelWidthFraction = saved.panelWidth
+            panelHeightFraction = saved.panelHeight
             // Focusable so the soft keyboard can type into the panel; the platform IME only
             // accepts an overlay window that can take focus.
             params.flags = WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
             params.softInputMode =
                 WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE or
                 WindowManager.LayoutParams.SOFT_INPUT_STATE_UNSPECIFIED
-            params.x = (params.x - dp(EDGE_MARGIN_DP)).coerceIn(0, metrics.widthPixels - params.width)
+            applyPanelSize()
+            params.x = (params.x - dp(EDGE_MARGIN_DP)).coerceIn(0, (metrics.widthPixels - params.width).coerceAtLeast(0))
             params.y =
                 (params.y - dp(EDGE_MARGIN_DP) + dp(COLLAPSED_SIZE_DP))
-                    .coerceIn(0, (metrics.heightPixels - bottomInset() - params.height).coerceAtLeast(0))
+                    .coerceIn(0, (usableHeight() - params.height).coerceAtLeast(0))
+            view?.let { runCatching { windowManager.updateViewLayout(it, params) } }
         } else {
             val collapsed = dp(COLLAPSED_SIZE_DP)
             params.width = collapsed
             params.height = collapsed
             params.flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
             params.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_STATE_UNSPECIFIED
+            view?.let { runCatching { windowManager.updateViewLayout(it, params) } }
         }
+    }
+
+    /** Display height minus the navigation bar; the window must stay above it. */
+    private fun usableHeight(): Int = (resources.displayMetrics.heightPixels - bottomInset()).coerceAtLeast(1)
+
+    /**
+     * Applies [panelWidthFraction]/[panelHeightFraction] to the window, clamped so the panel stays
+     * on screen and above the navigation bar, then persists the size for both surfaces.
+     */
+    private fun applyPanelSize() {
+        val metrics = resources.displayMetrics
+        val minPx = dp(MIN_PANEL_DP)
+        val usable = usableHeight()
+        params.width =
+            (panelWidthFraction * metrics.widthPixels).toInt()
+                .coerceIn(minPx, (metrics.widthPixels - dp(EDGE_MARGIN_DP)).coerceAtLeast(minPx))
+        params.height =
+            (panelHeightFraction * usable).toInt()
+                .coerceIn(minPx, usable.coerceAtLeast(minPx))
+        params.x = params.x.coerceIn(0, (metrics.widthPixels - params.width).coerceAtLeast(0))
+        params.y = params.y.coerceIn(0, (usable - params.height).coerceAtLeast(0))
         view?.let { runCatching { windowManager.updateViewLayout(it, params) } }
+        session.setPreferences(panelWidth = panelWidthFraction, panelHeight = panelHeightFraction)
+    }
+
+    /** Pinch factor (1.0 = no change) from the panel header. */
+    private fun zoomBy(factor: Float) {
+        panelWidthFraction = (panelWidthFraction * factor).coerceIn(MIN_PANEL_FRACTION, 1f)
+        panelHeightFraction = (panelHeightFraction * factor).coerceIn(MIN_PANEL_FRACTION, 1f)
+        applyPanelSize()
+    }
+
+    /** Corner-grip drag delta in px. */
+    private fun resizeBy(
+        dx: Float,
+        dy: Float,
+    ) {
+        val metrics = resources.displayMetrics
+        panelWidthFraction = (panelWidthFraction + dx / metrics.widthPixels).coerceIn(MIN_PANEL_FRACTION, 1f)
+        panelHeightFraction = (panelHeightFraction + dy / usableHeight()).coerceIn(MIN_PANEL_FRACTION, 1f)
+        applyPanelSize()
     }
 
     /** Moves the whole window with the finger; clamped so it can never be dragged off-screen. */
@@ -266,31 +336,35 @@ class TerminalOverlayService : Service() {
     }
 }
 
+/**
+ * The overlay's callbacks, bundled so [OverlayContent] keeps a short signature: moving the
+ * window and the panel's own gestures are the same "act on the window" family.
+ */
+private data class OverlayActions(
+    val onToggle: () -> Unit,
+    val onMove: (Float, Float) -> Unit,
+    val panel: TerminalPanelActions,
+)
+
 @Composable
 private fun OverlayContent(
     session: TerminalSession,
     expanded: Boolean,
-    onToggle: () -> Unit,
-    onCollapse: () -> Unit,
-    onClose: () -> Unit,
-    onDrag: (Float, Float) -> Unit,
+    actions: OverlayActions,
 ) {
     val state by session.state.collectAsStateWithLifecycle()
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         if (expanded) {
             TerminalBubblePanel(
                 state = state,
+                actions = actions.panel,
                 modifier = Modifier.fillMaxSize(),
-                onRun = session::run,
-                onStop = session::stop,
-                onCollapse = onCollapse,
-                onClose = onClose,
             )
         } else {
             TerminalBubble(
                 running = state.running,
-                onTap = onToggle,
-                onDrag = { onDrag(it.x, it.y) },
+                onTap = actions.onToggle,
+                onDrag = { offset -> actions.onMove(offset.x, offset.y) },
             )
         }
     }

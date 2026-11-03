@@ -21,6 +21,9 @@ import androidx.compose.ui.unit.dp
 import org.indra.android.core.system.NativeCoreAction
 import org.indra.android.core.system.NativeCoreState
 import org.indra.android.ui.components.FormError
+import org.indra.android.ui.theme.Flat
+import org.indra.android.ui.theme.flatEdge
+import org.indra.android.ui.theme.flatSurfaceColor
 
 /** Above this luminance the accent is bright enough to need black content (green, red, teal). */
 private const val CONTENT_LUMINANCE_THRESHOLD = 0.45f
@@ -51,14 +54,20 @@ internal fun NativeCoreCard(
     val state = uiState.coreState
     val busy = uiState.coreBusyAction
 
-    ElevatedCard(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
+    Card(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                // Flat 2.0: this was the app's only `ElevatedCard` (3dp). A raised card is the
+                // one thing a flat design cannot have, so it becomes a tonal card with a hairline
+                // like every other surface.
+                .flatEdge(),
+        shape = Flat.shape,
         colors =
-            CardDefaults.elevatedCardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+            CardDefaults.cardColors(
+                containerColor = flatSurfaceColor(),
             ),
-        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 3.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = Flat.elevation),
     ) {
         Column(
             modifier =
@@ -83,12 +92,23 @@ internal fun NativeCoreCard(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                CoreActionButton(
-                    state = state,
-                    busy = busy,
-                    onClick = viewModel::onCoreAction,
-                    modifier = Modifier.weight(1f),
-                )
+                val action = state.action
+                if (action == null) {
+                    Text(
+                        text = "The daemon is not used in rootless mode. Turn rootless mode off " +
+                            "to install and run the bundled tools.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f),
+                    )
+                } else {
+                    CoreActionButton(
+                        state = state,
+                        busy = busy,
+                        onClick = viewModel::onCoreAction,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
                 // The spinning badge is the "it is alive" signal, so it is only meaningful while
                 // the daemon really is running and nothing is in flight.
                 if (state == NativeCoreState.Running && busy == null) LiveBadge()
@@ -119,7 +139,7 @@ private fun CoreActionButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val accent = state.accent(MaterialTheme.colorScheme.primary)
+    val accent = state.accent()
     Button(
         onClick = onClick,
         enabled = busy == null,
@@ -181,12 +201,13 @@ private fun LiveBadge() {
     }
 }
 
-/** The accent of the step the button would take: primary to install, green to start, red to stop. */
-private fun NativeCoreState.accent(primary: Color): Color =
+/** The accent of the step the button would take: teal to install, green to start, red to stop. */
+private fun NativeCoreState.accent(): Color =
     when (this) {
-        NativeCoreState.NotInstalled -> primary
+        NativeCoreState.NotInstalled -> SettingsPalette.Core
         NativeCoreState.InstalledStopped -> SettingsPalette.Running
         NativeCoreState.Running -> SettingsPalette.Stopped
+        NativeCoreState.Rootless -> SettingsPalette.WakeLock
     }
 
 /** Header subtitle: what the core is, in the user's terms rather than in state names. */
@@ -195,6 +216,7 @@ private fun NativeCoreState.subtitle(version: String): String =
         NativeCoreState.NotInstalled -> "Bundled tools and the indrad daemon are not extracted yet"
         NativeCoreState.InstalledStopped -> "Core $version · installed, not running"
         NativeCoreState.Running -> "Core $version · daemon listening and authenticated"
+        NativeCoreState.Rootless -> "Rootless mode · no daemon, only the platform-API tools run"
     }
 
 /** Traffic-light pill: needs attention, idle but healthy, alive. */
@@ -203,6 +225,7 @@ private fun NativeCoreState.pillColor(): Color =
         NativeCoreState.NotInstalled -> SettingsPalette.Stopped
         NativeCoreState.InstalledStopped -> SettingsPalette.WakeLock
         NativeCoreState.Running -> SettingsPalette.Running
+        NativeCoreState.Rootless -> SettingsPalette.WakeLock
     }
 
 private fun NativeCoreState.icon(): ImageVector =
@@ -210,6 +233,7 @@ private fun NativeCoreState.icon(): ImageVector =
         NativeCoreState.NotInstalled -> Icons.Default.Download
         NativeCoreState.InstalledStopped -> Icons.Default.PlayArrow
         NativeCoreState.Running -> Icons.Default.Stop
+        NativeCoreState.Rootless -> Icons.Default.Download
     }
 
 /**

@@ -3,18 +3,25 @@ package org.indra.android.ui.screens.plugins
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.indra.android.core.system.NetworkHelper
+import org.indra.android.core.system.PortScan
+import org.indra.android.core.system.SettingsRepository
 import org.indra.android.core.system.SmartToolBox
 import org.indra.android.core.system.ToolHandle
 import org.indra.android.core.system.ToolResult
 import org.indra.android.core.system.isStreaming
 import org.indra.android.core.system.streamedLine
 import org.indra.android.data.repository.NetworkRepository
+import java.net.InetAddress
+import java.net.InetSocketAddress
+import java.net.Socket
 import javax.inject.Inject
 
 data class PortScannerUiState(
@@ -43,6 +50,7 @@ class PortScannerViewModel
         private val toolBox: SmartToolBox,
         private val networkHelper: NetworkHelper,
         private val networkRepository: NetworkRepository,
+        private val settings: SettingsRepository,
     ) : ViewModel() {
         private val _uiState = MutableStateFlow(PortScannerUiState())
         val uiState: StateFlow<PortScannerUiState> = _uiState.asStateFlow()
@@ -73,6 +81,19 @@ class PortScannerViewModel
         fun scan() {
             viewModelScope.launch {
                 try {
+                    val target = _uiState.value.target.trim()
+                    if (target.isBlank()) {
+                        _uiState.value = _uiState.value.copy(isLoading = false, error = "Enter a target host")
+                        return@launch
+                    }
+
+                    // Rootless: there is no daemon to ask (see `Rootless`), so the screen runs
+                    // its own TCP connect scan instead of gating on nmap.
+                    if (settings.rootlessMode) {
+                        connectScan(target)
+                        return@launch
+                    }
+
                     val gate = toolBox.requireTool("nmap")
                     if (gate !is ToolHandle.Ready) {
                         _uiState.value =
@@ -80,11 +101,6 @@ class PortScannerViewModel
                                 isLoading = false,
                                 error = gate.message,
                             )
-                        return@launch
-                    }
-
-                    if (_uiState.value.target.isBlank()) {
-                        _uiState.value = _uiState.value.copy(isLoading = false, error = "Enter a target host")
                         return@launch
                     }
 
@@ -97,7 +113,7 @@ class PortScannerViewModel
                             liveLines = emptyList(),
                         )
 
-                    toolBox.nmap(_uiState.value.target, _uiState.value.portRange).collect { toolResult ->
+                    toolBox.nmap(target, _uiState.value.portRange).collect { toolResult ->
                         if (toolResult.isStreaming) {
                             mergeLiveResults(toolResult)
                         } else {
@@ -113,6 +129,78 @@ class PortScannerViewModel
                 }
             }
         }
+
+        /**
+         * Rootless implementation: an ordinary TCP connect scan.
+         *
+         * No raw sockets and no bundled binary, so it works as the app user. It can only find
+         * ports that accept a TCP connection — that is the same limit nmap's `-sT` has.
+         */
+        private suspend fun connectScan(target: String) {
+            val ports = PortScan.parseSpec(_uiState.value.portRange)
+            if (ports == null) {
+                _uiState.value =
+                    _uiState.value.copy(
+                        isLoading = false,
+                        error = "Invalid port range — use e.g. 1-1000 or 22,80,443",
+                    )
+                return
+            }
+            val address =
+                withContext(Dispatchers.IO) {
+                    runCatching { InetAddress.getByName(target) }.getOrNull()
+                }
+            if (address == null) {
+                _uiState.value =
+                    _uiState.value.copy(isLoading = false, finished = false, error = "Cannot resolve $target")
+                return
+            }
+
+            _uiState.value =
+                _uiState.value.copy(
+                    isLoading = true,
+                    error = null,
+                    finished = false,
+                    results = emptyList(),
+                    liveLines = listOf("TCP connect scan (rootless) — ${ports.size} port(s) on $target"),
+                )
+
+            val open =
+                PortScan.run(ports, probe = { port -> isOpen(address, port) }) { port ->
+                    _uiState.value =
+                        _uiState.value.copy(
+                            results =
+                                (_uiState.value.results + PortScanResult(port, "tcp"))
+                                    .distinctBy { it.port }
+                                    .sortedBy { it.port },
+                            liveLines =
+                                (_uiState.value.liveLines + "Discovered open port $port/tcp")
+                                    .takeLast(MAX_LIVE_LINES),
+                        )
+                }
+
+            // Zero open ports is a result, not an error (same contract as the nmap path).
+            _uiState.value =
+                _uiState.value.copy(
+                    isLoading = false,
+                    finished = true,
+                    results = open.map { PortScanResult(it, "tcp") },
+                    error = null,
+                )
+        }
+
+        private suspend fun isOpen(
+            address: InetAddress,
+            port: Int,
+        ): Boolean =
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    Socket().use { socket ->
+                        socket.connect(InetSocketAddress(address, port), PortScan.DEFAULT_TIMEOUT_MS)
+                        true
+                    }
+                }.getOrDefault(false)
+            }
 
         /** Live update from a running emission: streamed line + structured Port events. */
         private fun mergeLiveResults(toolResult: ToolResult) {

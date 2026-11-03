@@ -26,12 +26,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.indra.android.core.system.terminal.TerminalSession
 import org.indra.android.ui.screens.terminal.TerminalBubble
 import org.indra.android.ui.screens.terminal.TerminalBubblePanel
+import org.indra.android.ui.screens.terminal.TerminalPanelActions
 import kotlin.math.roundToInt
 
 private const val BUBBLE_DP = 56
 private const val MARGIN_DP = 16
-private const val PANEL_WIDTH_FRACTION = 0.94f
-private const val PANEL_HEIGHT_FRACTION = 0.45f
+
+/** Smallest the floating panel may be shrunk to, as a fraction of the container. */
+private const val MIN_PANEL_FRACTION = 0.35f
 private const val START_VERTICAL_FRACTION = 0.6f
 
 /**
@@ -84,22 +86,26 @@ fun TerminalBubbleHost(
         val marginPx = with(density) { MARGIN_DP.dp.toPx() }
         val maxX = (constraints.maxWidth - bubblePx - marginPx).coerceAtLeast(0f)
         val maxY = (constraints.maxHeight - bubblePx - marginPx).coerceAtLeast(0f)
+        // The panel is sized as a fraction of this container, and a resize is expressed as a
+        // fraction delta, so the drag/pinch has to be converted with the container's own px size.
+        val containerW = constraints.maxWidth.toFloat().coerceAtLeast(1f)
+        val containerH = constraints.maxHeight.toFloat().coerceAtLeast(1f)
         var x by remember { mutableFloatStateOf(maxX) }
         var y by remember { mutableFloatStateOf(maxY * START_VERTICAL_FRACTION) }
 
         if (expanded) {
-            TerminalBubblePanel(
+            ExpandedFloatingPanel(
+                session = session,
                 state = state,
+                containerWidth = containerW,
+                containerHeight = containerH,
+                onCollapse = { expanded = false },
                 modifier =
                     Modifier
                         .align(Alignment.BottomEnd)
                         .padding(end = MARGIN_DP.dp, bottom = MARGIN_DP.dp)
-                        .fillMaxWidth(PANEL_WIDTH_FRACTION)
-                        .fillMaxHeight(PANEL_HEIGHT_FRACTION),
-                onRun = session::run,
-                onStop = session::stop,
-                onCollapse = { expanded = false },
-                onClose = { session.setBubbleVisible(false) },
+                        .fillMaxWidth(state.panelWidth)
+                        .fillMaxHeight(state.panelHeight),
             )
         } else {
             TerminalBubble(
@@ -116,4 +122,47 @@ fun TerminalBubbleHost(
             )
         }
     }
+}
+
+/**
+ * The expanded panel and its resize wiring, extracted so [TerminalBubbleHost] stays short.
+ *
+ * A pinch scales both fractions; a corner-grip drag adds a fraction delta computed from the
+ * container's own px size. Both go through the session, so the size is persisted and shared
+ * with the over-app overlay.
+ */
+@Composable
+private fun ExpandedFloatingPanel(
+    session: TerminalSession,
+    state: TerminalSession.State,
+    containerWidth: Float,
+    containerHeight: Float,
+    onCollapse: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    TerminalBubblePanel(
+        state = state,
+        actions =
+            TerminalPanelActions(
+                onRun = session::run,
+                onStop = session::stop,
+                onCollapse = onCollapse,
+                onClose = { session.setPreferences(bubbleVisible = false) },
+                onZoom = { zoom ->
+                    val current = session.state.value
+                    session.setPreferences(
+                        panelWidth = (current.panelWidth * zoom).coerceIn(MIN_PANEL_FRACTION, 1f),
+                        panelHeight = (current.panelHeight * zoom).coerceIn(MIN_PANEL_FRACTION, 1f),
+                    )
+                },
+                onResizeBy = { delta ->
+                    val current = session.state.value
+                    session.setPreferences(
+                        panelWidth = (current.panelWidth + delta.x / containerWidth).coerceIn(MIN_PANEL_FRACTION, 1f),
+                        panelHeight = (current.panelHeight + delta.y / containerHeight).coerceIn(MIN_PANEL_FRACTION, 1f),
+                    )
+                },
+            ),
+        modifier = modifier,
+    )
 }

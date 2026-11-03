@@ -1,8 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
     <files-path name="captures" path="captures/" />
-    <cache-path name="updates" path="." />
+    <!-- Only the downloaded APK, not the whole cache dir: payload files and staged captures
+         must not become reachable through a share/install URI. -->
+    <cache-path name="updates" path="updates/" />
     <!-- Shared by the Logs & Reports card (FileProvider authority is set in the manifest) -->
     <files-path name="logs" path="logs/" />
     <files-path name="crashes" path="crashes/" />
+    <!-- Exports (KML/CSV/capture manifest) when the app falls back to private storage
+         (`IndraWorkspace.exportDir`). -->
+    <files-path name="output" path="output/" />
+    <!-- The user-visible workspace, needed to share a capture or export written to
+         /sdcard/Indra/... — without this root, `getUriForFile` throws for every file the
+         Handshakes and GeoMac screens put on shared storage. -->
+    <external-path name="workspace" path="Indra/" />
 </paths>

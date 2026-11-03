@@ -22,9 +22,11 @@ import org.junit.Test
 class CaptureIfaceTest {
     @Test
     fun `wifi, ethernet and usb tethering are usable`() {
-        listOf("wlan0", "swlan0", "eth0", "rndis0", "usb0", "ap0").forEach {
-            assertTrue(it, CaptureIface.isUsable(it))
-        }
+        listOf(
+            "wlan0", "swlan0", "eth0", "rndis0", "usb0", "ap0",
+            "wlan0_ap", "wlan1_ap", "wifi0", "wifi1", "apcli0", "apcli1",
+            "p2p0", "p2p1", "wl0", "wl1"
+        ).forEach { assertTrue(it, CaptureIface.isUsable(it)) }
     }
 
     @Test

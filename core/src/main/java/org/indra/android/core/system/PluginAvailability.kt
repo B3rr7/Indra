@@ -61,24 +61,42 @@ class PluginAvailability
         /**
          * A plugin is usable when there is no known platform blocker AND its daemon
          * handler exists AND every extra artifact it needs (nuclei templates, gobuster,
-         * msf, iptables) is installed, unless the user runs rootless and the plugin
-         * needs root/raw sockets. The daemon-updater's "requires" key still decides
-         * which binary an OTA update fetches; this only gates the card.
+         * msf, iptables) is installed.
+         *
+         * Rootless mode is answered before any daemon question, because in that mode there is
+         * no daemon at all: `indrad` in app storage cannot be executed on Android 10+ (see
+         * [Rootless]). Only the plugins with a daemon-free implementation are available there;
+         * every other one needs the root daemon, so "needs root" is the truthful label —
+         * including for tools that do not need raw sockets themselves, because their binary
+         * can only be spawned by the root daemon.
+         *
+         * The daemon-updater's "requires" key still decides which binary an OTA update
+         * fetches; this only gates the card.
          */
         // Guard clauses over a booleans product: clear rules, failing fast.
-        fun pluginStatus(plugin: Plugin): PluginStatus {
+        fun pluginStatus(plugin: Plugin): PluginStatus =
+            when {
+                !isFeasibleOnAndroid(plugin.id) -> PluginStatus.UNSUPPORTED
+                settings.rootlessMode && Rootless.supports(plugin.id) -> PluginStatus.AVAILABLE
+                settings.rootlessMode -> PluginStatus.NEEDS_ROOT
+                else -> daemonStatus(plugin)
+            }
+
+        /**
+         * Rooted path: the card needs a live daemon, a handler it can see and any artifact.
+         *
+         * Liveness before the handler probe: when the daemon dies its handler list stays
+         * cached inside the native client, so `isAvailable()` keeps answering true and every
+         * card looked runnable (or, before this, "not in native core").
+         */
+        private fun daemonStatus(plugin: Plugin): PluginStatus {
             val tool = toolBox.getTool(plugin.requires)
             val handlerReady = tool?.isAvailable() == true
-            // Liveness first: when the daemon dies its handler list stays cached inside the
-            // native client, so `isAvailable()` keeps answering true and every card looked
-            // runnable (or, before this, "not in native core").
             return when {
-                !isFeasibleOnAndroid(plugin.id) -> PluginStatus.UNSUPPORTED
                 !toolBox.isDaemonConnected() -> PluginStatus.DAEMON_DOWN
                 tool == null -> PluginStatus.TOOL_MISSING
                 !handlerReady -> PluginStatus.TOOL_MISSING
                 !artifactInstalled(plugin.id) -> PluginStatus.ARTIFACT_MISSING
-                plugin.requiresRoot && settings.rootlessMode -> PluginStatus.NEEDS_ROOT
                 else -> PluginStatus.AVAILABLE
             }
         }
@@ -92,6 +110,7 @@ class PluginAvailability
                 "vuln_scanner", "web_tester" -> coreManager.isNucleiInstalled()
                 "gobuster" -> coreManager.isGobusterInstalled()
                 "exploit_finder" -> coreManager.isMsfInstalled()
+                "msf" -> coreManager.isMsfInstalled()
                 "iptables" -> coreManager.isIptablesSupported()
                 else -> true
             }

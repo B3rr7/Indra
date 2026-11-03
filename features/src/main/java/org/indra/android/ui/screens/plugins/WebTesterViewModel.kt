@@ -3,10 +3,14 @@ package org.indra.android.ui.screens.plugins
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.indra.android.core.system.CoreManager
 import org.indra.android.core.system.NetworkHelper
 import org.indra.android.core.system.Nuclei
@@ -29,11 +33,19 @@ class WebTesterViewModel
         private val networkHelper: NetworkHelper,
         private val networkRepository: NetworkRepository,
     ) : ViewModel() {
-        private val _uiState = MutableStateFlow(WebTesterUiState(nucleiInstalled = coreManager.isNucleiInstalled()))
+        private val _uiState = MutableStateFlow(WebTesterUiState())
         val uiState: StateFlow<WebTesterUiState> = _uiState.asStateFlow()
+
+        private var job: Job? = null
+        private var pid = -1
 
         init {
             refreshSuggestions()
+            // Off Main: the probe stats the core directory (see VulnScannerViewModel).
+            viewModelScope.launch {
+                val installed = withContext(Dispatchers.IO) { coreManager.isNucleiInstalled() }
+                _uiState.value = _uiState.value.copy(nucleiInstalled = installed)
+            }
             viewModelScope.launch { networkRepository.discoveredHosts.collect { refreshSuggestions() } }
         }
 
@@ -70,8 +82,9 @@ class WebTesterViewModel
 
         /** See [VulnScannerViewModel.scan]: live console plus [Nuclei.interpret] for the verdict. */
         fun test() {
-            viewModelScope.launch {
-                if (!coreManager.isNucleiInstalled()) {
+            if (job?.isActive == true) return
+            job = viewModelScope.launch {
+                if (!withContext(Dispatchers.IO) { coreManager.isNucleiInstalled() }) {
                     _uiState.value =
                         _uiState.value.copy(
                             isLoading = false,
@@ -97,13 +110,31 @@ class WebTesterViewModel
                     )
                 try {
                     toolBox.nuclei(_uiState.value.target, templates).collect { result ->
+                        if (result.pid > 0) pid = result.pid
                         collectLine(result)
-                        if (!result.isStreaming) finish(result)
+                        if (!result.isStreaming) {
+                            pid = -1
+                            finish(result)
+                        }
                     }
+                } catch (e: CancellationException) {
+                    // stop()/onCleared cancelled the collector: that is not a scan failure, and
+                    // reporting it was one ("StandaloneCoroutine was cancelled" in the error line).
+                    throw e
                 } catch (e: Exception) {
+                    pid = -1
                     _uiState.value = _uiState.value.copy(isLoading = false, error = e.message)
                 }
             }
+        }
+
+        /** Ends a run the user no longer wants; a template scan is bounded at 15 minutes. */
+        fun stop() {
+            if (pid > 0) toolBox.stop(pid)
+            job?.cancel()
+            job = null
+            pid = -1
+            _uiState.value = _uiState.value.copy(isLoading = false)
         }
 
         private fun collectLine(result: ToolResult) {

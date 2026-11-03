@@ -15,8 +15,8 @@ package org.indra.android.core.system
  * Pure by design (no Android, no Compose): derived in [of], pinned by `NativeCoreStateTest`.
  */
 sealed interface NativeCoreState {
-    /** The one lifecycle step this state needs. */
-    val action: NativeCoreAction
+    /** The one lifecycle step this state needs, or `null` when there is no step to take. */
+    val action: NativeCoreAction?
 
     /** Button copy for [action] — the button always says what the tap will do. */
     val buttonLabel: String
@@ -45,6 +45,25 @@ sealed interface NativeCoreState {
         override val statusLabel: String = "Running"
     }
 
+    /**
+     * Rootless mode is on, so there is no daemon to start — ever — and no step to offer.
+     *
+     * `indrad` lives in app storage and Android 10+ denies `untrusted_app` execute on
+     * `app_data_file`, so a rootless start is a guaranteed exit 126 (see [DaemonStartFailure]).
+     * The card used to keep offering "Start Daemon" here and every tap produced a well-worded
+     * dead end.
+     *
+     * [action] is `null` rather than [NativeCoreAction.INSTALL]: the four rootless plugins read
+     * their data from app assets and platform APIs, never from the extracted core, so installing
+     * it changes nothing for them. Offering a button that does nothing useful is the same class
+     * of bug as offering one that cannot work.
+     */
+    object Rootless : NativeCoreState {
+        override val action: NativeCoreAction? = null
+        override val buttonLabel: String = ""
+        override val statusLabel: String = "Rootless"
+    }
+
     companion object {
         /**
          * Derives the state from the two probes Settings already performs on `Dispatchers.IO`:
@@ -58,8 +77,10 @@ sealed interface NativeCoreState {
         fun of(
             installed: Boolean,
             running: Boolean,
+            rootless: Boolean = false,
         ): NativeCoreState =
             when {
+                rootless -> Rootless
                 !installed -> NotInstalled
                 running -> Running
                 else -> InstalledStopped

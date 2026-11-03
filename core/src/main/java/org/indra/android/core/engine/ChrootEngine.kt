@@ -170,8 +170,9 @@ class ChrootEngine
                         "cannot be converted for hashcat here. The bundled aircrack-ng reads `.cap` handshakes " +
                         "directly — use WiFi Audit with the same capture and wordlist."
                 Capability.NUCLEI_TEMPLATES ->
-                    "nuclei templates are not installed. They are downloaded by the app (the chroot's Go " +
-                        "resolver cannot fetch them) — install them on the Vulnerability Scanner screen."
+                    "nuclei templates are not installed yet. The first scan inside the chroot fetches them " +
+                        "(the engine writes the chroot's resolv.conf, so GitHub is reachable) — that run takes " +
+                        "several minutes. Refresh them up front on the Vulnerability Scanner screen."
                 Capability.MSF ->
                     "Metasploit is not installed. Install it on the Exploit Finder screen."
             }

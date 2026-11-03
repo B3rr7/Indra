@@ -18,6 +18,10 @@ class SettingsRepository
 
             /** File-logging toggle; `IndraApplication` reads it off the main thread at startup. */
             const val KEY_FILE_LOGGING = "PREF_DEBUG_ERROR_LOGGING"
+
+            /** Default floating-terminal panel size, as a fraction of the available space. */
+            const val DEFAULT_TERMINAL_PANEL_WIDTH = 0.94f
+            const val DEFAULT_TERMINAL_PANEL_HEIGHT = 0.45f
         }
 
         private val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -103,6 +107,15 @@ class SettingsRepository
         set(value) = prefs.edit().putBoolean("ROOTLESS_MODE", value).apply()
 
         /**
+         * Whether the first-install "set up storage access" prompt has already been shown.
+         * Persisted so the prompt fires once per install, not on every launch.
+         */
+        var storagePromptShown: Boolean
+            get() = prefs.getBoolean("PREF_STORAGE_PROMPT_SHOWN", false)
+            set(value) = prefs.edit().putBoolean("PREF_STORAGE_PROMPT_SHOWN", value).apply()
+
+
+        /**
          * Whether the floating terminal bubble is on. Persisted so it survives a restart:
          * a bubble the user opened and then backgrounded should still be there.
          */
@@ -110,9 +123,55 @@ class SettingsRepository
             get() = prefs.getBoolean("TERMINAL_BUBBLE", false)
             set(value) = prefs.edit().putBoolean("TERMINAL_BUBBLE", value).apply()
 
+        /**
+         * How the terminal's command field treats the IME (see `TerminalInputMode`).
+         *
+         * Stored as the enum's name rather than an ordinal: an ordinal would silently change
+         * meaning the moment a mode is inserted in the middle of the list, and the user's keyboard
+         * would start behaving differently after an update for no reason they could see.
+         */
+        var terminalInputMode: String
+            get() = prefs.getString("TERMINAL_INPUT_MODE", "") ?: ""
+            set(value) = prefs.edit().putString("TERMINAL_INPUT_MODE", value).apply()
+
+        /** Whether the Termux-style symbol row is shown above the command field. */
+        var terminalSymbolKeys: Boolean
+            get() = prefs.getBoolean("TERMINAL_SYMBOL_KEYS", true)
+            set(value) = prefs.edit().putBoolean("TERMINAL_SYMBOL_KEYS", value).apply()
+
+        /**
+         * Width of the floating terminal panel, as a fraction of the available width.
+         *
+         * Persisted so a size the user pinched/dragged survives a restart. Shared by both the
+         * in-app bubble and the over-app overlay, so one resize applies to either surface.
+         */
+        var terminalPanelWidth: Float
+            get() = prefs.getFloat("TERMINAL_PANEL_WIDTH", DEFAULT_TERMINAL_PANEL_WIDTH)
+            set(value) = prefs.edit().putFloat("TERMINAL_PANEL_WIDTH", value).apply()
+
+        /** Height of the floating terminal panel, as a fraction of the available height. */
+        var terminalPanelHeight: Float
+            get() = prefs.getFloat("TERMINAL_PANEL_HEIGHT", DEFAULT_TERMINAL_PANEL_HEIGHT)
+            set(value) = prefs.edit().putFloat("TERMINAL_PANEL_HEIGHT", value).apply()
+
+        /**
+         * How heavily the app background image is dimmed (see `WallpaperDim`).
+         *
+         * Stored as the enum's name rather than an ordinal, for the same reason as the terminal
+         * input mode: an ordinal changes meaning the moment a level is inserted in the middle.
+         */
+        var wallpaperDim: String
+            get() = prefs.getString("WALLPAPER_DIM", "") ?: ""
+            set(value) = prefs.edit().putString("WALLPAPER_DIM", value).apply()
+
     var bettercapUrl: String
         get() = prefs.getString("BETTERCAP_URL", "") ?: ""
         set(value) = prefs.edit().putString("BETTERCAP_URL", value).apply()
+
+    /** Binary URL for the optional Gobuster download (empty = not configured). */
+    var gobusterUrl: String
+        get() = prefs.getString("GOBUSTER_URL", "") ?: ""
+        set(value) = prefs.edit().putString("GOBUSTER_URL", value).apply()
 
     // Deferred: `context.filesDir` creates the app's files directory (`ensurePrivateDirExists`),
     // which StrictMode reports as a DiskReadViolation. Constructing this repository happens on

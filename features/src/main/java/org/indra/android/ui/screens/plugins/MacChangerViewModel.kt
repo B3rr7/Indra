@@ -7,11 +7,17 @@ import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.last
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+import kotlin.runCatching
 import org.indra.android.core.system.MacAddress
 import org.indra.android.core.system.SmartToolBox
 import org.indra.android.core.system.ToolHandle
@@ -19,9 +25,14 @@ import org.indra.android.core.system.isStreaming
 import org.indra.android.core.system.streamedLine
 import javax.inject.Inject
 
+/** `ip link show` returns immediately; a dead daemon must not hang the MAC read. */
+private const val IP_LINK_TIMEOUT_MS = 5_000L
+
 data class MacChangerUiState(
     val iface: String = "wlan0",
     val newMac: String = "",
+    val currentMac: String = "",        // Current MAC of the interface
+    val originalMac: String = "",       // Original MAC before first change
     val isRunning: Boolean = false,
     val output: List<String> = emptyList(),
     val error: String? = null,
@@ -44,6 +55,7 @@ class MacChangerViewModel
     ) : ViewModel() {
         private val prefs = context.getSharedPreferences("mac_profiles", Context.MODE_PRIVATE)
         private val gson = Gson()
+        private val fetchMutex = Mutex()
 
         private val _uiState = MutableStateFlow(MacChangerUiState())
         val uiState: StateFlow<MacChangerUiState> = _uiState.asStateFlow()
@@ -71,6 +83,56 @@ class MacChangerViewModel
             prefs.edit().putString("profiles", gson.toJson(list)).apply()
         }
 
+        /** Reads the current MAC address of [iface] via `ip link show`. */
+        private suspend fun fetchCurrentMac(iface: String): String? =
+            withContext(Dispatchers.IO) {
+                var foundMac: String? = null
+                fetchMutex.withLock {
+                    val result = runCatching {
+                        toolBox.command("ip link", "ip link show ${SmartToolBox.shellQuote(iface)}", IP_LINK_TIMEOUT_MS).last()
+                    }.getOrNull()
+                    if (result != null && result.success) {
+                        // Parse: "link/ether aa:bb:cc:dd:ee:ff brd ff:ff:ff:ff:ff:ff"
+                        val lines = result.rawOutput.lineSequence()
+                        for (line in lines) {
+                            val trimmed = line.trim()
+                            if (trimmed.startsWith("link/ether")) {
+                                val parts = trimmed.split("\\s+".toRegex())
+                                if (parts.size >= 2 && MacAddress.isValid(parts[1])) {
+                                    foundMac = parts[1].lowercase()
+                                }
+                            }
+                        }
+                    }
+                }
+                foundMac
+            }
+
+        /** Called when user changes interface — fetches current MAC and sets as original if first time. */
+        fun updateIface(v: String) {
+            _uiState.value = _uiState.value.copy(iface = v)
+            viewModelScope.launch {
+                val trimmed = v.trim()
+                if (trimmed.isNotEmpty()) {
+                    val mac = fetchCurrentMac(trimmed)
+                    if (mac != null) {
+                        _uiState.value = _uiState.value.copy(
+                            currentMac = mac,
+                            originalMac = if (_uiState.value.originalMac.isEmpty()) mac else _uiState.value.originalMac,
+                        )
+                    }
+                }
+            }
+        }
+
+        fun updateMac(v: String) {
+            _uiState.value = _uiState.value.copy(newMac = v)
+        }
+
+        fun randomize() {
+            _uiState.value = _uiState.value.copy(newMac = MacAddress.random())
+        }
+
         fun updateProfileName(v: String) {
             _uiState.value = _uiState.value.copy(profileName = v)
         }
@@ -94,22 +156,7 @@ class MacChangerViewModel
             _uiState.value = _uiState.value.copy(profiles = list)
         }
 
-        fun updateIface(v: String) {
-            _uiState.value = _uiState.value.copy(iface = v)
-        }
-
-        fun updateMac(v: String) {
-            _uiState.value = _uiState.value.copy(newMac = v)
-        }
-
-        fun randomize() {
-            // Locally administered, unicast, six octets — MacAddress.random(). One
-            // constant used to mean both the octet range (256) and the octet count (6),
-            // so "Randomize" filled the field with 256 colon separated pairs; splicing
-            // "2" over the first ':' used to produce "aa2bb:cc:dd:ee:ff".
-            _uiState.value = _uiState.value.copy(newMac = MacAddress.random())
-        }
-
+        /** Applies the new MAC; saves original if this is the first change. */
         fun apply() {
             if (job?.isActive == true) return
             val st = _uiState.value
@@ -123,10 +170,56 @@ class MacChangerViewModel
                 _uiState.value = st.copy(error = "MAC must look like aa:bb:cc:dd:ee:ff")
                 return
             }
-            // The script runs through /system/bin/sh as root, so both fields are quoted.
+            // Save current as original if we haven't yet
+            val original = if (st.originalMac.isEmpty()) st.currentMac else st.originalMac
             val qu = SmartToolBox.shellQuote(iface)
             val cmd =
                 "ip link set $qu down && ip link set $qu address ${SmartToolBox.shellQuote(mac)} && " +
+                    "ip link set $qu up"
+            job =
+                viewModelScope.launch {
+                    val gate = toolBox.requireTool("shell")
+                    if (gate !is ToolHandle.Ready) {
+                        _uiState.value = _uiState.value.copy(error = gate.message)
+                        return@launch
+                    }
+                    _uiState.value = _uiState.value.copy(
+                        isRunning = true,
+                        error = null,
+                        output = emptyList(),
+                        originalMac = original, // persist original
+                    )
+                    toolBox.shell(cmd).collect { result ->
+                        if (result.pid > 0) pid = result.pid
+                        result.streamedLine?.let { line ->
+                            _uiState.value = _uiState.value.copy(output = _uiState.value.output + line)
+                        }
+                        if (!result.isStreaming) {
+                            _uiState.value =
+                                _uiState.value.copy(
+                                    isRunning = false,
+                                    error = if (result.success) null else result.error,
+                                    currentMac = if (result.success) mac else st.currentMac,
+                                )
+                            pid = -1
+                        }
+                    }
+                }
+        }
+
+        /** Restores the original MAC address. */
+        fun restoreOriginal() {
+            val st = _uiState.value
+            val iface = st.iface.trim()
+            val original = st.originalMac.trim()
+            if (iface.isEmpty() || original.isEmpty() || !MacAddress.isValid(original)) {
+                _uiState.value = st.copy(error = "No original MAC saved or invalid")
+                return
+            }
+            if (job?.isActive == true) return
+            val qu = SmartToolBox.shellQuote(iface)
+            val cmd =
+                "ip link set $qu down && ip link set $qu address ${SmartToolBox.shellQuote(original)} && " +
                     "ip link set $qu up"
             job =
                 viewModelScope.launch {
@@ -146,6 +239,8 @@ class MacChangerViewModel
                                 _uiState.value.copy(
                                     isRunning = false,
                                     error = if (result.success) null else result.error,
+                                    currentMac = if (result.success) original else st.currentMac,
+                                    newMac = if (result.success) original else st.newMac,
                                 )
                             pid = -1
                         }

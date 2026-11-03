@@ -173,7 +173,7 @@ private fun WorkspaceDirRow(
 }
 
 /** Opens the system "All files access" page for this app (Android 11+; no-op below). */
-private fun openAllFilesAccessSettings(context: android.content.Context) {
+internal fun openAllFilesAccessSettings(context: android.content.Context) {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
     runCatching {
         context.startActivity(

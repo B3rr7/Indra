@@ -56,6 +56,8 @@ class SmartToolBoxRunner
             templates: String,
         ): Flow<ToolResult> = box.nuclei(target, templates)
 
+        override suspend fun nucleiUpdateTemplates(): Flow<ToolResult> = box.nucleiUpdateTemplates()
+
         override suspend fun crackHandshake(
             capturePath: String,
             wordlistPath: String?,

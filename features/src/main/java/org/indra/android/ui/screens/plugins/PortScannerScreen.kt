@@ -7,7 +7,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.indra.android.ui.components.EmptyState
 import org.indra.android.ui.components.FormError
@@ -114,7 +114,7 @@ fun PortScannerScreen(
             } else if (uiState.finished && uiState.error == null) {
                 EmptyState(
                     text = "No open ports in ${uiState.portRange}",
-                    hint = "nmap finished and reported no open ports on ${uiState.target}.",
+                    hint = "The scan finished and reported no open ports on ${uiState.target}.",
                 )
             }
 

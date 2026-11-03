@@ -53,7 +53,6 @@ class PluginManager
                     description = "Man-in-the-middle attacks",
                     targetTypes = setOf("endpoint", "network"),
                     requires = "arpspoof",
-                    requiresRoot = true,
                 ),
             )
             registerPlugin(
@@ -63,7 +62,6 @@ class PluginManager
                     description = "Discover hosts on the local network",
                     targetTypes = setOf("network"),
                     requires = "network-radar",
-                    requiresRoot = true,
                 ),
             )
             registerPlugin(
@@ -73,7 +71,6 @@ class PluginManager
                     description = "Capture live traffic with tcpdump",
                     targetTypes = setOf("network"),
                     requires = "tcpdump",
-                    requiresRoot = true,
                 ),
             )
             registerPlugin(
@@ -84,6 +81,17 @@ class PluginManager
                     targetTypes = setOf("endpoint"),
                     // The screen runs `chroot <msfDir> msfconsole` through the shell
                     // handler; the chroot presence itself is gated on isMsfInstalled().
+                    requires = "shell",
+                ),
+            )
+            registerPlugin(
+                Plugin(
+                    id = "msf",
+                    name = "Metasploit",
+                    description = "Metasploit console — search modules and run them",
+                    targetTypes = setOf("endpoint", "network"),
+                    // Runs `chroot <msfDir> msfconsole -q -x …` through the shell handler; the
+                    // chroot itself is gated on CoreManager.isMsfInstalled() (ARTIFACT_MISSING).
                     requires = "shell",
                 ),
             )
@@ -103,7 +111,6 @@ class PluginManager
                     description = "Forge TCP/UDP packets",
                     targetTypes = setOf("endpoint"),
                     requires = "hping3",
-                    requiresRoot = true,
                 ),
             )
             registerPlugin(
@@ -122,7 +129,6 @@ class PluginManager
                     description = "WiFi network auditing and cracking",
                     targetTypes = setOf("network"),
                     requires = "aircrack-ng",
-                    requiresRoot = true,
                 ),
             )
             registerPlugin(
@@ -302,8 +308,7 @@ class PluginManager
                     name = "Session Hijacking",
                     description = "Extract HTTP cookies from captured traffic",
                     targetTypes = setOf("network", "endpoint"),
-                    requires = "shell",
-                    requiresRoot = true
+                    requires = "shell"
                 ),
             )
             registerPlugin(
@@ -321,8 +326,7 @@ class PluginManager
                     name = "DNS Spoofing",
                     description = "Spoof DNS responses",
                     targetTypes = setOf("network"),
-                    requires = "shell",
-                    requiresRoot = true
+                    requires = "shell"
                 ),
             )
             registerPlugin(
@@ -331,8 +335,7 @@ class PluginManager
                     name = "One-Tap MITM",
                     description = "Automated ARP spoof + DNS redirect",
                     targetTypes = setOf("network", "endpoint"),
-                    requires = "arpspoof",
-                    requiresRoot = true
+                    requires = "arpspoof"
                 ),
             )
             registerPlugin(
@@ -363,6 +366,16 @@ class PluginManager
 
         fun getAllPlugins(): List<Plugin> = plugins.values.toList()
 
+        /**
+         * Every registered plugin id, for consistency checks.
+         *
+         * `Rootless.SUPPORTED_PLUGINS` names ids that must exist here: a renamed or dropped
+         * plugin would silently fall out of the rootless subset (the card would then say
+         * "needs root" for something that works), and nothing else in the tree compares the two
+         * lists. `RootlessTest` does, through this.
+         */
+        fun allPluginIds(): Set<String> = plugins.keys.toSet()
+
         fun getPluginsForTarget(targetType: String): List<Plugin> = plugins.values.filter { it.targetTypes.contains(targetType) }
     }
 
@@ -373,6 +386,4 @@ data class Plugin(
     val targetTypes: Set<String>,
     /** SmartToolBox entry the plugin needs; unavailable tools disable the card. */
     val requires: String = "nmap",
-    /** Whether this plugin needs raw sockets / root (disabled in rootless mode). */
-    val requiresRoot: Boolean = false,
 )

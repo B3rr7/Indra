@@ -1,6 +1,7 @@
 plugins {
     id 'com.android.library'
     id 'org.jetbrains.kotlin.android'
+    id 'org.jetbrains.kotlin.plugin.compose'
     id 'com.google.dagger.hilt.android'
     id 'kotlin-kapt'
     id 'io.gitlab.arturbosch.detekt'
@@ -8,11 +9,11 @@ plugins {
 
 android {
     namespace 'org.indra.android.ui'
-    compileSdk 35
+    compileSdk 36
 
     defaultConfig {
         minSdk 26
-        targetSdk 35
+        targetSdk 36
     }
 
     compileOptions {
@@ -26,22 +27,23 @@ android {
     buildFeatures {
         compose true
     }
-    composeOptions {
-        kotlinCompilerExtensionVersion = '1.5.14'
-    }
 }
 
 dependencies {
     implementation project(':core')
-    def composeBom = platform('androidx.compose:compose-bom:2024.02.02')
+    def composeBom = platform('androidx.compose:compose-bom:2025.10.01')
     implementation composeBom
-    implementation 'androidx.core:core-ktx:1.12.0'
+    implementation 'androidx.core:core-ktx:1.17.0'
     implementation 'androidx.compose.ui:ui'
     implementation 'androidx.compose.ui:ui-graphics'
     implementation 'androidx.compose.material3:material3'
     implementation 'androidx.compose.material:material-icons-extended'
-    implementation 'com.google.dagger:hilt-android:2.51.1'
-    kapt 'com.google.dagger:hilt-android-compiler:2.51.1'
+    implementation 'com.google.dagger:hilt-android:2.57.2'
+    kapt 'com.google.dagger:hilt-android-compiler:2.57.2'
+
+    // The Flat 2.0 surface policy is constants, so it is testable without a device — but the
+    // module had no test source set at all until this test needed one.
+    testImplementation 'junit:junit:4.13.2'
 }
 
 detekt {

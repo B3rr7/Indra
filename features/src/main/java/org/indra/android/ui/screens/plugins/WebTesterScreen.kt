@@ -5,9 +5,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.indra.android.core.system.Nuclei
 import org.indra.android.core.system.NucleiFinding
@@ -62,19 +63,28 @@ fun WebTesterScreen(
                 onSelect = { viewModel.setTestType(it) },
             )
 
-            Button(
-                onClick = { viewModel.test() },
-                enabled = !uiState.isLoading && uiState.target.isNotBlank(),
+            Row(
                 modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                if (uiState.isLoading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(20.dp),
-                        color = MaterialTheme.colorScheme.onPrimary,
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
+                Button(
+                    onClick = { viewModel.test() },
+                    enabled = !uiState.isLoading && uiState.target.isNotBlank(),
+                    modifier = Modifier.weight(1f),
+                ) {
+                    if (uiState.isLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            color = MaterialTheme.colorScheme.onPrimary,
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                    }
+                    Text(if (uiState.isLoading) "Testing..." else "Run Test")
                 }
-                Text(if (uiState.isLoading) "Testing..." else "Run Test")
+                if (uiState.isLoading) {
+                    OutlinedButton(onClick = { viewModel.stop() }) { Text("Stop") }
+                }
             }
 
             WebTestVerdict(uiState)
@@ -162,7 +172,8 @@ data class WebTesterUiState(
     val transcript: String = "",
     val finished: Boolean = false,
     val error: String? = null,
-    val nucleiInstalled: Boolean = false,
+    /** Null until the off-Main probe answers, so "not installed" is never shown speculatively. */
+    val nucleiInstalled: Boolean? = null,
     val isInstalling: Boolean = false,
     val installProgress: Float = 0f,
     val suggestions: List<String> = emptyList(),

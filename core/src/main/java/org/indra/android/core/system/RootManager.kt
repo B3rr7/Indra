@@ -248,17 +248,28 @@ class RootManager
         }
 
         /**
-         * Whether the app can run the native daemon as the app user (no root).
-         * The daemon and bundled tools are native Android binaries, so they can
-         * execute without root for TCP-connect scans, hydra, nuclei, etc.
+         * Whether Indra is usable without root at all — **not** whether the daemon can run.
+         *
+         * `indrad` in app storage cannot be executed on Android 10+ (SELinux denies
+         * `untrusted_app` execute on `app_data_file`; see `DaemonStartFailure`), so rootless
+         * mode never starts the daemon. It runs the platform-API plugins listed in
+         * `Rootless` instead, which is what this answers.
+         *
+         * Not called: `PluginAvailability` asks `Rootless.supports(plugin.id)` directly, which
+         * is the per-plugin question the cards actually need. Kept as the device-level answer.
          */
         fun canRunRootless(): Boolean = true
 
         /**
          * Whether raw sockets / CAP_NET_RAW are available. Without these, SYN scans,
-         * packet capture, MITM and monitor mode cannot work even in rootless mode.
+         * packet capture, MITM and monitor mode cannot work at all — rootless mode does not
+         * grant them either, which is why the rootless subset is platform APIs only.
          * Root can be granted *and* stripped of the capability (Magisk 30.1+), which is
          * why the probe reads the mask instead of assuming "rooted means raw sockets".
+         *
+         * Not called yet: the capability warning reaches the user through
+         * `RootAccess.guidance` (`hasNetRaw == false`), which the Settings screen and the
+         * startup snackbar already render. Kept because it is the same probe in boolean form.
          */
         fun hasRawSocketCapability(): Boolean {
             val status = detectRoot()

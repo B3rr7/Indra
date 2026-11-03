@@ -15,6 +15,7 @@ import org.indra.android.core.engine.ChrootEngine
 import org.tukaani.xz.XZInputStream
 import java.io.File
 import java.io.InputStream
+import java.nio.file.Files
 import java.util.zip.GZIPInputStream
 import java.util.zip.ZipInputStream
 import javax.inject.Inject
@@ -180,9 +181,11 @@ class CoreManager
                         tmp.delete()
                     }
 
-                    // Honest post-check instead of a blanket chmod: the extractor restored the
-                    // archive's own modes, so a non-executable busybox means extraction lost
-                    // them and every later `chroot` would fail with a confusing message.
+                    // The Alpine minirootfs tarball has 600 on some binaries (busybox, ld-musl*).
+                    // TarExtract preserves the archive's modes, so we must fix them post-extraction.
+                    fixAlpineModes(dir)
+
+                    // Honest post-check: the extractor + fixup should leave busybox executable.
                     val busybox = File(dir, "bin/busybox")
                     if (!busybox.canExecute()) {
                         error(
@@ -551,9 +554,21 @@ class CoreManager
 
         /**
          * Starts the native daemon as root and authenticates the JNI client against it.
+         *
+         * Rootless mode never gets here: there is no daemon in that mode (see [Rootless]), and
+         * attempting the start was a guaranteed exit 126 because SELinux denies `untrusted_app`
+         * execute on `app_data_file` on Android 10+. That failure was reachable from three
+         * places — `MainActivity` on every launch, the Settings lifecycle button, and the OTA
+         * installer — so the refusal lives here, at the one choke point, instead of in each
+         * caller. The message names the mode rather than a shell error.
          */
         suspend fun startDaemon(): Result<Unit> =
             withContext(Dispatchers.IO) {
+                if (settings.rootlessMode) {
+                    return@withContext Result.failure(
+                        IllegalStateException(DaemonStartFailure.ROOTLESS_REFUSAL),
+                    )
+                }
                 daemonMutex.withLock {
                     runCatching {
                         if (!system.isCoreInstalled()) error("Core is not installed")
@@ -678,9 +693,15 @@ class CoreManager
         /**
          * Attaches to an already-running daemon, starting it when the core is installed
          * but the socket is missing. Safe to call on app start.
+         *
+         * Rootless mode returns immediately: there is no daemon to attach to or start there, and
+         * `MainActivity` calls this on every launch, so without the guard every rootless start
+         * logged a doomed exec (exit 126) and the app looked broken on a device where it was
+         * working exactly as configured.
          */
         suspend fun ensureDaemon(): Boolean =
             withContext(Dispatchers.IO) {
+                if (settings.rootlessMode) return@withContext false
                 if (!system.isCoreInstalled()) return@withContext false
                 if (File(socketPath).exists()) {
                     val connected =
@@ -837,6 +858,25 @@ class CoreManager
             File(dir, "tools")
                 .walkTopDown()
                 .filter { it.isFile }
+                .forEach { it.setExecutable(true, false) }
+        }
+
+        /**
+         * Fixes Alpine minirootfs mode bits: the tarball ships some binaries as 600 (rw-------),
+         * notably busybox and the musl dynamic linker. We must make them executable post-extraction.
+         */
+        private fun fixAlpineModes(dir: File) {
+            val binDirs = listOf("bin", "sbin", "usr/bin", "usr/sbin")
+            binDirs.forEach { binDir ->
+                File(dir, binDir)
+                    .walkTopDown()
+                    .filter { it.isFile && !Files.isSymbolicLink(it.toPath()) }
+                    .forEach { it.setExecutable(true, false) }
+            }
+            // The musl dynamic linker lives in lib/ and must be executable for the dynamic loader.
+            File(dir, "lib")
+                .walkTopDown()
+                .filter { it.isFile && it.name.startsWith("ld-musl") && !Files.isSymbolicLink(it.toPath()) }
                 .forEach { it.setExecutable(true, false) }
         }
 

@@ -99,7 +99,11 @@ fun LiveOutputCard(
                             .fillMaxWidth()
                             .padding(CONSOLE_PADDING.dp),
                 ) {
-                    items(lines) { line ->
+                    items(
+                        items = lines,
+                        key = { it },
+                        contentType = { "console-line" },
+                    ) { line ->
                         Text(
                             // Tools that draw progress bars emit ANSI cursor control
                             // (`.[23C00 00 …`), and a console is not a terminal: aircrack-ng

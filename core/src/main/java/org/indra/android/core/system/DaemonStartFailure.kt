@@ -18,6 +18,18 @@ object DaemonStartFailure {
     private const val EXEC_DENIED_TEXT = "Permission denied"
 
     /**
+     * The refusal shown when a start is attempted in rootless mode.
+     *
+     * Rootless mode does not attempt the start at all any more (there is no daemon in that
+     * mode), so this is not a diagnosis of a failed exec — it is the reason none was tried.
+     * It lives here, next to the exec-denial copy it replaced, so both rootless messages are in
+     * one place and neither drifts back into describing a daemon that runs as the app user.
+     */
+    const val ROOTLESS_REFUSAL: String =
+        "Rootless mode is on, so the daemon is not started: the bundled tools need root. " +
+            "Turn rootless mode off in Settings and grant Indra root access to use them."
+
+    /**
      * The message to show for a failed start.
      *
      * A rootless start that fails with an exec denial is not a generic failure — no retry will

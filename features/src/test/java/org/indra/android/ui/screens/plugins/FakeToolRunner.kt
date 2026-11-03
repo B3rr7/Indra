@@ -101,6 +101,8 @@ class FakeToolRunner : ToolRunner {
         templates: String,
     ): Flow<ToolResult> = record("nuclei", "$target $templates")
 
+    override suspend fun nucleiUpdateTemplates(): Flow<ToolResult> = record("nuclei", "-update-templates")
+
     override suspend fun crackHandshake(
         capturePath: String,
         wordlistPath: String?,

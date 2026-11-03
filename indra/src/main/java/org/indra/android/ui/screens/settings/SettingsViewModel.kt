@@ -1,5 +1,7 @@
 package org.indra.android.ui.screens.settings
 
+import android.os.SystemClock
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -20,6 +22,9 @@ import org.indra.android.core.system.NativeCoreState
 import org.indra.android.core.system.OtaUpdateManager
 import org.indra.android.core.system.RootAccess
 import org.indra.android.core.system.RootManager
+import org.indra.android.core.system.wallpaper.WallpaperDim
+import org.indra.android.core.system.wallpaper.WallpaperState
+import org.indra.android.core.system.wallpaper.WallpaperStore
 import org.indra.android.core.system.SettingsRepository
 import org.indra.android.core.system.SmartToolBox
 import javax.inject.Inject
@@ -57,6 +62,12 @@ data class SettingsUiState(
     val alpineBusy: Boolean = false,
     val alpineMessage: String? = null,
     val debugErrorLogging: Boolean = false,
+    /** The user's app background, or none. */
+    val wallpaper: WallpaperState = WallpaperState(),
+    /** A failed wallpaper pick, shown under the card. */
+    val wallpaperError: String? = null,
+    /** True while an image is being copied and re-encoded. */
+    val wallpaperBusy: Boolean = false,
     val crashLogCount: Int = 0,
     val debugLogSizeBytes: Long = 0,
     val allFilesAccess: Boolean = false,
@@ -87,6 +98,15 @@ enum class PortField(
     MSF_RPC("MSF RPC Port"),
 }
 
+/**
+ * How long a root probe stays usable before this screen may run `su` again.
+ *
+ * Long enough that switching tabs repeatedly does not re-exec `su` (which the root manager
+ * reports as a request), short enough that a grant made in the manager app shows up when the
+ * user comes back.
+ */
+private const val ROOT_PROBE_TTL_MS = 15_000L
+
 @Suppress("LongParameterList") // Hilt-injected settings hub; splitting it is a separate refactor.
 @HiltViewModel
 class SettingsViewModel
@@ -100,6 +120,7 @@ class SettingsViewModel
         private val crashReporter: CrashReporter,
         private val appUpdateManager: AppUpdateManager,
         private val rootManager: RootManager,
+        private val wallpaperStore: WallpaperStore,
     ) : ViewModel() {
         private val _uiState = MutableStateFlow(SettingsUiState())
         val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
@@ -111,11 +132,25 @@ class SettingsViewModel
         @Volatile
         private var lastRoot: RootManager.RootStatus? = null
 
+        /** `SystemClock.elapsedRealtime()` of [lastRoot]; 0 = never probed. */
+        @Volatile
+        private var lastRootProbeAt: Long = 0L
+
         init {
-            loadSettings()
+            loadSettings(probeRoot = true)
         }
 
-        fun loadSettings() {
+        /**
+         * Re-reads settings.
+         *
+         * [probeRoot] runs the `su` probe (`RootManager.detectRoot()`); without it the cached
+         * status is reused unless it is older than [ROOT_PROBE_TTL_MS]. This screen reloads on
+         * **every resume** ([ReloadOnResume]) and after every toggle, and each probe is a real
+         * `su` exec — which the root manager reports as a fresh request, so an unapproved install
+         * spammed a Magisk notification on every tab switch. Root state changes only when the user
+         * edits it in the manager app, and the short TTL still picks that up. [refresh] forces it.
+         */
+        fun loadSettings(probeRoot: Boolean = false) {
             // Everything probed here blocks: `su`-based root detection (exec + waitFor),
             // workspace tree walks, log-file stats, and 17 handler probes (JNI) when the
             // daemon is down. ViewModelScope launches on Main — this screen used to ANR
@@ -126,8 +161,7 @@ class SettingsViewModel
                     // One probe, read three times: detectRoot() shells out to `su` (up to a
                     // 15 s bound) and used to be called twice per load — once for the flag
                     // and once more inside getRootTypeDisplayName().
-                    val root = rootManager.detectRoot()
-                    lastRoot = root
+                    val root = rootStatus(probeRoot)
                     // One probe pair feeds three fields: the version text, the hero's boolean and
                     // the single-button state the Native Core card draws. Reading them twice was
                     // how the card could say "Running" while the hero said "stopped".
@@ -142,7 +176,12 @@ class SettingsViewModel
                             version = "2.0.0",
                             coreVersion = coreVersion ?: "Not installed",
                             daemonRunning = coreRunning,
-                            coreState = NativeCoreState.of(installed = coreVersion != null, running = coreRunning),
+                            coreState =
+                                NativeCoreState.of(
+                                    installed = coreVersion != null,
+                                    running = coreRunning,
+                                    rootless = settings.rootlessMode,
+                                ),
                             isRooted = root.isRooted,
                             rootType = rootManager.getRootTypeDisplayName(root),
                             rootGuidance = rootManager.guidance(root),
@@ -153,6 +192,7 @@ class SettingsViewModel
                             wakeLockEnabled = settings.wakeLockEnabled,
                             alpineInstalled = coreManager.isAlpineInstalled(),
                             debugErrorLogging = settings.debugErrorLogging,
+                            wallpaper = wallpaperStore.state(),
                             crashLogCount = crashReporter.getCrashFiles().size,
                             debugLogSizeBytes = crashReporter.getLogFile()?.length() ?: 0,
                             allFilesAccess = IndraWorkspace.hasAllFilesAccess(),
@@ -241,6 +281,9 @@ class SettingsViewModel
          */
         fun onCoreAction() {
             when (_uiState.value.coreState.action) {
+                // Rootless: there is no step to take, and the card draws no button for it.
+                // Reaching here means a stale tap landed after the mode changed.
+                null -> Unit
                 NativeCoreAction.INSTALL -> installCore()
                 NativeCoreAction.START -> startDaemon()
                 NativeCoreAction.STOP -> stopDaemon()
@@ -354,7 +397,19 @@ class SettingsViewModel
         }
 
         fun refresh() {
-            loadSettings()
+            loadSettings(probeRoot = true)
+        }
+
+        /** Probe now, or reuse the last one while it is younger than [ROOT_PROBE_TTL_MS]. */
+        private suspend fun rootStatus(force: Boolean): RootManager.RootStatus {
+            val cached = lastRoot
+            val age = SystemClock.elapsedRealtime() - lastRootProbeAt
+            if (!force && cached != null && age in 0 until ROOT_PROBE_TTL_MS) return cached
+
+            val fresh = rootManager.detectRoot()
+            lastRoot = fresh
+            lastRootProbeAt = SystemClock.elapsedRealtime()
+            return fresh
         }
 
         /**
@@ -381,6 +436,46 @@ class SettingsViewModel
             settings.debugErrorLogging = enabled
             Logger.setFileLogging(enabled)
             _uiState.value = _uiState.value.copy(debugErrorLogging = enabled)
+        }
+
+        /**
+         * Copies the picked image in and makes it the app background.
+         *
+         * The URI comes from the system photo picker, which grants read access to that one file
+         * only — no storage permission needed. Every failure is reported under the card and leaves
+         * the previous wallpaper alone.
+         */
+        fun setWallpaper(uri: Uri) {
+            if (_uiState.value.wallpaperBusy) return
+            _uiState.value = _uiState.value.copy(wallpaperBusy = true, wallpaperError = null)
+            viewModelScope.launch {
+                val result = wallpaperStore.set(uri)
+                _uiState.value =
+                    result.fold(
+                        onSuccess = { state ->
+                            _uiState.value.copy(wallpaper = state, wallpaperBusy = false, wallpaperError = null)
+                        },
+                        onFailure = { error ->
+                            _uiState.value.copy(
+                                wallpaperBusy = false,
+                                wallpaperError = error.message ?: "Could not set that image.",
+                            )
+                        },
+                    )
+            }
+        }
+
+        /** Removes the background, back to the plain theme colour. */
+        fun clearWallpaper() {
+            viewModelScope.launch {
+                val state = wallpaperStore.clear()
+                _uiState.value = _uiState.value.copy(wallpaper = state, wallpaperError = null)
+            }
+        }
+
+        /** Changes the scrim weight without touching the stored image. */
+        fun setWallpaperDim(dim: WallpaperDim) {
+            _uiState.value = _uiState.value.copy(wallpaper = wallpaperStore.setDim(dim))
         }
 
         fun checkAppUpdate() {
@@ -515,7 +610,13 @@ class SettingsViewModel
             loadSettings()
             _uiState.value =
                 _uiState.value.copy(
-                    coreMessage = if (enabled) "Rootless mode enabled (restart daemon)" else "Root mode enabled",
+                    coreMessage =
+                        if (enabled) {
+                            "Rootless mode enabled — port scan, Wi-Fi scan, BLE and password audit " +
+                                "work without root"
+                        } else {
+                            "Root mode enabled — start the daemon for the bundled tools"
+                        },
                 )
         }
 
@@ -548,7 +649,10 @@ class SettingsViewModel
                     otaManager
                         .installLatest(manifest)
                         .onSuccess {
-                            _uiState.value = _uiState.value.copy(otaMessage = "Updates installed")
+                            // The update is applied, so the single button must fall back to
+                            // "Check for updates" instead of offering the same install again.
+                            _uiState.value =
+                                _uiState.value.copy(otaUpdateAvailable = false, otaMessage = "Updates installed")
                         }.onFailure { error ->
                             _uiState.value =
                                 _uiState.value.copy(
@@ -582,7 +686,12 @@ class SettingsViewModel
                         _uiState.value.copy(
                             coreVersion = coreVersion ?: "Not installed",
                             daemonRunning = running,
-                            coreState = NativeCoreState.of(installed = coreVersion != null, running = running),
+                            coreState =
+                                NativeCoreState.of(
+                                    installed = coreVersion != null,
+                                    running = running,
+                                    rootless = settings.rootlessMode,
+                                ),
                             coreBusyAction = null,
                             toolStatus = toolBox.getAllTools().map { ToolStatus(it.name, it.isAvailable()) },
                         )
