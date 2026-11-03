@@ -92,7 +92,12 @@ fun InspectorScreen(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    items(uiState.services) { service ->
+                    items(
+                        items = uiState.services,
+                        // Services are already deduplicated by port in the ViewModel.
+                        key = { it.port },
+                        contentType = { "service" },
+                    ) { service ->
                         Card(modifier = Modifier.fillMaxWidth()) {
                             Row(
                                 modifier =

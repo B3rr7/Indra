@@ -59,13 +59,17 @@ fun ToolsScreen(
                     onQueryChange = viewModel::setQuery,
                 )
                 val query = uiState.query.trim()
+                // Filtering 36 plugin records walks two strings each; without keys it re-runs on
+                // every recomposition (including the per-keystroke query updates).
                 val visiblePlugins =
-                    if (query.isEmpty()) {
-                        uiState.plugins
-                    } else {
-                        uiState.plugins.filter { plugin ->
-                            plugin.name.contains(query, ignoreCase = true) ||
-                                plugin.description.contains(query, ignoreCase = true)
+                    remember(uiState.plugins, query) {
+                        if (query.isEmpty()) {
+                            uiState.plugins
+                        } else {
+                            uiState.plugins.filter { plugin ->
+                                plugin.name.contains(query, ignoreCase = true) ||
+                                    plugin.description.contains(query, ignoreCase = true)
+                            }
                         }
                     }
                 ToolsList(
@@ -129,7 +133,11 @@ private fun ToolsList(
                 )
             }
         }
-        items(plugins) { plugin ->
+        items(
+            items = plugins,
+            key = { it.id },
+            contentType = { "tool-card" },
+        ) { plugin ->
             ModernToolCard(
                 plugin = plugin,
                 onClick = { onNavigateToPlugin(plugin.id) },

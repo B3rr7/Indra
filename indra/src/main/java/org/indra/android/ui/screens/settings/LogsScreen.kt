@@ -8,7 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
@@ -202,7 +202,14 @@ private fun ColumnScope.LogsBody(uiState: LogsUiState) {
                 .weight(1f),
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        items(uiState.lines) { line ->
+        itemsIndexed(
+            items = uiState.lines,
+            // A log line is content with no identity: two lines can be byte-identical, and a
+            // content key would silently collapse them into one row. The file is append-only,
+            // so the position is the stable identity.
+            key = { index, _ -> index },
+            contentType = { _, _ -> "log-line" },
+        ) { _, line ->
             Text(
                 text = line,
                 style = MaterialTheme.typography.bodySmall,

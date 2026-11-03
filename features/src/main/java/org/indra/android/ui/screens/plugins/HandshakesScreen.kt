@@ -132,7 +132,12 @@ fun HandshakesScreen(
                 )
             } else {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(uiState.files) { f ->
+                    items(
+                        items = uiState.files,
+                        // A file is identified by its path: renaming keeps the key stable.
+                        key = { it.path },
+                        contentType = { "capture-file" },
+                    ) { f ->
                         Card(modifier = Modifier.fillMaxWidth()) {
                             Row(
                                 modifier = Modifier.padding(12.dp),

@@ -65,33 +65,7 @@ fun TracerouteScreen(
                     text = "Route (${uiState.hops.size} hops)",
                     style = MaterialTheme.typography.titleMedium,
                 )
-                LazyColumn(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    items(uiState.hops) { hop ->
-                        Card(modifier = Modifier.fillMaxWidth()) {
-                            Row(
-                                modifier =
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .padding(12.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                            ) {
-                                Text(
-                                    text = "${hop.number}. ${hop.address}",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontFamily = FontFamily.Monospace,
-                                )
-                                Text(
-                                    text = hop.time,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
-                    }
-                }
+                HopList(hops = uiState.hops, modifier = Modifier.weight(1f))
             } else if (uiState.finished && uiState.error == null) {
                 EmptyState(
                     text = "No hops reported",
@@ -100,6 +74,51 @@ fun TracerouteScreen(
             }
 
             uiState.error?.let { FormError(it) }
+        }
+    }
+}
+
+/**
+ * The route rows. Extracted from [TracerouteScreen] so the screen itself stays short.
+ *
+ * @param modifier supplied by the caller: it must bound the height, and `weight(1f)` is a
+ *   `ColumnScope` modifier that only the screen (which owns the column) can apply.
+ */
+@Composable
+private fun HopList(
+    hops: List<TracerouteHop>,
+    modifier: Modifier = Modifier,
+) {
+    LazyColumn(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        items(
+            items = hops,
+            // Hop numbers are unique: the ViewModel keys its map on them.
+            key = { it.number },
+            contentType = { "hop" },
+        ) { hop ->
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(
+                        text = "${hop.number}. ${hop.address}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontFamily = FontFamily.Monospace,
+                    )
+                    Text(
+                        text = hop.time,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
         }
     }
 }

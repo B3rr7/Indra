@@ -31,6 +31,13 @@ data class PortScannerUiState(
     val results: List<PortScanResult> = emptyList(),
     val liveLines: List<String> = emptyList(),
     /**
+     * Monotonic count of lines appended so far. [liveLines] is capped at
+     * [MAX_LIVE_LINES], so the console cannot key its auto-follow on `liveLines.size` — that
+     * stops changing once the cap is reached and the view freezes mid-scan (same reason
+     * WifiAudit/Mitm/PacketCapture carry their own counter).
+     */
+    val liveLineCount: Int = 0,
+    /**
      * True once a scan has finished. Without it "no results yet" and "scanned, found
      * nothing" look identical on screen — and the zero case used to be reported as a red
      * error, which reads like the scan failed.
@@ -111,6 +118,7 @@ class PortScannerViewModel
                             finished = false,
                             results = emptyList(),
                             liveLines = emptyList(),
+                            liveLineCount = 0,
                         )
 
                     toolBox.nmap(target, _uiState.value.portRange).collect { toolResult ->
@@ -163,6 +171,7 @@ class PortScannerViewModel
                     finished = false,
                     results = emptyList(),
                     liveLines = listOf("TCP connect scan (rootless) — ${ports.size} port(s) on $target"),
+                    liveLineCount = 1,
                 )
 
             val open =
@@ -176,6 +185,7 @@ class PortScannerViewModel
                             liveLines =
                                 (_uiState.value.liveLines + "Discovered open port $port/tcp")
                                     .takeLast(MAX_LIVE_LINES),
+                            liveLineCount = _uiState.value.liveLineCount + 1,
                         )
                 }
 
@@ -221,7 +231,19 @@ class PortScannerViewModel
                 } else {
                     (_uiState.value.liveLines + live).takeLast(MAX_LIVE_LINES)
                 }
-            _uiState.value = _uiState.value.copy(results = merged, liveLines = lines)
+            _uiState.value =
+                _uiState.value.copy(
+                    results = merged,
+                    liveLines = lines,
+                    // Advance only when a line was actually appended: this is the auto-follow
+                    // signal, and [liveLines] stops growing at MAX_LIVE_LINES.
+                    liveLineCount =
+                        if (live == null) {
+                            _uiState.value.liveLineCount
+                        } else {
+                            _uiState.value.liveLineCount + 1
+                        },
+                )
         }
 
         /** Final emission: authoritative result set, or the failure reason. */

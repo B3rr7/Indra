@@ -71,7 +71,12 @@ fun WhisperPairScreen(
                 modifier = Modifier.weight(1f).fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                items(uiState.devices) { d ->
+                items(
+                    items = uiState.devices,
+                    // A BLE address is the device's identity; it never changes during a scan.
+                    key = { it.address },
+                    contentType = { "ble-device" },
+                ) { d ->
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         onClick = { viewModel.selectDevice(d.address) },

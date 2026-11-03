@@ -32,7 +32,6 @@ fun GeoMacScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    Configuration.getInstance().load(context, context.getSharedPreferences("osmdroid", 0))
 
     Scaffold(
         topBar = {
@@ -57,6 +56,11 @@ fun GeoMacScreen(
             // Map
             AndroidView(
                 factory = { ctx ->
+                    // osmdroid's bootstrap reads a prefs file and rewrites its cache
+                    // configuration. It used to sit in the composition body, so it re-ran that
+                    // disk I/O on every keystroke in the fields below; the view factory runs
+                    // exactly once per map, still ahead of the MapView constructor that needs it.
+                    Configuration.getInstance().load(ctx, ctx.getSharedPreferences("osmdroid", 0))
                     MapView(ctx).apply {
                         setTileSource(TileSourceFactory.MAPNIK)
                         setMultiTouchControls(true)
@@ -94,7 +98,12 @@ fun GeoMacScreen(
 
             // List
             LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                items(uiState.entries) { e ->
+                items(
+                    items = uiState.entries,
+                    // A BSSID is one access point, so it is the row's identity.
+                    key = { it.bssid },
+                    contentType = { "geo-entry" },
+                ) { e ->
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
                             Column(modifier = Modifier.weight(1f)) {

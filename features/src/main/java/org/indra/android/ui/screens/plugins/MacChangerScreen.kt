@@ -123,7 +123,11 @@ fun MacChangerScreen(
             if (uiState.profiles.isNotEmpty()) {
                 Text("Saved profiles", style = MaterialTheme.typography.titleSmall)
                 LazyColumn(modifier = Modifier.height(120.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    items(uiState.profiles) { p ->
+                    items(
+                        items = uiState.profiles,
+                        key = { it.name },
+                        contentType = { "mac-profile" },
+                    ) { p ->
                         Card(modifier = Modifier.fillMaxWidth()) {
                             Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Column(modifier = Modifier.weight(1f)) {

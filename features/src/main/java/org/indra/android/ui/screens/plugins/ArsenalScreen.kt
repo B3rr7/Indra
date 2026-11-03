@@ -99,7 +99,11 @@ fun ArsenalScreen(
             )
 
             LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(uiState.templates) { t ->
+                items(
+                    items = uiState.templates,
+                    key = { it.id },
+                    contentType = { "arsenal-template" },
+                ) { t ->
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text(

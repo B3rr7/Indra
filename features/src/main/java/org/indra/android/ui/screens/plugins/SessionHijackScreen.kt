@@ -53,7 +53,12 @@ fun SessionHijackScreen(
                 modifier = Modifier.weight(1f).fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                items(uiState.sessions) { session ->
+                items(
+                    items = uiState.sessions,
+                    // The ViewModel deduplicates on the cookie, so it is the row's identity.
+                    key = { it.cookie },
+                    contentType = { "session" },
+                ) { session ->
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Column(modifier = Modifier.padding(12.dp)) {
                             Text("Host: ${session.host}", style = MaterialTheme.typography.bodyMedium)

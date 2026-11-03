@@ -77,7 +77,11 @@ fun GadgetProfilesScreen(
                 if (uiState.profiles.isNotEmpty()) {
                     Text("Saved profiles", style = MaterialTheme.typography.titleSmall)
                     LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        items(uiState.profiles) { p ->
+                        items(
+                            items = uiState.profiles,
+                            key = { it.name },
+                            contentType = { "gadget-profile" },
+                        ) { p ->
                             Card(modifier = Modifier.fillMaxWidth()) {
                                 Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
                                     Column(modifier = Modifier.weight(1f)) {

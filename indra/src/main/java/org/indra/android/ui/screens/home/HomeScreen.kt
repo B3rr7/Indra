@@ -172,7 +172,8 @@ fun HomeScreen(
             // Tools Grid — chunked rows keep cards at natural height inside the LazyColumn
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    uiState.plugins.chunked(2).forEach { rowPlugins ->
+                    val toolRows = remember(uiState.plugins) { uiState.plugins.chunked(2) }
+                    toolRows.forEach { rowPlugins ->
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             rowPlugins.forEach { plugin ->
                                 ModernToolCard(

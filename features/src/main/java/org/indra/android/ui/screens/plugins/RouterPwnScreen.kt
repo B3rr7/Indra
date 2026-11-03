@@ -81,7 +81,13 @@ fun RouterPwnScreen(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    items(uiState.vulnerabilities) { vuln ->
+                    items(
+                        items = uiState.vulnerabilities,
+                        // A finding is identified by what it is, so the key has to carry both
+                        // halves of the pair the row renders.
+                        key = { "${it.name}|${it.description}" },
+                        contentType = { "router-vulnerability" },
+                    ) { vuln ->
                         Card(modifier = Modifier.fillMaxWidth()) {
                             Column(modifier = Modifier.padding(16.dp)) {
                                 Text(

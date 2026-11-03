@@ -71,7 +71,7 @@ fun PortScannerScreen(
             if (uiState.liveLines.isNotEmpty()) {
                 LiveOutputCard(
                     lines = uiState.liveLines,
-                    appendCount = uiState.liveLines.size,
+                    appendCount = uiState.liveLineCount,
                     modifier = Modifier.fillMaxWidth().height(160.dp),
                     title = "Live output",
                     placeholder = "No output yet",
@@ -89,7 +89,11 @@ fun PortScannerScreen(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    items(uiState.results) { result ->
+                    items(
+                        items = uiState.results,
+                        key = { it.port },
+                        contentType = { "port-result" },
+                    ) { result ->
                         Card(modifier = Modifier.fillMaxWidth()) {
                             Row(
                                 modifier =
