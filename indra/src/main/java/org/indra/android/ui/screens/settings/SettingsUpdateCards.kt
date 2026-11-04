@@ -313,3 +313,98 @@ internal fun AppUpdateCard(
         }
     }
 }
+
+/**
+ * Runtime bundle channels (tools, msf) updated from signed GitHub Releases.
+ *
+ * Each channel shows its installed version, where it came from, and a per-channel
+ * "Install" button when a newer signed release is known. The shared button checks both
+ * channels at once — one releases API call serves them.
+ */
+@Composable
+internal fun BundleUpdateCard(
+    uiState: SettingsUiState,
+    viewModel: SettingsViewModel,
+) {
+    val anyBusy = uiState.bundles.any { it.busy }
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors =
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+            ),
+    ) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            CardHeader(
+                title = "Runtime bundles",
+                subtitle = "Signed tools and Metasploit bundles from GitHub Releases",
+                icon = Icons.Default.CloudDownload,
+                accent = SettingsPalette.Ota,
+            )
+            if (uiState.bundles.isEmpty()) {
+                CardStatus(message = "Reading installed bundles…")
+            } else {
+                uiState.bundles.forEach { bundle ->
+                    BundleRow(bundle, onInstall = { viewModel.installBundle(bundle.id) })
+                }
+            }
+            UpdateCardButton(
+                busy = anyBusy,
+                label = "Check for updates",
+                busyLabel = "Checking…",
+                onClick = { viewModel.checkBundles() },
+                accent = SettingsPalette.Ota,
+                icon = Icons.Default.CloudDownload,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+    }
+}
+
+@Composable
+private fun BundleRow(
+    bundle: BundleUiInfo,
+    onInstall: () -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                text = bundle.label,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.weight(1f),
+            )
+            val installed = bundle.installedVersion ?: "not installed"
+            Text(
+                text = if (bundle.source != null) "$installed · ${bundle.source}" else installed,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        CardStatus(message = bundle.status)
+        bundle.availableVersion?.let { version ->
+            Button(
+                onClick = onInstall,
+                enabled = !bundle.busy,
+                modifier = Modifier.height(40.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors =
+                    ButtonDefaults.buttonColors(
+                        containerColor = SettingsPalette.Ota,
+                        contentColor = contentColorOn(SettingsPalette.Ota),
+                    ),
+            ) {
+                Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(text = "Install $version", fontWeight = FontWeight.SemiBold, maxLines = 1)
+            }
+        }
+    }
+}

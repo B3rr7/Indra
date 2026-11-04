@@ -1,0 +1,117 @@
+name: Build bundle
+
+# Builds, signs and publishes a runtime bundle that the app consumes at
+# Settings → Bundle Updates.
+#
+# Deliverable (one GitHub Release per channel tag):
+#   tools-bundle.tar.gz.bin   the archive
+#   tools-bundle.json         its signed manifest
+#   tools-bundle.json.sig     DER ECDSA P-256 signature over the manifest bytes
+#
+# The app pins the matching public key in `SignatureVerifier.PINNED_PUBLIC_KEY_PEM`.
+# Generate the CI keypair once (keep the private half in the BUNDLE_SIGNING_KEY
+# repository secret, never in the repo):
+#   openssl ecparam -name prime256v1 -genkey -noout -out bundle-key.pem
+#   openssl ec -in bundle-key.pem -pubout -out bundle-key.pub
+# Then paste bundle-key.pub into PINNED_PUBLIC_KEY_PEM.
+#
+# Signing is over the exact manifest bytes: `openssl dgst -sha256 -sign` emits
+# the DER signature the app's SignatureVerifier.verify(data, signature) expects.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Bundle version (default: <core-version>+<run number>)'
+        required: false
+        type: string
+      min_app:
+        description: 'Minimum app versionCode for this bundle'
+        required: false
+        default: '1'
+        type: string
+  schedule:
+    # Weekly, Mondays 03:00 UTC.
+    - cron: '0 3 * * 1'
+
+permissions:
+  contents: write
+
+jobs:
+  tools:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Build native core
+        run: |
+          set -euo pipefail
+          export ANDROID_NDK_HOME=$ANDROID_HOME/ndk/25.2.9519653
+          cd indra/jni
+          ./build.sh jni
+          ./build.sh cores
+
+      - name: Package tools bundle
+        run: |
+          set -euo pipefail
+          asset=$(ls indra/dist/core-*.tar.xz | sort | tail -n1)
+          echo "Packaging from $asset"
+          mkdir -p build/core build/out
+          tar -xJf "$asset" -C build/core
+          # The bundle carries the tools/ payload only; handlers/, lib/ and indrad
+          # come from the APK core that CoreManager installs.
+          tar -czf build/out/tools-bundle.tar.gz -C build/core tools
+          mv build/out/tools-bundle.tar.gz build/out/tools-bundle.tar.gz.bin
+
+      - name: Generate signed manifest
+        env:
+          BUNDLE_SIGNING_KEY: ${{ secrets.BUNDLE_SIGNING_KEY }}
+          MIN_APP: ${{ github.event.inputs.min_app || '1' }}
+        run: |
+          set -euo pipefail
+          if [ -z "${BUNDLE_SIGNING_KEY:-}" ]; then
+            echo "::error::BUNDLE_SIGNING_KEY secret is not set; cannot sign the manifest."
+            exit 1
+          fi
+          cd build/out
+          file=tools-bundle.tar.gz.bin
+          size=$(stat -c%s "$file")
+          unpacked=$(gunzip -c "$file" | wc -c)
+          sha=$(sha256sum "$file" | awk '{print $1}')
+          built=$(date +%s)
+          version="${{ github.event.inputs.version }}"
+          if [ -z "$version" ]; then
+            core=$(basename "$(ls "$GITHUB_WORKSPACE"/indra/dist/core-*.tar.xz | sort | tail -n1)" .tar.xz)
+            version="${core}+${GITHUB_RUN_NUMBER}"
+          fi
+          printf '{"format":1,"id":"tools","version":"%s","file":"%s","sha256":"%s","size":%s,"unpacked":%s,"minApp":%s,"built":%s}' \
+            "$version" "$file" "$sha" "$size" "$unpacked" "$MIN_APP" "$built" > tools-bundle.json
+          printf '%s' "$BUNDLE_SIGNING_KEY" > ../signing-key.pem
+          openssl dgst -sha256 -sign ../signing-key.pem -out tools-bundle.json.sig tools-bundle.json
+          rm -f ../signing-key.pem
+          echo "Signed tools bundle ${version} (${size} bytes)"
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version=$(python3 -c "import json;print(json.load(open('build/out/tools-bundle.json'))['version'])")
+          tag="bundles-tools-${version}"
+          gh release create "$tag" \
+            build/out/tools-bundle.tar.gz.bin \
+            build/out/tools-bundle.json \
+            build/out/tools-bundle.json.sig \
+            --title "Tools bundle ${version}" \
+            --notes "Signed tools bundle built from ${GITHUB_SHA}."

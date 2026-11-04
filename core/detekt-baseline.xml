@@ -9,6 +9,7 @@
     <ID>CyclomaticComplexMethod:OtaModels.kt$internal fun parseOtaManifest(json: String): OtaManifest?</ID>
     <ID>CyclomaticComplexMethod:SmartToolBox.kt$SmartToolBox$private fun execute( tool: String, args: String, label: String = tool, timeoutMs: Long = TOOL_TIMEOUT_MS, ): Flow&lt;ToolResult&gt;</ID>
     <ID>FunctionOnlyReturningConstant:RootManager.kt$RootManager$fun canRunRootless(): Boolean</ID>
+    <ID>LargeClass:SmartToolBox.kt$SmartToolBox</ID>
     <ID>LongMethod:SmartToolBox.kt$SmartToolBox$private fun execute( tool: String, args: String, label: String = tool, timeoutMs: Long = TOOL_TIMEOUT_MS, ): Flow&lt;ToolResult&gt;</ID>
     <ID>MagicNumber:AppUpdateManager.kt$AppUpdateManager$8192</ID>
     <ID>MagicNumber:ChildProcessManager.kt$ChildProcessManager$9</ID>
@@ -47,9 +48,6 @@
     <ID>SwallowedException:OtaModels.kt$e: Exception</ID>
     <ID>SwallowedException:OtaUpdateManager.kt$OtaUpdateManager$e: AtomicMoveNotSupportedException</ID>
     <ID>SwallowedException:OtaUpdateManager.kt$OtaUpdateManager$e: Exception</ID>
-    <ID>SwallowedException:RootManager.kt$RootManager$e2: PackageManager.NameNotFoundException</ID>
-    <ID>SwallowedException:RootManager.kt$RootManager$e: Exception</ID>
-    <ID>SwallowedException:RootManager.kt$RootManager$e: PackageManager.NameNotFoundException</ID>
     <ID>TooGenericExceptionCaught:AppUpdateManager.kt$AppUpdateManager$e: Exception</ID>
     <ID>TooGenericExceptionCaught:ArsenalRepository.kt$ArsenalRepository$e: Exception</ID>
     <ID>TooGenericExceptionCaught:CoreManager.kt$CoreManager$e: Throwable</ID>
@@ -59,7 +57,6 @@
     <ID>TooGenericExceptionCaught:NetworkHelper.kt$NetworkHelper$e: Exception</ID>
     <ID>TooGenericExceptionCaught:OtaModels.kt$e: Exception</ID>
     <ID>TooGenericExceptionCaught:OtaUpdateManager.kt$OtaUpdateManager$e: Exception</ID>
-    <ID>TooGenericExceptionCaught:RootManager.kt$RootManager$e: Exception</ID>
     <ID>TooGenericExceptionCaught:SmartToolBox.kt$SmartTool$e: Exception</ID>
     <ID>TooGenericExceptionCaught:SmartToolBox.kt$SmartTool$e: Throwable</ID>
     <ID>TooGenericExceptionCaught:SmartToolBox.kt$SmartToolBox$e: Exception</ID>

@@ -232,6 +232,16 @@ fun SettingsScreen(
             }
             item { ToolsStatusCard(uiState) }
 
+            // ── Runtime Bundles ──────────────────────────────────────────
+            item {
+                SettingsSection(
+                    title = "Bundle Updates",
+                    icon = Icons.Default.CloudDownload,
+                    accent = SettingsPalette.Ota,
+                )
+            }
+            item { BundleUpdateCard(uiState, viewModel) }
+
             // ── Binary Updates (OTA) ─────────────────────────────────────
             item {
                 SettingsSection(

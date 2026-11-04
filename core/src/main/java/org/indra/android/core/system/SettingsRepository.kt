@@ -3,6 +3,7 @@ package org.indra.android.core.system
 import android.content.Context
 import android.content.SharedPreferences
 import dagger.hilt.android.qualifiers.ApplicationContext
+import org.indra.android.core.data.bundle.BundleManifest
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -123,6 +124,26 @@ class SettingsRepository
             get() = prefs.getBoolean("TERMINAL_BUBBLE", false)
             set(value) = prefs.edit().putBoolean("TERMINAL_BUBBLE", value).apply()
 
+        /** Whether to check for bundle updates only on Wi-Fi. */
+        var bundleWifiOnly: Boolean
+            get() = prefs.getBoolean("BUNDLE_WIFI_ONLY", true)
+            set(value) = prefs.edit().putBoolean("BUNDLE_WIFI_ONLY", value).apply()
+
+        /** Timestamp of the last bundle update check (epoch ms). */
+        var bundleLastCheckMs: Long
+            get() = prefs.getLong("BUNDLE_LAST_CHECK_MS", 0)
+            set(value) = prefs.edit().putLong("BUNDLE_LAST_CHECK_MS", value).apply()
+
+        /** Available manifest for tools bundle (null = none). */
+        var availableToolsManifest: String?
+            get() = prefs.getString("AVAILABLE_TOOLS_MANIFEST", null)
+            set(value) = prefs.edit().putString("AVAILABLE_TOOLS_MANIFEST", value).apply()
+
+        /** Available manifest for msf bundle (null = none). */
+        var availableMsfManifest: String?
+            get() = prefs.getString("AVAILABLE_MSF_MANIFEST", null)
+            set(value) = prefs.edit().putString("AVAILABLE_MSF_MANIFEST", value).apply()
+
         /**
          * How the terminal's command field treats the IME (see `TerminalInputMode`).
          *
@@ -172,6 +193,21 @@ class SettingsRepository
     var gobusterUrl: String
         get() = prefs.getString("GOBUSTER_URL", "") ?: ""
         set(value) = prefs.edit().putString("GOBUSTER_URL", value).apply()
+
+    /** Available manifest for tools bundle (null = none). */
+    fun availableManifest(id: String): BundleManifest? =
+        when (id) {
+            "tools" -> availableToolsManifest?.let { BundleManifest.parseOrNull(it) }
+            "msf" -> availableMsfManifest?.let { BundleManifest.parseOrNull(it) }
+            else -> null
+        }
+
+    fun setAvailableManifest(id: String, manifest: BundleManifest?) {
+        when (id) {
+            "tools" -> availableToolsManifest = manifest?.toJson()
+            "msf" -> availableMsfManifest = manifest?.toJson()
+        }
+    }
 
     // Deferred: `context.filesDir` creates the app's files directory (`ensurePrivateDirExists`),
     // which StrictMode reports as a DiskReadViolation. Constructing this repository happens on

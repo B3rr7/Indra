@@ -11,6 +11,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.indra.android.core.data.bundle.BundleOp
+import org.indra.android.core.data.bundle.BundleUpdateManager
 import org.indra.android.core.system.AppUpdateManager
 import org.indra.android.core.system.CoreManager
 import org.indra.android.core.system.CrashReporter
@@ -32,6 +34,21 @@ import javax.inject.Inject
 data class ToolStatus(
     val name: String,
     val available: Boolean,
+)
+
+/** One runtime-updatable bundle channel as the card draws it. */
+data class BundleUiInfo(
+    val id: String,
+    val label: String,
+    /** Installed version, or null when the bundle is not installed. */
+    val installedVersion: String? = null,
+    /** Where the installed tools came from: "APK" or "downloaded" (tools channel only). */
+    val source: String? = null,
+    /** Version offered by the latest release, or null when the channel is up to date. */
+    val availableVersion: String? = null,
+    val busy: Boolean = false,
+    /** Progress/status line for the channel, or null when idle. */
+    val status: String? = null,
 )
 
 data class SettingsUiState(
@@ -86,6 +103,8 @@ data class SettingsUiState(
     val rootGuidance: String? = null,
     /** Name of the root manager app that can grant root ("Magisk", "KernelSU", …). */
     val rootManagerLabel: String = "root manager",
+    /** Runtime bundle channels (tools, msf) and their update state. */
+    val bundles: List<BundleUiInfo> = emptyList(),
 )
 
 /** Port fields the daemon tools read from [SettingsRepository]. */
@@ -107,6 +126,9 @@ enum class PortField(
  */
 private const val ROOT_PROBE_TTL_MS = 15_000L
 
+/** Progress is a 0..1 fraction; the UI shows whole percent. */
+private const val PERCENT = 100
+
 @Suppress("LongParameterList") // Hilt-injected settings hub; splitting it is a separate refactor.
 @HiltViewModel
 class SettingsViewModel
@@ -121,9 +143,27 @@ class SettingsViewModel
         private val appUpdateManager: AppUpdateManager,
         private val rootManager: RootManager,
         private val wallpaperStore: WallpaperStore,
+        private val bundleUpdateManager: BundleUpdateManager,
     ) : ViewModel() {
         private val _uiState = MutableStateFlow(SettingsUiState())
         val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
+
+        /** Latest op of each channel, kept so either collector can rebuild the whole list. */
+        @Volatile
+        private var toolsOp: BundleOp = BundleOp.Idle("tools")
+
+        @Volatile
+        private var msfOp: BundleOp = BundleOp.Idle("msf")
+
+        /** Installed versions read off IO in [loadSettings]; null until first read. */
+        @Volatile
+        private var toolsInstalledVersion: String? = null
+
+        @Volatile
+        private var toolsSource: String? = null
+
+        @Volatile
+        private var msfInstalledVersion: String? = null
 
         /**
          * Last root probe, kept so [openRootManager] can name a manager whose package
@@ -138,6 +178,72 @@ class SettingsViewModel
 
         init {
             loadSettings(probeRoot = true)
+            viewModelScope.launch {
+                bundleUpdateManager.tools.op.collect { op ->
+                    toolsOp = op
+                    publishBundles()
+                }
+            }
+            viewModelScope.launch {
+                bundleUpdateManager.msf.op.collect { op ->
+                    msfOp = op
+                    publishBundles()
+                }
+            }
+        }
+
+        /** Rebuilds the bundle list from the two channel ops plus the installed versions. */
+        private fun publishBundles() {
+            _uiState.value =
+                _uiState.value.copy(
+                    bundles =
+                        listOf(
+                            bundleInfo("tools", "Tools", toolsInstalledVersion, toolsSource, toolsOp),
+                            bundleInfo("msf", "Metasploit", msfInstalledVersion, null, msfOp),
+                        ),
+                )
+        }
+
+        private fun bundleInfo(
+            id: String,
+            label: String,
+            installedVersion: String?,
+            source: String?,
+            op: BundleOp,
+        ): BundleUiInfo {
+            val available = (op as? BundleOp.UpdateAvailable)?.manifest?.version
+            return BundleUiInfo(id, label, installedVersion, source, available, bundleBusy(op), bundleStatus(op))
+        }
+
+        private fun bundleBusy(op: BundleOp): Boolean =
+            op is BundleOp.Checking || op is BundleOp.Downloading || op is BundleOp.Verifying ||
+                op is BundleOp.Staging || op is BundleOp.Swapping || op is BundleOp.PendingSwap
+
+        private fun bundleStatus(op: BundleOp): String? =
+            when (op) {
+                is BundleOp.Checking -> "Checking…"
+                is BundleOp.Downloading -> "Downloading… ${(op.progress * PERCENT).toInt()}%"
+                is BundleOp.Verifying -> "Verifying signature…"
+                is BundleOp.Staging -> "Staging…"
+                is BundleOp.PendingSwap -> "Waiting to install: ${op.reason}"
+                is BundleOp.Swapping -> "Installing…"
+                is BundleOp.Done -> "Updated"
+                is BundleOp.Error -> op.message
+                is BundleOp.UpdateAvailable -> "Update available: ${op.manifest.version}"
+                is BundleOp.Idle -> null
+            }
+
+        /** Checks both channels against GitHub Releases (one API call). */
+        fun checkBundles() {
+            bundleUpdateManager.checkForUpdates()
+        }
+
+        /** Installs the pending update of one channel ("tools" or "msf"). */
+        fun installBundle(id: String) {
+            when (id) {
+                "tools" -> bundleUpdateManager.tools.installUpdate()
+                "msf" -> bundleUpdateManager.msf.installUpdate()
+            }
         }
 
         /**
@@ -167,6 +273,11 @@ class SettingsViewModel
                     // how the card could say "Running" while the hero said "stopped".
                     val coreVersion = system.getCoreVersion()
                     val coreRunning = coreManager.isDaemonRunning
+                    // Bundle versions are disk reads (sentinels + .bundle-version), so they
+                    // belong on IO with the rest of this block.
+                    toolsInstalledVersion = bundleUpdateManager.installedToolsVersion()
+                    toolsSource = bundleUpdateManager.toolsSource()
+                    msfInstalledVersion = bundleUpdateManager.installedMsfVersion()
                     _uiState.value =
                         _uiState.value.copy(
                             httpProxyPort = settings.httpProxyPort,
@@ -201,6 +312,7 @@ class SettingsViewModel
                             workspaceMissing = workspace.missing,
                             toolStatus = toolBox.getAllTools().map { ToolStatus(it.name, it.isAvailable()) },
                         )
+                    publishBundles()
                 }
             }
         }

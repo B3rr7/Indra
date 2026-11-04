@@ -8,15 +8,25 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import org.indra.android.core.client.IndraClient
+import org.indra.android.core.data.bundle.BundleUpdateManager
 import org.indra.android.core.system.CrashReporter
 import org.indra.android.core.system.Logger
 import org.indra.android.core.system.SettingsRepository
+import javax.inject.Inject
+import javax.inject.Provider
 
 @HiltAndroidApp
 class IndraApplication : Application() {
     /** Process-lifetime scope for one-shot startup work that must stay off the main thread. */
     private val startupJob = SupervisorJob()
     private val startupScope = CoroutineScope(startupJob + Dispatchers.IO)
+
+    /**
+     * Resolved lazily inside [startupScope]: building the bundle system touches `filesDir`
+     * (disk), which must not happen on Main during `super.onCreate()`.
+     */
+    @Inject
+    lateinit var bundleUpdateManager: Provider<BundleUpdateManager>
 
     override fun onCreate() {
         super.onCreate()
@@ -35,6 +45,9 @@ class IndraApplication : Application() {
             // CoreManager/SmartToolBox into MainActivity or a ViewModel). Warm it here instead;
             // later touches see an initialized class.
             IndraClient.isAvailable()
+            // Background bundle check: at most once a day, Wi-Fi-only when the user asked for it,
+            // never downloads. A failure is silent here — Settings surfaces it on demand.
+            runCatching { bundleUpdateManager.get().autoCheckIfDue() }
         }
 
         installCrashHandler()
