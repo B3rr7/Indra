@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.indra.android.core.system.OtaUpdateManager
+import org.indra.android.core.system.OtaCheckResult
 import org.indra.android.core.system.Plugin
 import org.indra.android.core.system.PluginAvailability
 import org.indra.android.core.system.PluginManager
@@ -25,6 +26,8 @@ data class ToolsUiState(
     val isLoading: Boolean = false,
     val updatingToolId: String? = null,
     val otaMessage: String? = null,
+    /** Map of tool name -> server version, for tools that have an update available. */
+    val outdatedTools: Map<String, String> = emptyMap(),
 )
 
 @HiltViewModel
@@ -100,6 +103,25 @@ class ToolsViewModel
                                 }
                             }.awaitAll()
                     }.toMap()
+
+                // Check for OTA updates (compares local versions against server manifest).
+                val outdatedTools = withContext(Dispatchers.IO) {
+                    val checkResult = otaManager.checkForUpdate()
+                    if (checkResult.manifest != null) {
+                        val manifest = checkResult.manifest!!
+                        val localVersions = checkResult.localVersions
+                        manifest.binaries
+                            .filter { bin ->
+                                val localVer = localVersions[bin.name]
+                                // Tool has an update if local version is null (unknown) or differs from server.
+                                localVer == null || localVer != bin.version
+                            }
+                            .associate { it.name to it.version }
+                    } else {
+                        emptyMap<String, String>()
+                    }
+                }
+
                 _uiState.value =
                     _uiState.value.copy(
                         plugins =
@@ -107,6 +129,7 @@ class ToolsViewModel
                                 val v = versions[p.id]
                                 if (v != null) p.copy(version = v) else p
                             },
+                        outdatedTools = outdatedTools,
                     )
             }
         }
@@ -121,6 +144,7 @@ class ToolsViewModel
                         name = plugin.name,
                         description = plugin.description,
                         status = pluginAvailability.pluginStatus(plugin),
+                        requires = plugin.requires,
                     )
                 }
             return plugins to requiresById

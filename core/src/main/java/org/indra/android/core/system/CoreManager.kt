@@ -61,7 +61,16 @@ class CoreManager
             private const val WORDLIST_ASSET = "wordlists/common-passwords.txt"
             private const val WORDLIST_TARGET = "wordlists/common-passwords.txt"
 
-            private const val SOCKET_NAME = "cSploitd.sock"
+            /**
+             * Must match `SOCKET_PATH` in `indra/jni/cSploitDaemon/cSploitd.h`.
+             *
+             * These fell out of sync once: the native side was renamed to `indrad.sock` and the
+             * app was left on the cSploit-era name, so a freshly installed core bound one socket
+             * while the client connected to another — every screen then reported "daemon not
+             * running" against a daemon that was running perfectly. The bundled archive is built
+             * from that header, so this constant is not free to drift.
+             */
+            private const val SOCKET_NAME = "indrad.sock"
             private const val DAEMON_NAME = "indrad"
 
             /** Credentials shipped inside the core package's `users` file. */

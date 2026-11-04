@@ -77,6 +77,7 @@ fun ToolsScreen(
                     query = query,
                     updatingToolId = uiState.updatingToolId,
                     otaMessage = uiState.otaMessage,
+                    outdatedTools = uiState.outdatedTools,
                     onNavigateToPlugin = onNavigateToPlugin,
                     onUpdateTool = viewModel::updateToolOta,
                 )
@@ -116,6 +117,7 @@ private fun ToolsList(
     query: String,
     updatingToolId: String?,
     otaMessage: String?,
+    outdatedTools: Map<String, String>,
     onNavigateToPlugin: (String) -> Unit,
     onUpdateTool: (String) -> Unit,
 ) {
@@ -138,11 +140,14 @@ private fun ToolsList(
             key = { it.id },
             contentType = { "tool-card" },
         ) { plugin ->
+            // The OTA manifest keys tools by their binary name (e.g., "nmap"), not plugin ID.
+            // Plugin.requires holds the binary name (e.g., "port_scanner" -> requires "nmap").
+            val hasUpdate = plugin.available && outdatedTools.containsKey(plugin.requires)
             ModernToolCard(
                 plugin = plugin,
                 onClick = { onNavigateToPlugin(plugin.id) },
                 onUpdate =
-                    if (plugin.available) {
+                    if (hasUpdate) {
                         { onUpdateTool(plugin.id) }
                     } else {
                         null

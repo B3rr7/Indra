@@ -32,6 +32,8 @@ data class PluginInfo(
     val description: String,
     val status: PluginAvailability.PluginStatus = PluginAvailability.PluginStatus.AVAILABLE,
     val version: String? = null,
+    /** Binary name required by this plugin (e.g., "nmap"), used for OTA version lookup. */
+    val requires: String = "",
 ) {
     /** Runnable now — drives the per-card "Update binary" entry point. */
     val available: Boolean get() = status == PluginAvailability.PluginStatus.AVAILABLE
@@ -133,6 +135,7 @@ class HomeViewModel
                             name = plugin.name,
                             description = plugin.description,
                             status = pluginAvailability.pluginStatus(plugin),
+                            requires = plugin.requires,
                         )
                     }
 
