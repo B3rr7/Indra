@@ -27,6 +27,13 @@ import javax.inject.Singleton
  * | `/sys` | `/sys` | `/sys/class/net/…` (MAC, wireless) |
  * | `/dev`, `/dev/pts` | `/dev`, `/dev/pts` | `/dev/null`, `/dev/urandom`, ptys |
  */
+
+/** Which chroot to use. ALPINE for musl tools; MSF_GLIBC for Metasploit (glibc). */
+enum class ChrootType {
+    ALPINE,
+    MSF_GLIBC,
+}
+
 @Suppress("TooManyFunctions")
 @Singleton
 class ChrootEngine
@@ -47,6 +54,15 @@ class ChrootEngine
         private val cacheMountPoint: String get() = "/data/user/0/" + context.packageName + "/cache"
 
         fun isInstalled(): Boolean = coreManager.isAlpineInstalled()
+
+        /** Checks MSF_GLIBC chroot installation. */
+        fun isMsfInstalled(): Boolean = coreManager.isMsfInstalled()
+
+        /** Rootfs path for the given type. */
+        fun rootPath(type: ChrootType): File = when (type) {
+            ChrootType.ALPINE -> root
+            ChrootType.MSF_GLIBC -> coreManager.msfPath()
+        }
 
         fun capability(capability: Capability): CapabilityState {
             if (!isInstalled()) return CapabilityState.EngineNotInstalled(INSTALL_FIX)

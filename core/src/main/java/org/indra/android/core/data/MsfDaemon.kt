@@ -108,7 +108,7 @@ class MsfDaemon @Inject constructor(
             return
         }
         watchProcess(gen, buildMsfrpcdLaunch(settings.msfRpcPort))
-        val ready = awaitReady(gen)
+        val ready = awaitReadyRpc(gen)
         if (isCurrent(gen)) {
             transition(gen) { if (ready) DaemonState.READY else DaemonState.FAILED }
         }
@@ -143,10 +143,23 @@ class MsfDaemon @Inject constructor(
         }
     }
 
-    private suspend fun awaitReady(gen: Long): Boolean {
+    /**
+     * Health-check msfrpcd via RPC ping instead of log markers.
+     * Returns true when RPC responds with a version.
+     */
+    private suspend fun awaitReadyRpc(gen: Long): Boolean {
         while (isCurrent(gen) && _state.value == DaemonState.STARTING) {
-            val output = _logs.value.joinToString("\n")
-            if (output.contains(READY_MARKER) || output.contains(LISTEN_MARKER)) return true
+            val client = MsfRpcClient.create(
+                host = "127.0.0.1",
+                port = settings.msfRpcPort,
+                user = "msf",
+                password = "msf",
+            )
+            if (client != null && client.version() != null) {
+                client.close()
+                return true
+            }
+            client?.close()
             delay(READY_POLL_MS)
         }
         return false
