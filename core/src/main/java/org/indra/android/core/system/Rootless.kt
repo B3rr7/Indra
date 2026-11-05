@@ -25,6 +25,10 @@ object Rootless {
      * - `password_auditor` — pure computation over the bundled wordlist.
      * - `wifi_keygen` — pure computation over a BSSID ([WifiKeygen]); it is also the one entry
      *   here that stays available *with* root and no daemon, since it never asks for a handler.
+     * - `gobuster` — an HTTP directory sweep in the app process ([DirBrute]/[DirBruteRunner]).
+     *   The bundled `gobuster` binary still needs the root daemon; this is a second
+     *   implementation of the same job, not the same binary, and it resolves hostnames through
+     *   Android's resolver (the Go binary cannot, because Android has no `/etc/resolv.conf`).
      * - `terminal` — `/system/bin/sh` as the app's own uid ([LocalShell]). It runs no bundled
      *   binary and needs no privilege; the Alpine chroot inside it stays root-only, because
      *   `chroot(2)` and `mount(2)` need `CAP_SYS_ADMIN` ([TerminalTransport]).
@@ -36,6 +40,7 @@ object Rootless {
             "whisperpair",
             "password_auditor",
             "wifi_keygen",
+            "gobuster",
             "terminal",
         )
 

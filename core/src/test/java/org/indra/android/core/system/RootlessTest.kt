@@ -14,6 +14,8 @@ class RootlessTest {
         assertTrue(Rootless.supports("password_auditor"))
         // WiFi Keygen is arithmetic over a BSSID: it never asks the daemon for a handler.
         assertTrue(Rootless.supports("wifi_keygen"))
+        // Gobuster is an HTTP sweep in the app process (DirBrute), not the bundled binary.
+        assertTrue(Rootless.supports("gobuster"))
         // The Terminal runs `/system/bin/sh` as the app uid (LocalShell). The Alpine chroot
         // inside it stays root-only — that is a transport question, not a plugin one.
         assertTrue(Rootless.supports("terminal"))
@@ -45,7 +47,15 @@ class RootlessTest {
         // Rootless is a promise about what works without root. Growing it silently is how it
         // became a broken promise once already, so a new entry has to be a conscious edit here.
         assertEquals(
-            setOf("port_scanner", "wifi_scanner", "whisperpair", "password_auditor", "wifi_keygen", "terminal"),
+            setOf(
+                "port_scanner",
+                "wifi_scanner",
+                "whisperpair",
+                "password_auditor",
+                "wifi_keygen",
+                "gobuster",
+                "terminal",
+            ),
             Rootless.SUPPORTED_PLUGINS,
         )
     }

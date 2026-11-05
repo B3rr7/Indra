@@ -57,15 +57,11 @@ fun GobusterScreen(
             modifier = Modifier.fillMaxSize().padding(paddingValues).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            if (!uiState.gobusterInstalled) {
-                GobusterInstallCard(
-                    installUrl = uiState.installUrl,
-                    isInstalling = uiState.isInstalling,
-                    installProgress = uiState.installProgress,
-                    onUrlChange = viewModel::updateInstallUrl,
-                    onInstall = { viewModel.install() },
-                )
-            }
+            GobusterNotice(
+                uiState = uiState,
+                onInstallUrlChange = viewModel::updateInstallUrl,
+                onInstall = { viewModel.install() },
+            )
             OutlinedTextField(
                 value = uiState.url,
                 onValueChange = { viewModel.updateUrl(it) },
@@ -92,15 +88,21 @@ fun GobusterScreen(
                 singleLine = true,
             )
             Button(
-                onClick = { viewModel.scan() },
-                enabled = !uiState.isLoading && uiState.url.isNotBlank(),
+                onClick = { if (uiState.isLoading) viewModel.stop() else viewModel.scan() },
+                enabled = uiState.isLoading || uiState.url.isNotBlank(),
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 if (uiState.isLoading) {
                     CircularProgressIndicator(modifier = Modifier.size(20.dp), color = MaterialTheme.colorScheme.onPrimary)
                     Spacer(modifier = Modifier.width(8.dp))
                 }
-                Text(if (uiState.isLoading) "Scanning..." else "Scan")
+                Text(
+                    when {
+                        uiState.isLoading -> "Stop"
+                        uiState.rootless -> "Scan (rootless)"
+                        else -> "Scan"
+                    },
+                )
             }
             LiveOutputCard(
                 lines = uiState.output,
@@ -112,6 +114,30 @@ fun GobusterScreen(
             )
             uiState.error?.let { FormError(it) }
         }
+    }
+}
+
+@Composable
+private fun GobusterNotice(
+    uiState: GobusterUiState,
+    onInstallUrlChange: (String) -> Unit,
+    onInstall: () -> Unit,
+) {
+    // In rootless mode there is no binary to install: the sweep is the app's own HTTP client.
+    if (uiState.rootless) {
+        Text(
+            text = "Rootless: this sweep runs inside the app — no daemon and no binary needed.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    } else if (!uiState.gobusterInstalled) {
+        GobusterInstallCard(
+            installUrl = uiState.installUrl,
+            isInstalling = uiState.isInstalling,
+            installProgress = uiState.installProgress,
+            onUrlChange = onInstallUrlChange,
+            onInstall = onInstall,
+        )
     }
 }
 
