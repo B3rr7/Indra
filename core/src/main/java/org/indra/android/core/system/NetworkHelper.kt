@@ -58,6 +58,15 @@ class NetworkHelper
             return if (ssid.isNullOrBlank() || ssid == "<unknown ssid>") null else ssid
         }
 
+        /**
+         * BSSID of the access point this device is associated with, or null when the platform
+         * withholds it (no location permission, Wi-Fi off, or mobile data only).
+         */
+        fun getWifiBssid(): String? {
+            val bssid = currentWifiInfo()?.bssid?.uppercase()
+            return if (bssid.isNullOrBlank() || bssid == UNKNOWN_BSSID) null else bssid
+        }
+
         fun isCellularConnected(): Boolean {
             val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
             return cm?.activeNetwork?.let { network ->
@@ -189,5 +198,10 @@ class NetworkHelper
             return properties.dnsServers
                 .mapNotNull { it.hostAddress }
                 .filter { !it.isNullOrBlank() }
+        }
+
+        private companion object {
+            /** What Android reports when the real BSSID is withheld. */
+            private const val UNKNOWN_BSSID = "02:00:00:00:00:00"
         }
     }

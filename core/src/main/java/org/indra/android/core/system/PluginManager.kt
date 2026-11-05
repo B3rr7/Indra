@@ -286,6 +286,15 @@ class PluginManager
             )
             registerPlugin(
                 Plugin(
+                    id = "wifi_keygen",
+                    name = "WiFi Keygen",
+                    description = "Offline key candidates from a BSSID, plus the WPS PIN checksum",
+                    targetTypes = setOf("network"),
+                    requires = "shell",
+                ),
+            )
+            registerPlugin(
+                Plugin(
                     id = "usb_arsenal",
                     name = "USB Arsenal",
                     description = "USB gadget profile manager",

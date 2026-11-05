@@ -14,6 +14,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AdminPanelSettings
+import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material3.*
 import android.content.Intent
 import androidx.compose.runtime.*
@@ -379,6 +380,16 @@ private fun LogsActions(
                 Text("Clear crashes")
             }
         }
+        // Export logs (redacted) — creates a zip with SSID/BSSID/MAC/IP/passwords redacted
+        UpdateCardButton(
+            busy = false,
+            label = "Export logs (redacted)",
+            busyLabel = "Exporting…",
+            onClick = viewModel::exportLogs,
+            accent = SettingsPalette.Ota,
+            icon = Icons.Default.CloudDownload,
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 }
 

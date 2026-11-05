@@ -2,9 +2,12 @@ package org.indra.android.ui.screens.settings
 
 import android.os.SystemClock
 import android.net.Uri
+import android.content.ActivityNotFoundException
+import android.content.Intent
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -15,6 +18,8 @@ import org.indra.android.core.data.bundle.BundleOp
 import org.indra.android.core.data.bundle.BundleUpdateManager
 import org.indra.android.core.system.AppUpdateManager
 import org.indra.android.core.system.CoreManager
+import android.content.Context
+import org.indra.android.core.system.LogExporter
 import org.indra.android.core.system.CrashReporter
 import org.indra.android.core.system.IndraWorkspace
 import org.indra.android.core.system.Logger
@@ -134,6 +139,7 @@ private const val PERCENT = 100
 class SettingsViewModel
     @Inject
     constructor(
+        @ApplicationContext private val context: Context,
         private val system: IndraSystem,
         private val settings: SettingsRepository,
         private val coreManager: CoreManager,
@@ -660,6 +666,34 @@ class SettingsViewModel
         fun clearDebugLog() {
             Logger.clearLog()
             _uiState.value = _uiState.value.copy(debugLogSizeBytes = 0)
+        }
+
+        /** Exports redacted logs as a zip file and shares via FileProvider. */
+        fun exportLogs() {
+            viewModelScope.launch {
+                LogExporter(context)
+                    .exportLogs()
+                    .fold(
+                        onSuccess = { uri -> shareExport(uri) },
+                        onFailure = { error -> Logger.w("Log export failed: ${error.message}") },
+                    )
+            }
+        }
+
+        /** Hands the exported zip to the system share sheet; failures are logged, never thrown. */
+        private fun shareExport(uri: Uri) {
+            val send =
+                Intent(Intent.ACTION_SEND)
+                    .setType("application/zip")
+                    .putExtra(Intent.EXTRA_STREAM, uri)
+                    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            // The chooser is started from the application context, so it needs its own task.
+            val chooser = Intent.createChooser(send, "Export Indra logs").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            try {
+                context.startActivity(chooser)
+            } catch (e: ActivityNotFoundException) {
+                Logger.w("No app can receive the log export: ${e.message}")
+            }
         }
 
         fun getCrashLogFiles(): List<java.io.File> = crashReporter.getCrashFiles()

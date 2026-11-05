@@ -46,6 +46,7 @@ import org.indra.android.ui.screens.plugins.VulnScannerScreen
 import org.indra.android.ui.screens.plugins.WebTesterScreen
 import org.indra.android.ui.screens.plugins.WhisperPairScreen
 import org.indra.android.ui.screens.plugins.WifiAuditScreen
+import org.indra.android.ui.screens.plugins.WifiKeygenScreen
 import org.indra.android.ui.screens.plugins.WifiScannerScreen
 import org.indra.android.ui.screens.plugins.WifiteScreen
 import org.indra.android.ui.screens.settings.LogsScreen
@@ -173,6 +174,7 @@ private fun EntryProviderScope<NavKey>.wirelessEntries(navigator: Navigator) {
     entry<Screen.GeoMac> { GeoMacScreen(onNavigateBack = { navigator.goBack() }) }
     entry<Screen.MacChanger> { MacChangerScreen(onNavigateBack = { navigator.goBack() }) }
     entry<Screen.WhisperPair> { WhisperPairScreen(onNavigateBack = { navigator.goBack() }) }
+        entry<Screen.WifiKeygen> { WifiKeygenScreen(onNavigateBack = { navigator.goBack() }) }
 }
 
 /** Credential tooling. */

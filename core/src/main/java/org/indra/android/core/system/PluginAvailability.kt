@@ -77,10 +77,20 @@ class PluginAvailability
         fun pluginStatus(plugin: Plugin): PluginStatus =
             when {
                 !isFeasibleOnAndroid(plugin.id) -> PluginStatus.UNSUPPORTED
+                plugin.id in daemonFreePlugins -> PluginStatus.AVAILABLE
                 settings.rootlessMode && Rootless.supports(plugin.id) -> PluginStatus.AVAILABLE
                 settings.rootlessMode -> PluginStatus.NEEDS_ROOT
                 else -> daemonStatus(plugin)
             }
+
+        /**
+         * Plugins implemented entirely app-side: no handler, no chroot, no privilege.
+         *
+         * They are answered before the daemon question in *both* modes. WiFi Keygen is pure
+         * arithmetic over a BSSID, so gating it on a running `indrad` would dim a card that
+         * works perfectly on a phone with no root, no core and no daemon.
+         */
+        private val daemonFreePlugins: Set<String> = setOf("wifi_keygen")
 
         /**
          * Rooted path: the card needs a live daemon, a handler it can see and any artifact.
