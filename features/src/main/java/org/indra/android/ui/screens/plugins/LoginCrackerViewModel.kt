@@ -59,7 +59,7 @@ class LoginCrackerViewModel
             viewModelScope.launch {
                 val state = _uiState.value
 
-                val gate = toolBox.requireTool("raw")
+                val gate = toolBox.requireDirectTool("hydra")
                 if (gate !is ToolHandle.Ready) {
                     _uiState.value =
                         _uiState.value.copy(
@@ -75,7 +75,7 @@ class LoginCrackerViewModel
                 var failure: String? = null
 
                 toolBox
-                    .hydra(
+                    .hydraDirect(
                         state.target.trim(),
                         state.service.trim(),
                         state.username.trim(),

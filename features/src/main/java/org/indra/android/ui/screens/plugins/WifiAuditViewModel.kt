@@ -111,7 +111,7 @@ class WifiAuditViewModel
 
             job =
                 viewModelScope.launch {
-                    val gate = toolBox.requireTool("raw")
+                    val gate = toolBox.requireDirectTool("aircrack-ng")
                     if (gate !is ToolHandle.Ready) {
                         _uiState.value = _uiState.value.copy(error = gate.message)
                         return@launch
@@ -125,7 +125,7 @@ class WifiAuditViewModel
                             keyFound = false,
                         )
                     var found = false
-                    toolBox.aircrack(args).collect { result ->
+                    toolBox.aircrackDirect(args).collect { result ->
                         if (result.pid > 0) pid = result.pid
                         result.streamedLine?.let { line ->
                             if (line.contains("KEY FOUND")) found = true

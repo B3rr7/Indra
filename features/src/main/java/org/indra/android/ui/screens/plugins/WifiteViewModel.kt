@@ -124,7 +124,7 @@ class WifiteViewModel
                     val crack =
                         stage(
                             "crack",
-                            toolBox.aircrack(
+                            toolBox.aircrackDirect(
                                 "-w ${SmartToolBox.shellQuote(wordlist)} ${SmartToolBox.shellQuote(outFile)}",
                             ),
                         )

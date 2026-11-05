@@ -28,6 +28,9 @@ interface ToolRunner {
      */
     suspend fun requireTool(name: String): ToolHandle
 
+    /** Probes root access for tools that run via direct `su -c` (bypasses daemon). */
+    suspend fun requireDirectTool(name: String): ToolHandle
+
     /** Runs an argv vector through the daemon's `raw` handler — no shell, so `;` is an argument. */
     fun command(
         label: String,
@@ -48,6 +51,12 @@ interface ToolRunner {
         iface: String = "",
     ): Flow<ToolResult>
 
+    fun masscanDirect(
+        target: String,
+        args: String = "",
+        iface: String = "",
+    ): Flow<ToolResult>
+
     fun tcpdump(
         iface: String = "wlan0",
         filter: String = "",
@@ -56,6 +65,8 @@ interface ToolRunner {
     ): Flow<ToolResult>
 
     fun aircrack(args: String): Flow<ToolResult>
+
+    fun aircrackDirect(args: String): Flow<ToolResult>
 
     suspend fun nuclei(
         target: String,

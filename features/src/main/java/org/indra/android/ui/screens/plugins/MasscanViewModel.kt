@@ -83,13 +83,13 @@ class MasscanViewModel
             val rate = st.rate.trim().ifEmpty { "1000" }
             job =
                 viewModelScope.launch {
-                    val gate = toolBox.requireTool("masscan")
+                    val gate = toolBox.requireDirectTool("masscan")
                     if (gate !is ToolHandle.Ready) {
                         _uiState.value = _uiState.value.copy(error = gate.message)
                         return@launch
                     }
                     _uiState.value = _uiState.value.copy(isRunning = true, error = null, output = emptyList())
-                    toolBox.masscan(target, "-p $ports --rate=$rate", st.iface.trim()).collect { result ->
+                    toolBox.masscanDirect(target, "-p $ports --rate=$rate", st.iface.trim()).collect { result ->
                         if (result.pid > 0) pid = result.pid
                         result.streamedLine?.let { line ->
                             _uiState.value = _uiState.value.copy(output = _uiState.value.output + line)

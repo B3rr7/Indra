@@ -85,7 +85,7 @@ class PacketForgerViewModel
         fun send() {
             viewModelScope.launch {
                 try {
-                    val gate = toolBox.requireTool("raw")
+                    val gate = toolBox.requireDirectTool("hping3")
                     if (gate !is ToolHandle.Ready) {
                         _uiState.value =
                             _uiState.value.copy(
@@ -131,7 +131,7 @@ class PacketForgerViewModel
 
                     // hping3() appends the target itself.
                     try {
-                        toolBox.hping3(state.target, args.toString()).collect { result ->
+                        toolBox.hping3Direct(state.target, args.toString()).collect { result ->
                             // Only the terminal emission carries the whole transcript.
                             if (result.isStreaming) return@collect
                             if (result.success) {

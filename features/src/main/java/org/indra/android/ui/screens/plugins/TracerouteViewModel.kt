@@ -60,7 +60,7 @@ class TracerouteViewModel
                 val target = _uiState.value.target.trim()
 
                 // The core ships no traceroute binary: nmap's --traceroute is the only one.
-                val gate = toolBox.requireTool("raw")
+                val gate = toolBox.requireDirectTool("traceroute")
                 if (gate !is ToolHandle.Ready) {
                     _uiState.value =
                         _uiState.value.copy(
@@ -78,7 +78,7 @@ class TracerouteViewModel
                 val hops = LinkedHashMap<Int, TracerouteHop>()
                 var failure: String? = null
 
-                toolBox.traceroute(target).collect { result ->
+                toolBox.tracerouteDirect(target).collect { result ->
                     if (result.isStreaming) {
                         result.rawOutput.lines().forEach { line ->
                             val match = HOP_LINE.matchEntire(line) ?: return@forEach

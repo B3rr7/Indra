@@ -26,6 +26,9 @@ import org.indra.android.core.engine.CapabilityState
 import org.indra.android.core.engine.ChrootEngine
 import org.indra.android.core.engine.ChrootScript
 import org.indra.android.core.engine.Hashcat
+import org.indra.android.core.system.ProcessEvent as SystemProcessEvent
+import org.indra.android.core.system.ProcessManager
+import org.indra.android.core.system.RootManager
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -47,10 +50,15 @@ class SmartToolBox
         private val client: IndraClient,
         private val coreManager: CoreManager,
         private val childProcessManager: ChildProcessManager,
+        private val processManager: ProcessManager,
+        private val rootManager: RootManager,
         private val chrootEngine: ChrootEngine,
         private val networkHelper: NetworkHelper,
     ) {
         companion object {
+            /** Shell exit codes 129..159 mean "terminated by signal (exit-128)". */
+            private const val SHELL_SIGNAL_BASE = 128
+
             /** Tools that never emit ChildEnd (long-running daemons) are bounded by this. */
             private const val TOOL_TIMEOUT_MS = 120_000L
 
@@ -128,9 +136,13 @@ class SmartToolBox
              *  kept here so the registry can be validated in a unit test. */
             val DAEMON_HANDLERS: Set<String> =
                 setOf(
-                    "nmap", "hydra", "ettercap", "tcpdump", "arpspoof",
+                    "nmap", "ettercap", "tcpdump", "arpspoof",
                     "fusemounts", "network-radar", "msfrpcd", "raw", "blind",
                 )
+
+            /** Tools that run via direct `su -c` (bypass daemon). Their handlers are pseudo-handlers. */
+            val DIRECT_HANDLERS: Set<String> =
+                setOf("direct")
 
             /**
              * Registry, one spec per name. Tools whose real handler exists in
@@ -145,11 +157,11 @@ class SmartToolBox
             val TOOL_SPECS: List<ToolSpec> =
                 listOf(
                     ToolSpec("nmap", "nmap", "Network scanner", "nmap"),
-                    ToolSpec("masscan", "raw", "High-speed port scanner", "masscan"),
-                    ToolSpec("hydra", "hydra", "Login cracker", "hydra"),
-                    ToolSpec("aircrack-ng", "raw", "WiFi WEP/WPA cracker", "aircrack-ng"),
+                    ToolSpec("masscan", "direct", "High-speed port scanner", "masscan"),
+                    ToolSpec("hydra", "direct", "Login cracker", "hydra"),
+                    ToolSpec("aircrack-ng", "direct", "WiFi WEP/WPA cracker", "aircrack-ng"),
                     ToolSpec("reaver", "raw", "WPS PIN cracker", "reaver"),
-                    ToolSpec("hping3", "raw", "Packet crafter", "hping3"),
+                    ToolSpec("hping3", "direct", "Packet crafter", "hping3"),
                     ToolSpec("nuclei", "raw", "Vulnerability scanner", "nuclei"),
                     ToolSpec("gobuster", "raw", "Directory/file brute-forcer", "gobuster"),
                     ToolSpec("bettercap", "raw", "Network attack framework", "bettercap"),
@@ -242,6 +254,29 @@ class SmartToolBox
                     client.isConnected() &&
                     client.isAuthenticated()
             }.getOrDefault(false)
+
+        /**
+         * Asks for a tool that runs via direct `su -c` (bypasses daemon).
+         *
+         * Checks root access instead of daemon liveness. Returns a ToolHandle with the
+         * appropriate message so the UI can show the same pattern as [requireTool].
+         */
+        suspend fun requireDirectTool(name: String): ToolHandle =
+            withContext(Dispatchers.IO) {
+                val status = rootManager.detectRoot()
+                if (!status.isRooted) {
+                    val msg = rootManager.guidance(status)
+                        ?: "Root access required. Enable root in Settings or grant in your root manager."
+                    ToolHandle.RootRequired(msg)
+                } else {
+                    val tool = getTool(name)
+                    if (tool == null) {
+                        ToolHandle.Missing(name)
+                    } else {
+                        ToolHandle.Ready(tool)
+                    }
+                }
+            }
 
         fun getAvailableTools(): List<SmartTool> = tools.values.filter { it.isAvailable() }
 
@@ -597,6 +632,238 @@ class SmartToolBox
                 timeoutMs = LONG_RUNNING_TIMEOUT_MS,
             )
 
+
+        /**
+         * Runs a command directly via `su -c` using [ProcessManager], bypassing the daemon.
+         *
+         * This is for tools that don't need the daemon's structured events (only nmap's handler
+         * provides Port/Os events). Running via direct `su` means:
+         * - Works even when the daemon is down
+         * - No daemon restart needed for binary updates (OTA)
+         * - Process tree is killed on cancellation (TERM then KILL)
+         * - stderr and stdout are streamed live
+         *
+         * The command runs as root, so user-typed fields MUST be [shellQuote]d.
+         */
+        @Suppress("LongMethod", "CyclomaticComplexMethod", "UnusedParameter")
+        private fun runDirect(
+            label: String,
+            command: String,
+            timeoutMs: Long = TOOL_TIMEOUT_MS,
+            secrets: Collection<String> = emptyList(),
+        ): Flow<ToolResult> = channelFlow {
+            val output = StringBuilder()
+            var finished = false
+            var exitValue: Int? = null
+            var pid: Int? = null
+
+            val events = processManager.execute(
+                command = command,
+                env = emptyMap(),
+                asSu = true,
+                secrets = secrets,
+            )
+
+            send(
+                ToolResult(
+                    tool = label,
+                    success = true,
+                    status = STATUS_RUNNING,
+                    pid = -1,
+                    rawOutput = "Executing: $label $command",
+                ),
+            )
+
+            try {
+                events.collect { event ->
+                    when (event) {
+                        is SystemProcessEvent.StdoutLine -> {
+                            val line = event.line
+                            if (pid == null && line.startsWith("INDRA_PID=")) {
+                                pid = line.substringAfter("INDRA_PID=").toIntOrNull()
+                            } else {
+                                output.appendLine(line)
+                                send(
+                                    ToolResult(
+                                        tool = label,
+                                        success = true,
+                                        status = STATUS_RUNNING,
+                                        pid = pid ?: -1,
+                                        rawOutput = line,
+                                    ),
+                                )
+                            }
+                        }
+                        is SystemProcessEvent.StderrLine -> {
+                            output.appendLine(event.line)
+                            send(
+                                ToolResult(
+                                    tool = label,
+                                    success = true,
+                                    status = STATUS_RUNNING,
+                                    pid = pid ?: -1,
+                                    rawOutput = event.line,
+                                ),
+                            )
+                        }
+                        is SystemProcessEvent.Exited -> {
+                            exitValue = event.code
+                            finished = true
+                        }
+                        is SystemProcessEvent.Killed -> {
+                            exitValue = SHELL_SIGNAL_BASE + event.signal
+                            finished = true
+                        }
+                    }
+                    if (finished) {
+                        val status = when {
+                            exitValue == 0 || exitValue == 1 -> STATUS_COMPLETED
+                            else -> STATUS_TIMEOUT
+                        }
+                        val success = exitValue == 0 || exitValue == 1
+                        send(
+                            ToolResult(
+                                tool = label,
+                                success = success,
+                                status = status,
+                                pid = pid ?: -1,
+                                rawOutput = output.toString().trim(),
+                                exitValue = exitValue,
+                                error = if (success) null else "Exited with code $exitValue${reasonSuffix(output.toString())}",
+                            ),
+                        )
+                        close()
+                    }
+                }
+            } catch (e: Exception) {
+                if (!finished) {
+                    send(
+                        ToolResult(
+                            tool = label,
+                            success = false,
+                            status = STATUS_FAILED,
+                            pid = pid ?: -1,
+                            rawOutput = output.toString().trim(),
+                            error = "Direct execution failed: ${e.message}",
+                        ),
+                    )
+                    close()
+                }
+            }
+        }
+
+        // ---- Direct su tools (bypass daemon) ---------------------------------
+
+        /**
+         * Wordlist login crack via direct su (bypasses daemon).
+         */
+        fun hydraDirect(
+            target: String,
+            service: String,
+            user: String,
+            passList: String = defaultWordlist(),
+            port: String? = null,
+        ): Flow<ToolResult> =
+            runDirect(
+                "hydra",
+                buildString {
+                    append("hydra -V -l ${shellQuote(user)}")
+                    port?.trim()?.takeIf { it.isNotEmpty() }?.let { append(" -s ${shellQuote(it)}") }
+                    append(" -P ${shellQuote(passList)} ${shellQuote(target)} ${shellQuote(service)}")
+                },
+                timeoutMs = LONG_RUNNING_TIMEOUT_MS,
+                secrets = listOf(user, passList),
+            )
+
+        /**
+         * Tests a single credential pair (`-p`) instead of a whole wordlist.
+         */
+        fun hydraCredentialDirect(
+            target: String,
+            service: String,
+            user: String,
+            password: String,
+            port: String? = null,
+        ): Flow<ToolResult> =
+            runDirect(
+                "hydra",
+                buildString {
+                    append("hydra -V -l ${shellQuote(user)}")
+                    port?.trim()?.takeIf { it.isNotEmpty() }?.let { append(" -s ${shellQuote(it)}") }
+                    append(" -p ${shellQuote(password)} ${shellQuote(target)} ${shellQuote(service)}")
+                },
+                timeoutMs = LONG_RUNNING_TIMEOUT_MS,
+                secrets = listOf(user, password),
+            )
+
+        /**
+         * nmap's traceroute via direct su.
+         */
+        fun tracerouteDirect(target: String): Flow<ToolResult> =
+            runDirect(
+                "traceroute",
+                "nmap -sn --traceroute -v -n ${shellQuote(target)}",
+                timeoutMs = SCAN_TIMEOUT_MS,
+            )
+
+        /**
+         * Packet crafting via hping3 direct su.
+         */
+        fun hping3Direct(
+            target: String,
+            args: String = "",
+        ): Flow<ToolResult> =
+            runDirect(
+                "hping3",
+                "hping3 $args ${shellQuote(target)}",
+                timeoutMs = SCAN_TIMEOUT_MS,
+            )
+
+        /**
+         * High-speed port scanner via direct su.
+         */
+        fun masscanDirect(
+            target: String,
+            args: String = "",
+            iface: String = "",
+        ): Flow<ToolResult> =
+            flow {
+                val resolved =
+                    withContext(Dispatchers.IO) {
+                        CaptureIface.masscanArgs(iface, args) { networkHelper.captureInterface() }
+                    }
+                if (!resolved.trimStart().startsWith("-e")) {
+                    emit(
+                        ToolResult(
+                            tool = "masscan",
+                            success = false,
+                            status = STATUS_FAILED,
+                            error =
+                                "No suitable network interface for masscan (need Wi-Fi, Ethernet, or " +
+                                    "USB tethering). Cellular interfaces (rmnet*) are not supported by libpcap.",
+                            rawOutput = "",
+                        ),
+                    )
+                    return@flow
+                }
+                emitAll(
+                    runDirect(
+                        "masscan",
+                        "masscan $resolved ${shellQuote(target)}",
+                        timeoutMs = SCAN_TIMEOUT_MS,
+                    ),
+                )
+            }
+
+        /**
+         * WiFi WEP/WPA cracker via direct su.
+         */
+        fun aircrackDirect(args: String): Flow<ToolResult> =
+            runDirect(
+                "aircrack",
+                "aircrack-ng $args",
+                timeoutMs = LONG_RUNNING_TIMEOUT_MS,
+            )
 
         /**
          * Runs a POSIX shell script through `/system/bin/sh -c`.
@@ -1265,6 +1532,11 @@ sealed interface ToolHandle {
         override val message: String
             get() = "Native daemon is not running — install the core and start it in Settings → Native Core."
     }
+
+    /** Root access is required but not granted. */
+    data class RootRequired(
+        override val message: String,
+    ) : ToolHandle
 
     /** Daemon is reachable, but this handler/binary is not part of the installed core. */
     data class Missing(

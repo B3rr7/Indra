@@ -18,23 +18,24 @@ class ToolRegistryTest {
     }
 
     @Test
-    fun `every registry entry binds to a real daemon handler`() {
+    fun `every registry entry binds to a real daemon handler or a direct handler`() {
         val offenders =
-            SmartToolBox.TOOL_SPECS.filter { it.handler !in SmartToolBox.DAEMON_HANDLERS }
+            SmartToolBox.TOOL_SPECS.filter { it.handler !in SmartToolBox.DAEMON_HANDLERS && it.handler !in SmartToolBox.DIRECT_HANDLERS }
         assertTrue(
-            " Handlers not in the daemon's loadHandlers() set: " +
+            " Handlers not in the daemon's loadHandlers() set or direct handlers: " +
                 offenders.joinToString { "${it.name}->${it.handler}" },
             offenders.isEmpty(),
         )
     }
 
     @Test
-    fun `adaemon handler set matches the native core build`() {
+    fun `daemon handler set matches the native core build`() {
         // Update this test together with the native handlers (jni/src/.../handlers)
         // whenever a handler is added or removed from the core package.
+        // hydra moved to direct su in Phase 3.
         assertEquals(
             setOf(
-                "nmap", "hydra", "ettercap", "tcpdump", "arpspoof",
+                "nmap", "ettercap", "tcpdump", "arpspoof",
                 "fusemounts", "network-radar", "msfrpcd", "raw", "blind",
             ),
             SmartToolBox.DAEMON_HANDLERS,

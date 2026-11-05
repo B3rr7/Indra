@@ -78,7 +78,7 @@ class CredentialTesterViewModel
                     return@launch
                 }
 
-                val gate = toolBox.requireTool("raw")
+                val gate = toolBox.requireDirectTool("hydra")
                 if (gate !is ToolHandle.Ready) {
                     _uiState.value =
                         _uiState.value.copy(
@@ -94,7 +94,13 @@ class CredentialTesterViewModel
                 var failure: String? = null
                 var found = false
 
-                toolBox.hydraCredential(target, "ssh", user, password, port = state.port.trim().takeIf { it.isNotBlank() }).collect { result ->
+                toolBox.hydraCredentialDirect(
+                    target,
+                    "ssh",
+                    user,
+                    password,
+                    port = state.port.trim().takeIf { it.isNotBlank() },
+                ).collect { result ->
                     result.streamedLine?.let { line ->
                         output.appendLine(line)
                         if (isHydraSuccess(line)) found = true

@@ -24,6 +24,8 @@ class SmartToolBoxRunner
     ) : ToolRunner {
         override suspend fun requireTool(name: String): ToolHandle = box.requireTool(name)
 
+        override suspend fun requireDirectTool(name: String): ToolHandle = box.requireDirectTool(name)
+
         override fun command(
             label: String,
             command: String,
@@ -42,6 +44,12 @@ class SmartToolBoxRunner
             iface: String,
         ): Flow<ToolResult> = box.masscan(target, args, iface)
 
+        override fun masscanDirect(
+            target: String,
+            args: String,
+            iface: String,
+        ): Flow<ToolResult> = box.masscanDirect(target, args, iface)
+
         override fun tcpdump(
             iface: String,
             filter: String,
@@ -50,6 +58,8 @@ class SmartToolBoxRunner
         ): Flow<ToolResult> = box.tcpdump(iface, filter, count, outFile)
 
         override fun aircrack(args: String): Flow<ToolResult> = box.aircrack(args)
+
+        override fun aircrackDirect(args: String): Flow<ToolResult> = box.aircrackDirect(args)
 
         override suspend fun nuclei(
             target: String,

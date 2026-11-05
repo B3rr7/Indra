@@ -40,6 +40,12 @@ class FakeToolRunner : ToolRunner {
     /** What [requireTool] answers. [ready] flips it between the two interesting states. */
     var ready: Boolean = true
 
+    /** What [requireDirectTool] answers. */
+    var directReady: Boolean = true
+
+    /** The exact gate returned when [directReady] is false. */
+    var directGate: ToolHandle = ToolHandle.RootRequired("Root required")
+
     /** The exact gate returned when [ready] is false. */
     var gate: ToolHandle = ToolHandle.DaemonDown
 
@@ -69,6 +75,11 @@ class FakeToolRunner : ToolRunner {
         return if (ready) ToolHandle.Ready(tool()) else gate
     }
 
+    override suspend fun requireDirectTool(name: String): ToolHandle {
+        gateCalls += 1
+        return if (directReady) ToolHandle.Ready(tool()) else directGate
+    }
+
     override fun command(
         label: String,
         command: String,
@@ -87,6 +98,12 @@ class FakeToolRunner : ToolRunner {
         iface: String,
     ): Flow<ToolResult> = record("masscan", "masscan ${if (iface.isBlank()) "" else "-e $iface "}$args $target")
 
+    override fun masscanDirect(
+        target: String,
+        args: String,
+        iface: String,
+    ): Flow<ToolResult> = record("masscan", "masscan ${if (iface.isBlank()) "" else "-e $iface "}$args $target")
+
     override fun tcpdump(
         iface: String,
         filter: String,
@@ -95,6 +112,8 @@ class FakeToolRunner : ToolRunner {
     ): Flow<ToolResult> = record("tcpdump", "tcpdump $iface $filter $count ${outFile ?: ""}")
 
     override fun aircrack(args: String): Flow<ToolResult> = record("aircrack", args)
+
+    override fun aircrackDirect(args: String): Flow<ToolResult> = record("aircrack", args)
 
     override suspend fun nuclei(
         target: String,
