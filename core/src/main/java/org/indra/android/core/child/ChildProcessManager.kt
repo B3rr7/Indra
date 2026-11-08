@@ -4,7 +4,8 @@ import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
-import org.indra.android.core.client.IndraClient
+import javax.inject.Provider
+import org.indra.android.core.client.KotlinDaemonClient
 import org.indra.android.core.longrun.LongRunController
 import org.indra.android.core.system.Logger
 import org.indra.android.events.ChildDied
@@ -22,7 +23,7 @@ import javax.inject.Singleton
 class ChildProcessManager
     @Inject
     constructor(
-        private val client: IndraClient,
+        private val clientProvider: Provider<KotlinDaemonClient>,
         private val longRun: LongRunController,
     ) {
         private val registry = ChildRegistry()
@@ -86,7 +87,7 @@ class ChildProcessManager
         /** Stops every tracked child (used before a binary swap underneath running tools). */
         fun stopAllRunning() {
             registry.ids().forEach { pid ->
-                runCatching { client.kill(pid, 9) }
+                runCatching { clientProvider.get().kill(pid, 9) }
                     .onFailure { Logger.w("kill($pid) failed before a binary swap: ${it.message}") }
                 // Forget it either way: a pid that cannot be killed is almost always
                 // already gone, and keeping it would report a phantom running tool forever.

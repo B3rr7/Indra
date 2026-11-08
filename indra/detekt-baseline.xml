@@ -6,23 +6,6 @@
     <ID>LongMethod:HomeScreen.kt$@Composable fun ModernToolCard( plugin: PluginInfo, onClick: () -&gt; Unit, modifier: Modifier = Modifier, onUpdate: (() -&gt; Unit)? = null, updating: Boolean = false, updateEnabled: Boolean = true, )</ID>
     <ID>LongMethod:HomeScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun HomeScreen( onNavigateToPlugin: (String) -&gt; Unit, onNavigateToNetworkRadar: () -&gt; Unit, onNavigateToSettings: () -&gt; Unit, viewModel: HomeViewModel = hiltViewModel(), )</ID>
     <ID>LongMethod:SettingsScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun SettingsScreen( onNavigateBack: () -&gt; Unit, onNavigateToLogs: () -&gt; Unit, viewModel: SettingsViewModel = hiltViewModel(), )</ID>
-    <ID>MagicNumber:HomeScreen.kt$600</ID>
-    <ID>MagicNumber:SettingsCards.kt$SettingsPalette$0xFF00E5FF</ID>
-    <ID>MagicNumber:SettingsCards.kt$SettingsPalette$0xFF00E676</ID>
-    <ID>MagicNumber:SettingsCards.kt$SettingsPalette$0xFF1DE9B6</ID>
-    <ID>MagicNumber:SettingsCards.kt$SettingsPalette$0xFF448AFF</ID>
-    <ID>MagicNumber:SettingsCards.kt$SettingsPalette$0xFF536DFE</ID>
-    <ID>MagicNumber:SettingsCards.kt$SettingsPalette$0xFF69F0AE</ID>
-    <ID>MagicNumber:SettingsCards.kt$SettingsPalette$0xFF7C4DFF</ID>
-    <ID>MagicNumber:SettingsCards.kt$SettingsPalette$0xFFB388FF</ID>
-    <ID>MagicNumber:SettingsCards.kt$SettingsPalette$0xFFC6FF00</ID>
-    <ID>MagicNumber:SettingsCards.kt$SettingsPalette$0xFFE040FB</ID>
-    <ID>MagicNumber:SettingsCards.kt$SettingsPalette$0xFFFF4081</ID>
-    <ID>MagicNumber:SettingsCards.kt$SettingsPalette$0xFFFF5252</ID>
-    <ID>MagicNumber:SettingsCards.kt$SettingsPalette$0xFFFF6D00</ID>
-    <ID>MagicNumber:SettingsCards.kt$SettingsPalette$0xFFFF9800</ID>
-    <ID>MagicNumber:SettingsCards.kt$SettingsPalette$0xFFFFC107</ID>
-    <ID>MagicNumber:SettingsCards.kt$SettingsPalette$0xFFFFD600</ID>
     <ID>MagicNumber:SettingsScreen.kt$5</ID>
     <ID>MagicNumber:SettingsScreen.kt$65535</ID>
     <ID>MagicNumber:SettingsViewModel.kt$SettingsViewModel$65535</ID>

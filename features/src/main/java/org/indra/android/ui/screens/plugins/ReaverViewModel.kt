@@ -53,13 +53,13 @@ class ReaverViewModel
             }
             job =
                 viewModelScope.launch {
-                    val gate = toolBox.requireTool("reaver")
+                    val gate = toolBox.requireDirectTool("reaver")
                     if (gate !is ToolHandle.Ready) {
                         _uiState.value = _uiState.value.copy(error = gate.message)
                         return@launch
                     }
                     _uiState.value = _uiState.value.copy(isRunning = true, error = null, output = emptyList())
-                    toolBox.reaver(iface, bssid).collect { result ->
+                    toolBox.reaverDirect(iface, bssid).collect { result ->
                         if (result.pid > 0) pid = result.pid
                         result.streamedLine?.let { line ->
                             _uiState.value = _uiState.value.copy(output = _uiState.value.output + line)
@@ -74,7 +74,6 @@ class ReaverViewModel
         }
 
         fun stop() {
-            if (pid > 0) toolBox.stop(pid)
             job?.cancel()
             job = null
             pid = -1

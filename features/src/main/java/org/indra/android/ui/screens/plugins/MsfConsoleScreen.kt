@@ -112,7 +112,7 @@ private fun MsfInstallCard(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(
-                "Metasploit is not installed (it ships as its own glibc chroot tarball).",
+                "Metasploit is not installed (it ships as its own self-contained chroot rootfs).",
                 style = MaterialTheme.typography.bodyMedium,
             )
             OutlinedTextField(

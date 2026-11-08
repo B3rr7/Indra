@@ -136,9 +136,10 @@
     <ID>MagicNumber:TopologyScreen.kt$24f</ID>
     <ID>MagicNumber:WifiteViewModel.kt$WifiteViewModel$50</ID>
     <ID>MaxLineLength:BettercapViewModel.kt$BettercapViewModel$private val _uiState = MutableStateFlow(BettercapUiState(bettercapInstalled = coreManager.isBettercapInstalled(), bettercapUrl = settings.bettercapUrl))</ID>
-    <ID>MaxLineLength:CredentialTesterViewModel.kt$CredentialTesterViewModel$toolBox.hydraCredential(target, "ssh", user, password, port = state.port.trim().takeIf { it.isNotBlank() })</ID>
     <ID>MaxLineLength:DuckyScriptScreen.kt$Button(onClick = { viewModel.run() }, modifier = Modifier.weight(1f)) { Text(if (uiState.status == "Running…") "Running…" else "Run") }</ID>
+    <ID>MaxLineLength:ExploitFinderViewModel.kt$ExploitFinderViewModel$error = "Metasploit is not installed — install the Metasploit bundle in Settings → Bundle Updates, or paste a rootfs tarball URL on the card above."</ID>
     <ID>MaxLineLength:GadgetProfilesScreen.kt$Text("Capability: ${if (cap?.isGadgetCapable == true) "Gadget-capable" else "Not gadget-capable"}", style = MaterialTheme.typography.bodyMedium)</ID>
+    <ID>MaxLineLength:MsfConsoleViewModel.kt$MsfConsoleViewModel$error = "Metasploit is not installed — install the Metasploit bundle in Settings → Bundle Updates, or use the card above."</ID>
     <ID>MaxLineLength:OneTapMitmScreen.kt$"Automates ARP spoofing: tells the target that this device is the gateway. Run Session Hijacking in parallel to capture cookies. Requires root."</ID>
     <ID>MaxLineLength:PacketCaptureScreen.kt$"Enabling monitor mode on this interface may crash or reboot the device on some vendor drivers (similar risk to MITM/arpspoof). Continue?"</ID>
     <ID>MaxLineLength:SessionHijackViewModel.kt$SessionHijackViewModel$val host = _uiState.value.output.lastOrNull { it.lowercase().contains("host:") }?.substringAfter(":", "")?.trim() ?: "unknown"</ID>

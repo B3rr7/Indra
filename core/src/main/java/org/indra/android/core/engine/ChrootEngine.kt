@@ -28,10 +28,10 @@ import javax.inject.Singleton
  * | `/dev`, `/dev/pts` | `/dev`, `/dev/pts` | `/dev/null`, `/dev/urandom`, ptys |
  */
 
-/** Which chroot to use. ALPINE for musl tools; MSF_GLIBC for Metasploit (glibc). */
+/** Which chroot to use. ALPINE for musl tools; MSF for the Metasploit rootfs. */
 enum class ChrootType {
     ALPINE,
-    MSF_GLIBC,
+    MSF,
 }
 
 @Suppress("TooManyFunctions")
@@ -55,16 +55,25 @@ class ChrootEngine
 
         fun isInstalled(): Boolean = coreManager.isAlpineInstalled()
 
-        /** Checks MSF_GLIBC chroot installation. */
+        /** Checks MSF chroot installation. */
         fun isMsfInstalled(): Boolean = coreManager.isMsfInstalled()
 
         /** Rootfs path for the given type. */
         fun rootPath(type: ChrootType): File = when (type) {
             ChrootType.ALPINE -> root
-            ChrootType.MSF_GLIBC -> coreManager.msfPath()
+            ChrootType.MSF -> coreManager.msfPath()
         }
 
         fun capability(capability: Capability): CapabilityState {
+            // MSF ships as its own self-contained rootfs, so its availability has nothing to
+            // do with the Alpine engine being installed.
+            if (capability == Capability.MSF) {
+                return if (coreManager.isMsfInstalled()) {
+                    CapabilityState.Available
+                } else {
+                    CapabilityState.Missing(capability, fixFor(capability))
+                }
+            }
             if (!isInstalled()) return CapabilityState.EngineNotInstalled(INSTALL_FIX)
             val present =
                 when (capability) {
@@ -73,7 +82,8 @@ class ChrootEngine
                     Capability.HASHCAT -> executable("usr/bin/hashcat") || executable("usr/sbin/hashcat")
                     Capability.HCXTOOLS -> executable("usr/bin/hcxpcapngtool") || executable("usr/sbin/hcxpcapngtool")
                     Capability.NUCLEI_TEMPLATES -> hasNucleiTemplates()
-                    Capability.MSF -> coreManager.msfPath().let { File(it, "msfconsole").exists() }
+                    // Handled above; kept so the `when` stays exhaustive.
+                    Capability.MSF -> coreManager.isMsfInstalled()
                     // `iw` alone is not enough: the mode switch also sets the link up/down,
                     // and Alpine's minirootfs ships no `ip` (iproute2 is a separate package).
                     Capability.IW -> hasIw() && hasIp()
@@ -107,6 +117,37 @@ class ChrootEngine
                 mounts = mounts(),
                 dirs = listOf("/root/.cache", "/root/.config", cacheMountPoint, ChrootScript.CORE_MOUNT),
                 resolvConf = (dns ?: dnsText()).ifEmpty { null },
+            )
+
+        /**
+         * Rootfs + bind mounts + DNS for [type].
+         *
+         * The Metasploit rootfs carries its own Ruby and framework, so it needs no `/indra`
+         * or cache bind mount — only the kernel filesystems Ruby and the RPC server expect.
+         * A separate script rather than a parameter because the two rootfs layouts have
+         * nothing in common beyond `/proc`, `/dev` and a resolver.
+         */
+        fun setupScriptFor(
+            type: ChrootType,
+            dns: String? = null,
+        ): String =
+            when (type) {
+                ChrootType.ALPINE -> setupScript(dns)
+                ChrootType.MSF ->
+                    ChrootScript.setup(
+                        root = rootPath(type).absolutePath,
+                        mounts = kernelMounts(),
+                        dirs = listOf("/root", "/root/.msf4", "/tmp"),
+                        resolvConf = (dns ?: dnsText()).ifEmpty { null },
+                    )
+            }
+
+        private fun kernelMounts(): List<ChrootScript.Mount> =
+            listOf(
+                ChrootScript.Mount(target = "/proc", source = "proc", fsType = "proc", required = false),
+                ChrootScript.Mount(target = "/sys", source = "/sys", required = false),
+                ChrootScript.Mount(target = "/dev", source = "/dev", required = false),
+                ChrootScript.Mount(target = "/dev/pts", source = "/dev/pts", required = false),
             )
 
         fun teardownScript(): String = ChrootScript.teardown(root.absolutePath, mounts())
@@ -190,7 +231,8 @@ class ChrootEngine
                         "(the engine writes the chroot's resolv.conf, so GitHub is reachable) — that run takes " +
                         "several minutes. Refresh them up front on the Vulnerability Scanner screen."
                 Capability.MSF ->
-                    "Metasploit is not installed. Install it on the Exploit Finder screen."
+                    "Metasploit is not installed. Install the Metasploit bundle in Settings → Bundle Updates " +
+                        "(download-only, ≈ 400 MB) — it is a self-contained chroot, so nothing is added to the APK."
             }
 
         companion object {

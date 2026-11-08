@@ -58,6 +58,30 @@ class ToolRegistryTest {
     }
 
     @Test
+    fun `every direct gate names a registry entry`() {
+        // The screens that run a tool through `su` gate on a *registry* name. Traceroute gated
+        // on "traceroute", which is not a shipped binary (it is `nmap --traceroute`) and showed
+        // "'traceroute' is not available — install or update the native core" on device.
+        val gates = listOf("hydra", "nmap", "masscan", "hping3", "aircrack-ng")
+        val registered = SmartToolBox.TOOL_SPECS.map { it.name }.toSet()
+        val unknown = gates - registered
+        assertTrue("Direct gates with no registry entry: $unknown", unknown.isEmpty())
+    }
+
+    @Test
+    fun `direct tools resolve through the bundled tools path`() {
+        // A direct `su` run starts in `/` with the system PATH, so a bare binary name is only
+        // found when its own `tools/<name>` directory is on PATH. On device, Phase 3 handed
+        // `hydra`/`hping3`/`masscan`/`nmap`/`aircrack-ng` to `su -c` by bare name and got
+        // "/system/bin/sh: hydra: inaccessible or not found" with the binary in the core.
+        val dirs = SmartToolBox.directToolDirs(java.io.File("/core"))
+        listOf("hydra", "nmap", "aircrack-ng", "hping3", "masscan").forEach { binary ->
+            assertTrue("$binary missing from the direct PATH: $dirs", "/core/tools/$binary" in dirs)
+        }
+        assertEquals("direct PATH must not repeat a directory: $dirs", dirs.size, dirs.toSet().size)
+    }
+
+    @Test
     fun `shellQuote is POSIX-safe`() {
         assertEquals("'hello'", SmartToolBox.shellQuote("hello"))
         // O'Brien -> 'O'\''Brien' (close quote, escaped quote, reopen)

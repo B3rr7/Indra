@@ -52,13 +52,13 @@ class BettercapViewModel @Inject constructor(
         }
         val args = st.args.trim().ifEmpty { "-h" }
         job = viewModelScope.launch {
-            val gate = toolBox.requireTool("bettercap")
+            val gate = toolBox.requireDirectTool("bettercap")
             if (gate !is ToolHandle.Ready) {
                 _uiState.value = _uiState.value.copy(error = gate.message)
                 return@launch
             }
             _uiState.value = _uiState.value.copy(isRunning = true, error = null, output = emptyList())
-            toolBox.bettercap(args).collect { result ->
+            toolBox.bettercapDirect(args).collect { result ->
                 if (result.pid > 0) pid = result.pid
                 result.streamedLine?.let { line ->
                     _uiState.value = _uiState.value.copy(output = _uiState.value.output + line)
@@ -73,7 +73,6 @@ class BettercapViewModel @Inject constructor(
     }
 
     fun stop() {
-        if (pid > 0) toolBox.stop(pid)
         job?.cancel(); job = null; pid = -1
         _uiState.value = _uiState.value.copy(isRunning = false)
     }

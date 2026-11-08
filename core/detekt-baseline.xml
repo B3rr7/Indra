@@ -3,18 +3,22 @@
   <ManuallySuppressedIssues/>
   <CurrentIssues>
     <ID>ComplexCondition:OtaModels.kt$b[0] != 0x7F.toByte() || b[1] != 0x45.toByte() || b[2] != 0x4C.toByte() || b[3] != 0x46.toByte()</ID>
+    <ID>CyclomaticComplexMethod:ChrootEngine.kt$ChrootEngine$fun capability(capability: Capability): CapabilityState</ID>
     <ID>CyclomaticComplexMethod:CoreManager.kt$CoreManager$private suspend fun installTarballArtifact( title: String, url: String, dir: File, tmpName: String, onProgress: (Float) -&gt; Unit, urlErrorMessage: String = "$title tarball URL is not configured in Settings", executable: File? = null, ): Result&lt;Unit&gt;</ID>
     <ID>CyclomaticComplexMethod:CoreManager.kt$CoreManager$suspend fun installAlpine(onProgress: (Float) -&gt; Unit = {}): Result&lt;Unit&gt;</ID>
     <ID>CyclomaticComplexMethod:CoreManager.kt$CoreManager$suspend fun installNuclei(onProgress: (Float) -&gt; Unit = {}): Result&lt;Unit&gt;</ID>
     <ID>CyclomaticComplexMethod:OtaModels.kt$internal fun parseOtaManifest(json: String): OtaManifest?</ID>
     <ID>CyclomaticComplexMethod:SmartToolBox.kt$SmartToolBox$private fun execute( tool: String, args: String, label: String = tool, timeoutMs: Long = TOOL_TIMEOUT_MS, ): Flow&lt;ToolResult&gt;</ID>
     <ID>FunctionOnlyReturningConstant:RootManager.kt$RootManager$fun canRunRootless(): Boolean</ID>
+    <ID>LargeClass:CoreManager.kt$CoreManager</ID>
     <ID>LargeClass:SmartToolBox.kt$SmartToolBox</ID>
     <ID>LongMethod:SmartToolBox.kt$SmartToolBox$private fun execute( tool: String, args: String, label: String = tool, timeoutMs: Long = TOOL_TIMEOUT_MS, ): Flow&lt;ToolResult&gt;</ID>
     <ID>MagicNumber:AppUpdateManager.kt$AppUpdateManager$8192</ID>
     <ID>MagicNumber:ChildProcessManager.kt$ChildProcessManager$9</ID>
     <ID>MagicNumber:CoreManager.kt$CoreManager$100</ID>
     <ID>MagicNumber:CoreManager.kt$CoreManager$20</ID>
+    <ID>MagicNumber:CoreManager.kt$CoreManager$3</ID>
+    <ID>MagicNumber:CoreManager.kt$CoreManager$4</ID>
     <ID>MagicNumber:CoreManager.kt$CoreManager$8192</ID>
     <ID>MagicNumber:NetworkHelper.kt$NetworkHelper$0xff</ID>
     <ID>MagicNumber:NetworkHelper.kt$NetworkHelper$16</ID>
@@ -33,6 +37,8 @@
     <ID>MaxLineLength:SmartToolBox.kt$SmartToolBox$output.appendLine("[hint] This feature requires root. Disable rootless mode in Settings or run as root.")</ID>
     <ID>NestedBlockDepth:NetworkHelper.kt$NetworkHelper$fun getLocalIpv4Addresses(): Set&lt;String&gt;</ID>
     <ID>NestedBlockDepth:SmartToolBox.kt$SmartToolBox$suspend fun versionOf(binary: String): String?</ID>
+    <ID>ReturnCount:ChrootEngine.kt$ChrootEngine$fun capability(capability: Capability): CapabilityState</ID>
+    <ID>ReturnCount:MsfDaemon.kt$MsfDaemon$private suspend fun runStart(gen: Long)</ID>
     <ID>ReturnCount:NetworkHelper.kt$NetworkHelper$@Suppress("DEPRECATION") fun getWifiGatewayAddress(): String?</ID>
     <ID>ReturnCount:NetworkHelper.kt$NetworkHelper$@Suppress("DEPRECATION") private fun legacyDhcpGateway(): String?</ID>
     <ID>ReturnCount:NetworkHelper.kt$NetworkHelper$fun getGatewayAddress(): String?</ID>
@@ -61,7 +67,6 @@
     <ID>TooGenericExceptionCaught:SmartToolBox.kt$SmartTool$e: Throwable</ID>
     <ID>TooGenericExceptionCaught:SmartToolBox.kt$SmartToolBox$e: Exception</ID>
     <ID>TooManyFunctions:CoreManager.kt$CoreManager</ID>
-    <ID>TooManyFunctions:IndraClient.kt$IndraClient</ID>
     <ID>TooManyFunctions:Logger.kt$Logger</ID>
     <ID>TooManyFunctions:NetworkHelper.kt$NetworkHelper</ID>
     <ID>TooManyFunctions:OtaUpdateManager.kt$OtaUpdateManager</ID>

@@ -59,8 +59,10 @@ class TracerouteViewModel
             viewModelScope.launch {
                 val target = _uiState.value.target.trim()
 
-                // The core ships no traceroute binary: nmap's --traceroute is the only one.
-                val gate = toolBox.requireDirectTool("traceroute")
+                // The core ships no traceroute binary: nmap's --traceroute is the only one, so
+                // the gate names `nmap`. Gating on "traceroute" reported
+                // "'traceroute' is not available — install or update the native core" on device.
+                val gate = toolBox.requireDirectTool("nmap")
                 if (gate !is ToolHandle.Ready) {
                     _uiState.value =
                         _uiState.value.copy(

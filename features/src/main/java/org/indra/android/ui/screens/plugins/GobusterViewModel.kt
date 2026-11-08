@@ -54,8 +54,8 @@ class GobusterViewModel
         private val _uiState =
             MutableStateFlow(
                 GobusterUiState(
-                    gobusterInstalled = coreManager.isGobusterInstalled(),
-                    wordlist = toolBox.defaultDirWordlist(),
+                    gobusterInstalled = false,
+                    wordlist = "",
                     rootless = settings.rootlessMode,
                 ),
             )
@@ -66,6 +66,14 @@ class GobusterViewModel
         init {
             refreshSuggestions()
             viewModelScope.launch { networkRepository.discoveredHosts.collect { refreshSuggestions() } }
+            viewModelScope.launch(Dispatchers.IO) {
+                val wordlist = toolBox.defaultDirWordlist()
+                _uiState.value =
+                    _uiState.value.copy(
+                        gobusterInstalled = coreManager.isGobusterInstalled(),
+                        wordlist = _uiState.value.wordlist.ifBlank { wordlist },
+                    )
+            }
         }
 
         private fun refreshSuggestions() {

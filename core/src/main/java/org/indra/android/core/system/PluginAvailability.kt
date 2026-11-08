@@ -22,6 +22,7 @@ class PluginAvailability
         private val toolBox: SmartToolBox,
         private val coreManager: CoreManager,
         private val settings: SettingsRepository,
+        private val rootManager: RootManager,
     ) {
         /**
          * Why a plugin card is dimmed, in the user's terms.
@@ -80,6 +81,9 @@ class PluginAvailability
                 plugin.id in daemonFreePlugins -> PluginStatus.AVAILABLE
                 settings.rootlessMode && Rootless.supports(plugin.id) -> PluginStatus.AVAILABLE
                 settings.rootlessMode -> PluginStatus.NEEDS_ROOT
+                // Direct-`su` tools have no daemon handler to probe, so asking the daemon for
+                // one can only ever dim them; their gate is the bundled binary plus root.
+                SmartToolBox.isDirectTool(plugin.requires) -> directStatus(plugin)
                 else -> daemonStatus(plugin)
             }
 
@@ -111,6 +115,23 @@ class PluginAvailability
             }
         }
 
+        /**
+         * Direct-`su` tools (hydra, hping3, masscan, aircrack-ng): the daemon is not involved.
+         *
+         * Their registry handler is the `direct` pseudo-handler, which the daemon never reports,
+         * so [daemonStatus] could only ever answer TOOL_MISSING for them. That dimmed five cards
+         * — Masscan, Login Cracker, Packet Forger, Credential Tester, WiFi Audit — with "not in
+         * native core" on a device where the binary was in the core and root was granted, and a
+         * dimmed card cannot be opened to read the reason. The gate is the bundled binary plus
+         * root, which is exactly what `SmartToolBox.requireDirectTool` checks.
+         */
+        private fun directStatus(plugin: Plugin): PluginStatus =
+            directToolStatus(
+                binaryBundled = toolBox.toolBinaryPath(plugin.requires) != null,
+                rooted = rootManager.cachedRootStatus().isRooted,
+                artifactInstalled = artifactInstalled(plugin.id),
+            )
+
         /** Runnable now. Kept for callers that only need the boolean. */
         fun isPluginAvailable(plugin: Plugin): Boolean = pluginStatus(plugin) == PluginStatus.AVAILABLE
 
@@ -126,6 +147,24 @@ class PluginAvailability
             }
 
         companion object {
+            /**
+             * Pure policy for a direct-`su` tool, so the rule is unit-tested without a device.
+             *
+             * The `Context`-bearing branches are the ones this came from: a device run is what
+             * caught five cards dimmed as "not in native core" while root was granted.
+             */
+            fun directToolStatus(
+                binaryBundled: Boolean,
+                rooted: Boolean,
+                artifactInstalled: Boolean,
+            ): PluginStatus =
+                when {
+                    !binaryBundled -> PluginStatus.TOOL_MISSING
+                    !rooted -> PluginStatus.NEEDS_ROOT
+                    !artifactInstalled -> PluginStatus.ARTIFACT_MISSING
+                    else -> PluginStatus.AVAILABLE
+                }
+
             /**
              * Plugins that cannot work on Android no matter what is installed, so the
              * card stays dimmed everywhere. Responder is CPython-based and the core

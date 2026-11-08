@@ -64,11 +64,23 @@ interface ToolRunner {
         outFile: String? = null,
     ): Flow<ToolResult>
 
+    fun tcpdumpDirect(
+        iface: String = "wlan0",
+        filter: String = "",
+        count: Int = 0,
+        outFile: String? = null,
+    ): Flow<ToolResult>
+
     fun aircrack(args: String): Flow<ToolResult>
 
     fun aircrackDirect(args: String): Flow<ToolResult>
 
     suspend fun nuclei(
+        target: String,
+        templates: String = "",
+    ): Flow<ToolResult>
+
+    suspend fun nucleiDirect(
         target: String,
         templates: String = "",
     ): Flow<ToolResult>

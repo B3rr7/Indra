@@ -43,6 +43,20 @@ object ChrootScript {
     fun quote(value: String): String = "'" + value.replace("'", "'\\''") + "'"
 
     /**
+     * Alpine's package mirrors, written to `/etc/apk/repositories` by [setup].
+     *
+     * A minirootfs ships no repository list at all, so `apk add` fails with
+     * "no such package" until one is written — and the fix (`apk add iw iproute2`,
+     * `apk add ruby`) is the whole point of having a chroot. Full mirror URLs, not the
+     * bare domain: `apk` needs the release branch path to resolve `main`/`community`.
+     */
+    val ALPINE_REPOSITORIES: String =
+        listOf(
+            "https://dl-cdn.alpinelinux.org/alpine/v3.20/main",
+            "https://dl-cdn.alpinelinux.org/alpine/v3.20/community",
+        ).joinToString("\n")
+
+    /**
      * Creates every directory the chroot needs and mounts what is missing.
      *
      * Idempotent: a mount that is already in `/proc/mounts` is left alone, so this can run on
@@ -57,6 +71,7 @@ object ChrootScript {
         mounts: List<Mount>,
         dirs: List<String> = emptyList(),
         resolvConf: String? = null,
+        repositories: String? = null,
     ): String {
         val sb = StringBuilder("R=").append(quote(root)).append("; ")
         val created = (mounts.map { it.target } + dirs + "/etc").distinct()
@@ -74,6 +89,14 @@ object ChrootScript {
         }
         if (resolvConf != null) {
             sb.append("printf '%s' ${quote(resolvConf)} > \"\$R/etc/resolv.conf\"; ")
+        }
+        if (repositories != null) {
+            val lines = repositories.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.toList()
+            if (lines.isNotEmpty()) {
+                sb.append("printf '%s\\n'")
+                    .append(lines.joinToString("") { " " + quote(it) })
+                    .append(" > \"\$R/etc/apk/repositories\"; ")
+            }
         }
         sb.append("echo ").append(quote(READY_MARKER))
         return sb.toString()

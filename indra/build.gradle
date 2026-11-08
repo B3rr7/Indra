@@ -77,7 +77,10 @@ android {
         checkReleaseBuilds false
     }
 
-    ndkVersion = "25.2.9519653"
+    // No `ndkVersion`: the app has no `externalNativeBuild`, no `jniLibs/` and no
+    // `System.loadLibrary` (the client side is pure Kotlin). The NDK is still used to
+    // build the bundled C tools (`indra/jni` `./build.sh cores`) and to link the Rust
+    // daemon, neither of which is part of this Gradle project.
 }
 
 dependencies {
@@ -148,18 +151,17 @@ dependencies {
 }
 
 // ---------------------------------------------------------------------------
-// Native artifacts: the daemon core (assets/core-<abi>.tar.xz) and the JNI
-// bridge (jniLibs/<abi>/libIndra*.so).
+// Native artifact: the daemon core (assets/core-<abi>.tar.xz).
 //
-// Both are build outputs and therefore gitignored (`indra/.gitignore`: dist,
+// It is a build output and therefore gitignored (`indra/.gitignore`: dist,
 // *.so, *.tar.*). `bundleCore` used to be `onlyIf { dist.exists() }`, so a
 // clean clone silently produced an APK with **no daemon in it** and CI stayed
 // green — the published artifact could not scan anything. A missing artifact
 // now fails the build and names the ways to supply one:
 //
-//   1. build them:      git submodule update --init --recursive
-//                       cd indra/jni && ./build.sh jni && ./build.sh cores
-//   2. point at a dir:  -Pindra.jniLibsDir=… -Pindra.coreArchiveDir=…
+//   1. build it:        git submodule update --init --recursive
+//                       cd indra/jni && ./build.sh cores
+//   2. point at a dir:  -Pindra.coreArchiveDir=…
 //   3. download:        -Pindra.coreUrl='…/{abi}.tar.xz' -Pindra.coreSha256.<abi>=…
 //                       (checksum required; an unverified download is refused)
 // ---------------------------------------------------------------------------
@@ -212,42 +214,16 @@ def findCoreArchive = { String abi ->
 
 tasks.register('stageNativeCore') {
     group = 'build'
-    description = 'Stages the native daemon core into assets/ and fails when the JNI bridge is missing.'
+    description = 'Stages the native daemon core into assets/.'
 
-    def jniRoot = file("$projectDir/src/main/jniLibs")
     def assetsDir = file("$projectDir/src/main/assets")
     def urlTemplate = findProperty('indra.coreUrl') ?: System.getenv('INDRA_CORE_URL')
 
     inputs.property('coreUrl', urlTemplate ?: '')
-    outputs.upToDateWhen { false } // also re-verifies the JNI bridge on every build
+    outputs.upToDateWhen { false } // re-verifies the staged archives on every build
 
     doLast {
-        // 1. JNI bridge (libIndraClient/libIndraCommon) -------------------------
-        def externalJni = (findProperty('indra.jniLibsDir') ?: System.getenv('INDRA_JNI_LIBS_DIR'))?.with { file(it) }
-        def missingJni = []
-        coreAbis.each { abi ->
-            def target = file("$jniRoot/$abi")
-            def present = new File(target, 'libIndraClient.so').exists() && new File(target, 'libIndraCommon.so').exists()
-            if (!present && externalJni != null) {
-                def source = new File(externalJni, abi)
-                if (new File(source, 'libIndraClient.so').exists()) {
-                    target.mkdirs()
-                    source.listFiles()?.findAll { it.name.endsWith('.so') }?.each { copyFile(it, new File(target, it.name)) }
-                    present = new File(target, 'libIndraClient.so').exists()
-                }
-            }
-            if (!present) missingJni << abi
-        }
-        if (missingJni) {
-            throw new GradleException(
-                "Native JNI bridge missing for ${missingJni.join(', ')}: " +
-                    "jniLibs/<abi>/libIndraClient.so is a build output and is not tracked in git.\n" +
-                    "  build it:   cd indra/jni && ./build.sh jni\n" +
-                    "  or point:   -Pindra.jniLibsDir=/path/to/jniLibs  (with <abi>/ subdirectories)\n" +
-                    "Without it IndraClient cannot load and every tool gate reports the daemon as down.")
-        }
-
-        // 2. Daemon core archive per ABI ---------------------------------------
+        // Daemon core archive per ABI ------------------------------------------
         assetsDir.mkdirs()
         coreAbis.each { abi ->
             def target = new File(assetsDir, "core-${abi}.tar.xz")
@@ -321,11 +297,11 @@ androidComponents {
 
         def check = tasks.register("checkApkArtifacts${variantName}") {
             group = 'verification'
-            description = "Asserts the ${variant.name} APK contains libIndra*.so and the core archives."
+            description = "Asserts the ${variant.name} APK contains the core archives."
 
             doLast {
                 def required = coreAbis.collectMany { abi ->
-                    ["lib/${abi}/libIndraClient.so", "lib/${abi}/libIndraCommon.so", "assets/core-${abi}.tar.xz"]
+                    ["assets/core-${abi}.tar.xz"]
                 }
                 // GString != String in Groovy: without toString() the Set lookup never matches.
                 .collect { it.toString() }

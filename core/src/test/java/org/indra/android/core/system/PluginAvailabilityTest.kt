@@ -69,4 +69,36 @@ class PluginAvailabilityTest {
             openable,
         )
     }
+
+    @Test
+    fun directToolsAreGatedOnRootNotOnADaemonHandler() {
+        // Phase 3 moved hydra/hping3/masscan/aircrack-ng off the daemon onto direct `su`.
+        // Their registry handler is the "direct" pseudo-handler, which the daemon never
+        // reports, so a handler probe could only ever dim them: a device run caught Masscan,
+        // Login Cracker, Packet Forger, Credential Tester and WiFi Audit all saying "not in
+        // native core" — and disabled, so the reason could not even be read — on a device
+        // with the binary in the core and root granted.
+        fun status(bundled: Boolean, rooted: Boolean, artifact: Boolean) =
+            PluginAvailability.directToolStatus(
+                binaryBundled = bundled,
+                rooted = rooted,
+                artifactInstalled = artifact,
+            )
+        assertEquals(PluginAvailability.PluginStatus.AVAILABLE, status(true, true, true))
+        assertEquals(PluginAvailability.PluginStatus.NEEDS_ROOT, status(true, false, true))
+        assertEquals(PluginAvailability.PluginStatus.TOOL_MISSING, status(false, true, true))
+        assertEquals(PluginAvailability.PluginStatus.ARTIFACT_MISSING, status(true, true, false))
+    }
+
+    @Test
+    fun onlyThePhaseThreeToolsAreDirect() {
+        // A plugin whose `requires` key is a direct-handler spec is gated on root by
+        // directStatus; every other plugin must still go through the daemon probe.
+        listOf("masscan", "hydra", "hping3", "aircrack-ng", "reaver", "arpspoof", "tcpdump", "nuclei", "bettercap").forEach {
+            assertTrue("$it should be a direct tool", SmartToolBox.isDirectTool(it))
+        }
+        listOf("nmap", "raw", "shell", "ettercap", "gobuster", "network-radar", "msfrpcd", "fusemounts").forEach {
+            assertFalse("$it should not be a direct tool", SmartToolBox.isDirectTool(it))
+        }
+    }
 }

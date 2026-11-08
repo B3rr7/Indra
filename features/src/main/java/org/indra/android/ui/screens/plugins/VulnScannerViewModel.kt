@@ -117,7 +117,7 @@ class VulnScannerViewModel
                             transcript = "",
                         )
                     try {
-                        toolBox.nuclei(_uiState.value.target).collect { result ->
+                        toolBox.nucleiDirect(_uiState.value.target).collect { result ->
                             if (result.pid > 0) pid = result.pid
                             collectLine(result)
                             if (!result.isStreaming) {

@@ -117,7 +117,7 @@ class MitmViewModel
 
             job =
                 viewModelScope.launch {
-                    val gate = toolBox.requireTool("raw")
+                    val gate = toolBox.requireDirectTool("arpspoof")
                     if (gate !is ToolHandle.Ready) {
                         _uiState.value = _uiState.value.copy(error = gate.message)
                         return@launch
@@ -129,7 +129,7 @@ class MitmViewModel
                             log = listOf("arp spoof: $target via $gateway on $iface (root required)"),
                             logCount = 1,
                         )
-                    toolBox.arpspoof(iface, target, gateway).collect { result ->
+                    toolBox.arpspoofDirect(iface, target, gateway).collect { result ->
                         if (result.pid > 0) pid = result.pid
                         result.streamedLine?.let { raw ->
                             val line = raw.trim()
@@ -157,7 +157,6 @@ class MitmViewModel
         fun stop() {
             job?.cancel()
             job = null
-            toolBox.stop(pid)
             pid = -1
             val current = _uiState.value
             _uiState.value =
@@ -169,7 +168,6 @@ class MitmViewModel
         }
 
         override fun onCleared() {
-            toolBox.stop(pid)
             super.onCleared()
         }
 

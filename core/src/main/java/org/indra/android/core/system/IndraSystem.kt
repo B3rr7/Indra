@@ -52,8 +52,6 @@ class IndraSystem
         val httpsRedirectorPort: Int get() = settings.httpsRedirectorPort
         val msfRpcPort: Int get() = settings.msfRpcPort
         val corePath: String get() = settings.corePath
-        val rubyPath: String get() = settings.rubyPath
-        val msfPath: String get() = settings.msfPath
         val storagePath: String get() = settings.storagePath
         val sessionName: String = "indra-session-${System.currentTimeMillis()}"
 

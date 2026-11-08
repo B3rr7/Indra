@@ -61,6 +61,21 @@ class ChrootScriptTest {
     }
 
     @Test
+    fun `repositories are written one per line so apk can resolve packages`() {
+        val script = ChrootScript.setup(root, mounts, repositories = ChrootScript.ALPINE_REPOSITORIES)
+
+        assertTrue(script.contains("> \"\$R/etc/apk/repositories\""))
+        assertTrue(script.contains("printf '%s\\n'"))
+        assertTrue(script.contains("'https://dl-cdn.alpinelinux.org/alpine/v3.20/main'"))
+        assertTrue(script.contains("'https://dl-cdn.alpinelinux.org/alpine/v3.20/community'"))
+    }
+
+    @Test
+    fun `no repositories file is written when none are given`() {
+        assertFalse(ChrootScript.setup(root, mounts).contains("apk/repositories"))
+    }
+
+    @Test
     fun `failures are reported by name instead of aborting the script`() {
         val script = ChrootScript.setup(root, mounts)
         assertTrue(script.contains("|| echo \"INDRA_MOUNT_FAIL /proc\""))

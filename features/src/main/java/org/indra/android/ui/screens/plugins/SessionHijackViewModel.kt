@@ -56,7 +56,7 @@ class SessionHijackViewModel @Inject constructor(
         val iface = _uiState.value.iface.trim().ifEmpty { "wlan0" }
         val filter = _uiState.value.filter.trim().ifEmpty { DEFAULT_HTTP_FILTER }
         job = viewModelScope.launch {
-            val gate = toolBox.requireTool("raw")
+            val gate = toolBox.requireDirectTool("shell")
             if (gate !is ToolHandle.Ready) {
                 _uiState.value = _uiState.value.copy(error = gate.message)
                 return@launch
@@ -72,7 +72,7 @@ class SessionHijackViewModel @Inject constructor(
             // stderr is kept: tcpdump's "SIOCGIFHWADDR: No such device" and its capture
             // summary are the only explanation a failing run gives, and ToolResult.error
             // carries the last output line.
-            toolBox.shell(
+            toolBox.shellDirect(
                 "./tools/tcpdump/tcpdump -i ${SmartToolBox.shellQuote(iface)} -A -l " +
                     SmartToolBox.shellQuote(filter),
             ).collect { result ->
@@ -102,7 +102,6 @@ class SessionHijackViewModel @Inject constructor(
     }
 
     fun stop() {
-        if (pid > 0) toolBox.stop(pid)
         job?.cancel(); job = null; pid = -1
         _uiState.value = _uiState.value.copy(isRunning = false)
     }

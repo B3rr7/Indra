@@ -57,6 +57,13 @@ class SmartToolBoxRunner
             outFile: String?,
         ): Flow<ToolResult> = box.tcpdump(iface, filter, count, outFile)
 
+        override fun tcpdumpDirect(
+            iface: String,
+            filter: String,
+            count: Int,
+            outFile: String?,
+        ): Flow<ToolResult> = box.tcpdumpDirect(iface, filter, count, outFile)
+
         override fun aircrack(args: String): Flow<ToolResult> = box.aircrack(args)
 
         override fun aircrackDirect(args: String): Flow<ToolResult> = box.aircrackDirect(args)
@@ -65,6 +72,11 @@ class SmartToolBoxRunner
             target: String,
             templates: String,
         ): Flow<ToolResult> = box.nuclei(target, templates)
+
+        override suspend fun nucleiDirect(
+            target: String,
+            templates: String,
+        ): Flow<ToolResult> = box.nucleiDirect(target, templates)
 
         override suspend fun nucleiUpdateTemplates(): Flow<ToolResult> = box.nucleiUpdateTemplates()
 

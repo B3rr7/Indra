@@ -104,7 +104,7 @@ class MsfConsoleViewModel
                     if (!coreManager.isMsfInstalled()) {
                         _uiState.value =
                             _uiState.value.copy(
-                                error = "Metasploit is not installed — install it from the card above.",
+                                error = "Metasploit is not installed — install the Metasploit bundle in Settings → Bundle Updates, or use the card above.",
                             )
                         return@launch
                     }

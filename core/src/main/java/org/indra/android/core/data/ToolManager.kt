@@ -43,10 +43,17 @@ class ToolManager @Inject constructor(
     val toolsLock = Mutex()
 
     val toolsPath: String get() = context.filesDir.absolutePath + "/tools/"
-    val rubyPath: String get() = context.filesDir.absolutePath + "/ruby/"
+
+    /**
+     * The Metasploit chroot root (`<files>/msf`).
+     *
+     * One directory, not two: Ruby and the framework live inside it at `/usr/bin/ruby` and
+     * `/opt/metasploit-framework`, because they are a musl userland that can only run under
+     * `chroot`. Splitting them into `files/ruby` + `files/msf` was only meaningful for the
+     * old "bionic ruby" design, which cannot work without the NDK.
+     */
     val msfPath: String get() = context.filesDir.absolutePath + "/msf/"
-    /** HOME of msfrpcd (holds ~/.msf4); outside ruby/ so bundle swaps keep user data. */
-    val msfHomePath: String get() = context.filesDir.absolutePath + "/msf-home/"
+
     val corePath: String get() = context.filesDir.absolutePath
 
     fun isToolsInstalled(): Boolean = installer.sentinelsPresent(toolsSpec)
@@ -132,13 +139,18 @@ class ToolManager @Inject constructor(
         val result = withContext(Dispatchers.IO) {
             runCatching {
                 val root = File(context.filesDir, "msf")
-                if (!root.exists()) return@withContext "Metasploit chroot not found at $root"
-                // Check if msfconsole exists
-                val msfconsole = File(root, "msfconsole")
-                if (!msfconsole.exists()) return@withContext "msfconsole not found in $root"
-                // Check if ruby exists
-                val ruby = File(root, "ruby/bin/ruby")
-                if (!ruby.exists()) return@withContext "ruby not found in $root"
+                if (!root.isDirectory) return@withContext "Metasploit chroot not found at $root"
+                // The three files that prove the rootfs is a runnable musl userland with the
+                // framework inside: a shell, Ruby, and the console link at the root.
+                if (!File(root, "bin/busybox").exists()) {
+                    return@withContext "The Metasploit chroot has no /bin/busybox — the rootfs is incomplete."
+                }
+                if (!File(root, "usr/bin/ruby").exists()) {
+                    return@withContext "The Metasploit chroot has no ruby, so msfconsole cannot run."
+                }
+                if (!File(root, "msfconsole").exists()) {
+                    return@withContext "msfconsole not found in $root — reinstall the rootfs."
+                }
                 null
             }.getOrElse { it.message }
         }

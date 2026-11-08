@@ -13,6 +13,7 @@ import org.indra.android.core.data.bundle.AndroidBundleEnv
 import org.indra.android.core.data.bundle.BundleDownloader
 import org.indra.android.core.data.bundle.BundleEnv
 import org.indra.android.core.data.bundle.BundleInstaller
+
 import org.indra.android.core.system.SmartToolBoxRunner
 import org.indra.android.core.system.ToolRunner
 import javax.inject.Singleton
@@ -27,6 +28,7 @@ abstract class AppModule {
     @Binds
     @Singleton
     abstract fun bindToolRunner(runner: SmartToolBoxRunner): ToolRunner
+
 }
 
 /**

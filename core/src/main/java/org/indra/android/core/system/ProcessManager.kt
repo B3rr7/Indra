@@ -21,6 +21,9 @@ class ProcessManager @Inject constructor() {
     companion object {
         private const val PID_MARKER = "INDRA_PID="
         private val PID_PATTERN = Regex("""${PID_MARKER}(\d+)""")
+
+        /** How long the descendant-kill script may take before [killTree] gives up on it. */
+        private const val KILL_TIMEOUT_MS = 3_000L
     }
 
     // Kill sequences outlive the cancelled flow (TERM, then KILL).
@@ -103,25 +106,33 @@ class ProcessManager @Inject constructor() {
         awaitClose {
             if (exited.get()) return@awaitClose
             Logger.d("ProcessManager: killing process tree for cmd=$logCmd")
-            killScope.launch { killTree(process, asSu) }
+            val pid = completedPid(shellPid)
+            killScope.launch { killTree(process, asSu, pid) }
         }
     }
 
-    private fun buildShellCommand(
+    /** The shell pid if the marker already arrived; null when it never printed one. */
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    private fun completedPid(deferred: CompletableDeferred<Int>): Int? =
+        if (deferred.isCompleted) runCatching { deferred.getCompleted() }.getOrNull() else null
+
+    internal fun buildShellCommand(
         command: String,
         env: Map<String, String>,
         toolsDir: String?,
         workDir: String?,
     ): String {
         val sb = StringBuilder()
+        // Report the shell's pid FIRST. The tree is killed by it when the collector goes away,
+        // and a marker at the end only arrives once the tool has already finished — which is
+        // why Stop on a direct `su` run left the tool alive (observed with hydra on device).
+        sb.append("echo ").append(PID_MARKER).append("$$; ")
         env.forEach { (k, v) ->
             sb.append("export ").append(k).append("=").append(shellQuote(v)).append("; ")
         }
         toolsDir?.let { sb.append("export PATH=").append(shellQuote(it)).append(":").append(shellQuote("\$PATH")).append("; ") }
         workDir?.let { sb.append("cd ").append(shellQuote(it)).append("; ") }
         sb.append(command)
-        // Append PID marker so we can track the shell's PID
-        sb.append("; echo ").append(PID_MARKER).append("\$!")
         return sb.toString()
     }
 
@@ -131,14 +142,47 @@ class ProcessManager @Inject constructor() {
 
     private fun shellQuote(value: String): String = "'" + value.replace("'", "'\\''") + "'"
 
-    private fun killTree(process: java.lang.Process, asSu: Boolean) {
-        // Best-effort: kill the su session's children, then the process itself.
-        if (asSu) {
-            try {
-                Runtime.getRuntime().exec(arrayOf("su", "-c", "pkill -9 -P \${process.pid}"))
-            } catch (_: java.io.IOException) {
-                // Ignore: the process is force-destroyed below regardless.
-            }
+    /**
+     * Kills the direct run's whole process tree: every descendant of the shell, then the shell.
+     *
+     * [java.lang.Process.destroyForcibly] only reaps `su`, so a tool it started outlived the
+     * screen it belonged to — `hydra` was still running 3 s after Back was pressed on device.
+     * The shell's pid comes from the `INDRA_PID` marker, and the walk runs under a second `su`
+     * because the app uid cannot signal a root process. `ps | awk` replaces `pkill -P` because
+     * a tool may hold descendants of its own and toybox does not guarantee `pkill -P`.
+     */
+    /**
+     * Shell script that kills [shellPid]'s whole subtree, deepest first.
+     *
+     * Internal so the rule is unit-tested: the shipped version interpolated the literal text
+     * `${process.pid}` into `pkill -P`, so Stop never killed anything, and the marker it relied
+     * on was appended with `$!`, which is empty for a foreground command.
+     */
+    internal fun descendantKillScript(shellPid: Int): String =
+        "kill_desc() { for c in \$(ps -A -o PID,PPID | awk -v p=\$1 '\$2==p{print \$1}'); " +
+            "do kill_desc \$c; done; kill -9 \$1 2>/dev/null; }; kill_desc $shellPid"
+
+    private fun killTree(
+        process: java.lang.Process,
+        asSu: Boolean,
+        shellPid: Int?,
+    ) {
+        if (shellPid == null) {
+            Logger.d("ProcessManager: no shell pid for a cancelled run; killing su only")
+            process.destroyForcibly()
+            return
+        }
+        val script = descendantKillScript(shellPid)
+        try {
+            val argv = if (asSu) listOf("su", "-c", script) else listOf("sh", "-c", script)
+            ProcessBuilder(argv)
+                .redirectErrorStream(true)
+                .start()
+                .waitFor(KILL_TIMEOUT_MS, java.util.concurrent.TimeUnit.MILLISECONDS)
+        } catch (_: java.io.IOException) {
+            // Best-effort: the process is force-destroyed below regardless.
+        } catch (_: InterruptedException) {
+            Thread.currentThread().interrupt()
         }
         process.destroyForcibly()
     }

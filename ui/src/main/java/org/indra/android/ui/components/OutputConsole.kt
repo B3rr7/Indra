@@ -7,7 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
@@ -99,11 +99,17 @@ fun LiveOutputCard(
                             .fillMaxWidth()
                             .padding(CONSOLE_PADDING.dp),
                 ) {
-                    items(
+                    itemsIndexed(
                         items = lines,
-                        key = { it },
-                        contentType = { "console-line" },
-                    ) { line ->
+                        // Keyed by position, not by text: a console line has no identity and
+                        // tools legitimately print the same line twice (aircrack-ng prints
+                        // "Reading packets, please wait..." once per capture file). A content
+                        // key made the second copy crash the whole app with
+                        // "Key ... was already used" — found on device. The list is append-only
+                        // and only trimmed from the head, so the position does not reorder.
+                        key = { index, _ -> index },
+                        contentType = { _, _ -> "console-line" },
+                    ) { _, line ->
                         Text(
                             // Tools that draw progress bars emit ANSI cursor control
                             // (`.[23C00 00 …`), and a console is not a terminal: aircrack-ng

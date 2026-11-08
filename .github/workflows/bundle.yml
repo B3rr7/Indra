@@ -30,6 +30,11 @@ on:
         required: false
         default: '1'
         type: string
+      msf:
+        description: 'Also build the Metasploit rootfs bundle (~400 MB, 30-60 min)'
+        required: false
+        default: false
+        type: boolean
   schedule:
     # Weekly, Mondays 03:00 UTC.
     - cron: '0 3 * * 1'
@@ -54,6 +59,32 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v3
 
+      # Build the Rust daemon FIRST: `build.sh cores` → `pack_core` embeds it as the core's
+      # `indrad` when it is present (Phase 7 switched the default daemon to Rust).
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi
+
+      - name: Build Rust daemon
+        run: |
+          set -euo pipefail
+          export ANDROID_NDK_HOME=$ANDROID_HOME/ndk/25.2.9519653
+          # The committed .cargo/config.toml resolves the linkers by name, so the NDK's
+          # bin dir must be on PATH.
+          export PATH="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH"
+          cd rust/indrad
+          cargo test                                                   # nmap parser unit tests (host)
+          cargo build --target aarch64-linux-android   --release       # arm64-v8a
+          cargo build --target armv7-linux-androideabi --release       # armeabi-v7a
+          # core packaging copies these straight in (see indra/jni/build.sh pack_core)
+          mkdir -p ../../indra/dist/indrad
+          cp target/aarch64-linux-android/release/indrad   ../../indra/dist/indrad/arm64-v8a
+          cp target/armv7-linux-androideabi/release/indrad ../../indra/dist/indrad/armeabi-v7a
+          # bundle payload (single-abi convenience copy kept for backward compatibility)
+          mkdir -p ../../indra/dist
+          cp target/aarch64-linux-android/release/indrad ../../indra/dist/indrad-rust
+
       - name: Build native core
         run: |
           set -euo pipefail
@@ -69,8 +100,9 @@ jobs:
           echo "Packaging from $asset"
           mkdir -p build/core build/out
           tar -xJf "$asset" -C build/core
-          # The bundle carries the tools/ payload only; handlers/, lib/ and indrad
-          # come from the APK core that CoreManager installs.
+          # The bundle carries the tools/ payload only. `indrad` (now the Rust daemon),
+          # handlers/ and lib/ travel inside the APK core asset that CoreManager installs —
+          # `pack_core` embedded the Rust binary there in the step above.
           tar -czf build/out/tools-bundle.tar.gz -C build/core tools
           mv build/out/tools-bundle.tar.gz build/out/tools-bundle.tar.gz.bin
 
@@ -115,3 +147,74 @@ jobs:
             build/out/tools-bundle.json.sig \
             --title "Tools bundle ${version}" \
             --notes "Signed tools bundle built from ${GITHUB_SHA}."
+
+  # ---------------------------------------------------------------------------
+  # Metasploit: one self-contained aarch64 Alpine/musl rootfs (Ruby + the
+  # framework + its vendored gems). Download-only, so the APK is unchanged.
+  #
+  # Built on a native arm64 runner: the payload *is* aarch64, so there is no
+  # emulation, no proot and — crucially — no NDK. Metasploit's C-extension gems
+  # can only be built for bionic with the NDK, and the device has no compiler,
+  # which is why this ships as a chroot instead.
+  # ---------------------------------------------------------------------------
+  msf:
+    if: github.event_name == 'workflow_dispatch' && inputs.msf
+    runs-on: ubuntu-24.04-arm
+    container: alpine:3.20
+    steps:
+      - name: Install prerequisites
+        run: apk add --no-cache bash curl tar openssl coreutils git
+
+      - uses: actions/checkout@v4
+
+      - name: Build Metasploit rootfs
+        run: |
+          set -euo pipefail
+          scripts/build-msf-bundle.sh --out build/out --work build/msf-rootfs
+
+      - name: Sign manifest
+        env:
+          BUNDLE_SIGNING_KEY: ${{ secrets.BUNDLE_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${BUNDLE_SIGNING_KEY:-}" ]; then
+            echo "::error::BUNDLE_SIGNING_KEY secret is not set; cannot sign the manifest."
+            exit 1
+          fi
+          printf '%s' "$BUNDLE_SIGNING_KEY" > build/signing-key.pem
+          openssl dgst -sha256 -sign build/signing-key.pem \
+            -out build/out/msf-bundle.json.sig build/out/msf-bundle.json
+          rm -f build/signing-key.pem
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: msf-bundle
+          path: |
+            build/out/msf-bundle.tar.gz
+            build/out/msf-bundle.json
+            build/out/msf-bundle.json.sig
+
+  publish-msf:
+    needs: msf
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: msf-bundle
+          path: out
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version=$(python3 -c "import json;print(json.load(open('out/msf-bundle.json'))['version'])")
+          tag="bundles-msf-${version}"
+          assets="out/msf-bundle.tar.gz out/msf-bundle.json out/msf-bundle.json.sig"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$tag" $assets --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$tag" $assets --repo "$GITHUB_REPOSITORY" \
+              --title "Metasploit bundle ${version}" \
+              --notes "Signed Metasploit rootfs built from ${GITHUB_SHA}."
+          fi

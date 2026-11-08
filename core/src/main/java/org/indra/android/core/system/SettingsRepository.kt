@@ -59,18 +59,6 @@ class SettingsRepository
                     ?: context.filesDir.absolutePath
             set(value) = prefs.edit().putString("PREF_SAVE_PATH", value).apply()
 
-        var rubyPath: String
-            get() =
-                prefs.getString("RUBY_DIR", "${context.filesDir.absolutePath}/ruby")
-                    ?: "${context.filesDir.absolutePath}/ruby"
-            set(value) = prefs.edit().putString("RUBY_DIR", value).apply()
-
-        var msfPath: String
-            get() =
-                prefs.getString("MSF_DIR", "${context.filesDir.absolutePath}/msf")
-                    ?: "${context.filesDir.absolutePath}/msf"
-            set(value) = prefs.edit().putString("MSF_DIR", value).apply()
-
         var wakeLockEnabled: Boolean
             get() = prefs.getBoolean("PREF_WAKE_LOCK", true)
             set(value) = prefs.edit().putBoolean("PREF_WAKE_LOCK", value).apply()

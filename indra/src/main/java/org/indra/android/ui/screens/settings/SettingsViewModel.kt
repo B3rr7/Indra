@@ -184,6 +184,7 @@ class SettingsViewModel
 
         init {
             loadSettings(probeRoot = true)
+            refreshCoreState()
             viewModelScope.launch {
                 bundleUpdateManager.tools.op.collect { op ->
                     toolsOp = op
@@ -316,7 +317,10 @@ class SettingsViewModel
                             indraDirPath = workspace.rootPath,
                             workspacePresent = workspace.present,
                             workspaceMissing = workspace.missing,
-                            toolStatus = toolBox.getAllTools().map { ToolStatus(it.name, it.isAvailable()) },
+                            // Presence, not runnability: this card answers "is it bundled", and
+                            // `isAvailable()` is a daemon-handler probe that is permanently false
+                            // for the direct-`su` tools (see SmartToolBox.isToolBundled).
+                            toolStatus = toolBox.getAllTools().map { ToolStatus(it.name, toolBox.isToolBundled(it.name)) },
                         )
                     publishBundles()
                 }
@@ -839,7 +843,7 @@ class SettingsViewModel
                                     rootless = settings.rootlessMode,
                                 ),
                             coreBusyAction = null,
-                            toolStatus = toolBox.getAllTools().map { ToolStatus(it.name, it.isAvailable()) },
+                            toolStatus = toolBox.getAllTools().map { ToolStatus(it.name, toolBox.isToolBundled(it.name)) },
                         )
                 }
             }

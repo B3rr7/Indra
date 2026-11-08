@@ -1,6 +1,5 @@
 package org.indra.android.core.system
 
-import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CancellationException
@@ -12,8 +11,6 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
-import okhttp3.Request
 
 /**
  * The network half of [DirBrute]: a bounded-concurrency GET sweep over one base URL.
@@ -23,7 +20,8 @@ import okhttp3.Request
  * tools cannot do (Android has no `/etc/resolv.conf`).
  *
  * [Probe] is injected so the sweep (ordering, concurrency cap, failure accounting) is unit
- * tested without a network. The default probe is plain OkHttp.
+ * tested without a network. The default probe is [SocketProbe], not OkHttp: the platform
+ * blocks cleartext for every HTTP stack, and a LAN directory sweep is exactly cleartext HTTP.
  */
 @Singleton
 class DirBruteRunner
@@ -42,7 +40,7 @@ class DirBruteRunner
             ): DirBrute.Hit?
         }
 
-        private val defaultProbe: Probe by lazy { HttpProbe(defaultClient()) }
+        private val defaultProbe: Probe by lazy { SocketProbe() }
 
         /**
          * Probes every path, at most [CONCURRENCY] at a time, calling [onHit] as each finding
@@ -92,40 +90,8 @@ class DirBruteRunner
                 Report(requests, failures, firstFailure)
             }
 
-        private fun defaultClient(): OkHttpClient =
-            OkHttpClient.Builder()
-                // A redirect is a finding, not something to follow.
-                .followRedirects(false)
-                .followSslRedirects(false)
-                .connectTimeout(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-                .readTimeout(READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-                .callTimeout(CALL_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-                .build()
-
-        private class HttpProbe(private val client: OkHttpClient) : Probe {
-            override fun probe(
-                url: String,
-                path: String,
-            ): DirBrute.Hit? {
-                val request =
-                    Request.Builder()
-                        .url(url)
-                        .header("User-Agent", USER_AGENT)
-                        .get()
-                        .build()
-                return client.newCall(request).execute().use { response ->
-                    if (DirBrute.label(response.code) == null) null else DirBrute.Hit(response.code, path)
-                }
-            }
-        }
-
         companion object {
             /** Requests in flight. Higher values get throttled by small routers and look like failures. */
             const val CONCURRENCY = 8
-
-            private const val CONNECT_TIMEOUT_SECONDS = 5L
-            private const val READ_TIMEOUT_SECONDS = 8L
-            private const val CALL_TIMEOUT_SECONDS = 10L
-            private const val USER_AGENT = "Indra"
         }
     }

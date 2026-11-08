@@ -7,7 +7,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
-import org.indra.android.core.client.IndraClient
+
 import org.indra.android.core.data.bundle.BundleUpdateManager
 import org.indra.android.core.system.CrashReporter
 import org.indra.android.core.system.Logger
@@ -40,11 +40,7 @@ class IndraApplication : Application() {
         // go, so a few milliseconds of deferred configuration costs nothing.
         startupScope.launch {
             applyLoggingPreferences()
-            // `System.loadLibrary` reads and maps two .so files (~100 ms). Whichever thread
-            // first touches IndraClient pays that, and it used to be Main (Hilt injecting
-            // CoreManager/SmartToolBox into MainActivity or a ViewModel). Warm it here instead;
-            // later touches see an initialized class.
-            IndraClient.isAvailable()
+            // No native library preload needed anymore — KotlinDaemonClient is pure Kotlin.
             // Background bundle check: at most once a day, Wi-Fi-only when the user asked for it,
             // never downloads. A failure is silent here — Settings surfaces it on demand.
             runCatching { bundleUpdateManager.get().autoCheckIfDue() }

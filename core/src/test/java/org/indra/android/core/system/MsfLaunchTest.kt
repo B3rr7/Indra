@@ -90,4 +90,25 @@ class MsfLaunchTest {
         assertNull(MsfLaunch.explain("msf6 > "))
         assertEquals(null, MsfLaunch.explain("permission denied"))
     }
+
+    @Test
+    fun `launch sets the chroot's own PATH instead of inheriting Android's`() {
+        val command = MsfLaunch.launch("/core/msf", "search apache")
+
+        // `#!/usr/bin/env ruby` resolves through PATH; the inherited Android PATH points at
+        // /system/bin, which does not exist inside the rootfs.
+        assertTrue(command.contains("PATH=${MsfLaunch.PATH}"))
+        assertFalse(command.contains("/system/bin"))
+        assertFalse(command.contains("PATH=\$PATH"))
+    }
+
+    @Test
+    fun `rpcd starts the daemon through the chroot shell with a port`() {
+        val command = MsfLaunch.rpcd("/core/msf", 55553)
+
+        assertTrue(command.startsWith("chroot '/core/msf' /bin/sh -c '"))
+        assertTrue(command.contains("exec /msfrpcd -p 55553 -P ${MsfLaunch.RPC_PASSWORD} -U ${MsfLaunch.RPC_USER} -f -S -a 127.0.0.1 -n"))
+        assertTrue(command.contains("HOME=/root"))
+        assertTrue(command.contains("PATH=${MsfLaunch.PATH}"))
+    }
 }

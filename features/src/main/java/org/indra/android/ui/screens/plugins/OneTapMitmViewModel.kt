@@ -99,14 +99,14 @@ class OneTapMitmViewModel @Inject constructor(
         }
 
         job = viewModelScope.launch {
-            val gate = toolBox.requireTool("arpspoof")
+            val gate = toolBox.requireDirectTool("arpspoof")
             if (gate !is ToolHandle.Ready) {
                 _uiState.value = _uiState.value.copy(error = gate.message)
                 return@launch
             }
             _uiState.value = _uiState.value.copy(isRunning = true, error = null, output = emptyList())
             // ARP spoof: tell target that we are the gateway
-            toolBox.arpspoof(iface, target, gateway).collect { result ->
+            toolBox.arpspoofDirect(iface, target, gateway).collect { result ->
                 if (result.pid > 0) pid = result.pid
                 result.streamedLine?.let { line ->
                     _uiState.value = _uiState.value.copy(output = _uiState.value.output + line)
@@ -121,7 +121,6 @@ class OneTapMitmViewModel @Inject constructor(
     }
 
     fun stop() {
-        if (pid > 0) toolBox.stop(pid)
         job?.cancel(); job = null; pid = -1
         _uiState.value = _uiState.value.copy(isRunning = false)
     }

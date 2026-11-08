@@ -41,8 +41,8 @@ class PacketCaptureViewModelTest {
     @Test
     fun `a down daemon shows the gate message and never starts tcpdump`() =
         runTest(dispatcher) {
-            runner.ready = false
-            runner.gate = ToolHandle.DaemonDown
+            runner.directReady = false
+            runner.directGate = ToolHandle.DaemonDown
             val vm = PacketCaptureViewModel(runner)
 
             vm.start()

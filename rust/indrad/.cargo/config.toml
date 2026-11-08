@@ -1,0 +1,14 @@
+# Android cross-compilation. The linkers/archivers are the NDK's clang wrappers, so this
+# file carries no machine-specific absolute paths: put the NDK's `toolchains/llvm/prebuilt/
+# <host>/bin` on `PATH` before `cargo build --target <triple>`.
+#
+#   export PATH="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH"
+#   cargo build --target aarch64-linux-android   --release   # arm64-v8a
+#   cargo build --target armv7-linux-androideabi --release   # armeabi-v7a
+[target.aarch64-linux-android]
+ar = "llvm-ar"
+linker = "aarch64-linux-android21-clang"
+
+[target.armv7-linux-androideabi]
+ar = "llvm-ar"
+linker = "armv7a-linux-androideabi21-clang"

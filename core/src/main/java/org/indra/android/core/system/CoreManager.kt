@@ -9,12 +9,13 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import org.indra.android.core.client.IndraClient
+import org.indra.android.core.client.KotlinDaemonClient
 import org.indra.android.core.engine.AlpineManifest
 import org.indra.android.core.engine.ChrootEngine
 import org.tukaani.xz.XZInputStream
 import java.io.File
 import java.io.InputStream
+import java.io.PushbackInputStream
 import java.nio.file.Files
 import java.util.zip.GZIPInputStream
 import java.util.zip.ZipInputStream
@@ -27,7 +28,7 @@ class CoreManager
     constructor(
         @ApplicationContext private val context: Context,
         private val system: IndraSystem,
-        private val client: IndraClient,
+        private val client: KotlinDaemonClient,
         private val rootManager: RootManager,
         private val settings: SettingsRepository,
     ) {
@@ -37,6 +38,9 @@ class CoreManager
 
             /** Core archive bundled in assets (produced by `indra/jni/build.sh cores`). */
             private const val CORE_ASSET_PREFIX = "core-"
+
+            /** Enough leading bytes to recognise gzip and xz without consuming any. */
+            private const val MAGIC_BYTES = 6
 
             /**
              * How long [startDaemon] waits for the `su` handshake before giving up.
@@ -110,7 +114,13 @@ class CoreManager
 
         fun msfPath(): File = File(coreDir, MSF_DIR_NAME)
 
-        fun isMsfInstalled(): Boolean = File(msfPath(), "msfconsole").canExecute() || File(msfPath(), "msfconsole").exists()
+        /**
+         * A runnable Metasploit rootfs: a console link at its root **and** the musl shell that
+         * proves the userland unpacked with its symlinks intact. A console alone is what the
+         * old bionic-ruby layout produced and it could never start.
+         */
+        fun isMsfInstalled(): Boolean =
+            File(msfPath(), "msfconsole").exists() && File(msfPath(), "bin/busybox").exists()
 
         fun exploitdbPath(): File = File(coreDir, EXPLOITDB_DIR_NAME)
 
@@ -277,11 +287,14 @@ class CoreManager
         /**
          * Shared download-and-extract pipeline for the optional tarball
          * artifacts (Bettercap, MSF chroot, ExploitDB): download into a temp
-         * file inside [dir], extract `.tar.xz` (or plain tar) with the
-         * path-traversal guard, clean up the temp file, optionally mark
-         * [executable] runnable. Failure = incomplete/empty archive or bad URL;
+         * file inside [dir], extract it with the path-traversal guard, clean up the temp file,
+         * optionally mark [executable] runnable. Failure = incomplete/empty archive or bad URL;
          * partial extractions remain but the artifact availability checks
          * (e.g. `isBettercapInstalled`) keep the cards honest.
+         *
+         * The compression is sniffed from the file's magic bytes, not guessed from the URL
+         * suffix: the Metasploit bundle is a `.tar.gz` and the old `.xz`-or-nothing check would
+         * have handed gzip bytes straight to the tar reader.
          */
         private suspend fun installTarballArtifact(
             title: String,
@@ -295,7 +308,9 @@ class CoreManager
             withContext(Dispatchers.IO) {
                 runCatching {
                     if (url.isBlank()) error(urlErrorMessage)
-                    if (!dir.exists() && !dir.mkdirs()) error("Cannot create ${dir.name} directory")
+                    // A reinstall must not merge a new rootfs into the previous one's files.
+                    if (dir.exists() && !dir.deleteRecursively()) error("Cannot clear ${dir.name} directory")
+                    if (!dir.mkdirs()) error("Cannot create ${dir.name} directory")
                     OkHttpClient().newCall(Request.Builder().url(url).build()).execute().use { response ->
                         if (!response.isSuccessful) error("Download failed: ${response.code}")
                         val body = response.body ?: error("Empty response")
@@ -313,10 +328,7 @@ class CoreManager
                                 }
                             }
                             val hasContent =
-                                tmp.inputStream().use { raw ->
-                                    if (url.endsWith(".xz")) XZInputStream(raw).use { xz -> TarExtract.extract(xz, dir) }
-                                    else TarExtract.extract(raw, dir)
-                                }
+                                tmp.inputStream().use { raw -> TarExtract.extract(decompress(raw), dir) }
                             if (!hasContent) error("$title archive is empty or unreadable")
                             tmp.delete()
                         }
@@ -325,6 +337,31 @@ class CoreManager
                     Logger.i("$title installed to ${dir.absolutePath}")
                 }
             }
+
+        /**
+         * Wrap [input] in the decompressor its first bytes call for: gzip (`1f 8b`), xz
+         * (`fd 37 7a 58 5a 00`) or none. The bytes are pushed back so the tar reader sees the
+         * whole stream.
+         */
+        private fun decompress(input: InputStream): InputStream {
+            val pushback = PushbackInputStream(input, MAGIC_BYTES)
+            val magic = ByteArray(MAGIC_BYTES)
+            val read = pushback.read(magic)
+            if (read > 0) pushback.unread(magic, 0, read)
+            val gzip = read >= 2 && magic[0] == 0x1f.toByte() && magic[1] == 0x8b.toByte()
+            val xz =
+                read >= MAGIC_BYTES &&
+                    magic[0] == 0xfd.toByte() &&
+                    magic[1] == '7'.code.toByte() &&
+                    magic[2] == 'z'.code.toByte() &&
+                    magic[3] == 'X'.code.toByte() &&
+                    magic[4] == 'Z'.code.toByte()
+            return when {
+                gzip -> GZIPInputStream(pushback)
+                xz -> XZInputStream(pushback)
+                else -> pushback
+            }
+        }
 
         suspend fun installBettercap(
             url: String,
@@ -461,7 +498,7 @@ class CoreManager
 
         val socketPath: String get() = File(coreDir, SOCKET_NAME).absolutePath
         val isDaemonRunning: Boolean
-            get() = File(socketPath).exists() || (IndraClient.isAvailable() && client.isConnected())
+            get() = File(socketPath).exists() || client.isConnected()
 
         private val daemonMutex = kotlinx.coroutines.sync.Mutex()
 
@@ -799,7 +836,7 @@ class CoreManager
             return secret
         }
 
-        /** What the daemon expects from [org.indra.android.core.client.IndraClient.login]. */
+        /** What the daemon expects from [org.indra.android.core.client.KotlinDaemonClient.login]. */
         private fun daemonCredential(): String =
             java.security.MessageDigest
                 .getInstance("SHA-256")
@@ -846,7 +883,6 @@ class CoreManager
          * Must be called from a background thread.
          */
         private fun connectAndLogin() {
-            if (!IndraClient.isAvailable()) error("Native client libraries are not loaded")
             if (!client.isConnected() && !client.connect(socketPath)) {
                 error("Cannot connect to daemon socket at $socketPath")
             }

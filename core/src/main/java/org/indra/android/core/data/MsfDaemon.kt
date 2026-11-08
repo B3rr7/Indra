@@ -4,18 +4,25 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import org.indra.android.core.engine.ChrootEngine
+import org.indra.android.core.engine.ChrootType
 import org.indra.android.core.system.Logger
+import org.indra.android.core.system.MsfLaunch
 import org.indra.android.core.system.ProcessEvent
 import org.indra.android.core.system.ProcessManager
 import org.indra.android.core.system.SettingsRepository
 import javax.inject.Inject
 import javax.inject.Singleton
+
+import org.indra.android.core.system.MsfLaunch.RPC_USER
+import org.indra.android.core.system.MsfLaunch.RPC_PASSWORD
 
 enum class DaemonState {
     STOPPED,
@@ -28,6 +35,11 @@ enum class DaemonState {
  * Owns the `msfrpcd` process. Runs it in the singleton scope so leaving the
  * screen that started it cannot strand the daemon in STARTING, and uses a
  * generation counter so a stale watcher from a previous run is ignored.
+ *
+ * msfrpcd is a Ruby script inside the Metasploit chroot, so it is started as
+ * `su -c 'chroot <root> /bin/sh -c …'` — never from the app process. That is also why
+ * [stop] cancels the tracked process instead of `pkill msfrpcd`: the process name of a Ruby
+ * script is `ruby`, so a name match would never find it.
  */
 @Suppress("TooManyFunctions")
 @Singleton
@@ -35,12 +47,16 @@ class MsfDaemon @Inject constructor(
     private val processManager: ProcessManager,
     private val toolManager: ToolManager,
     private val settings: SettingsRepository,
+    private val chrootEngine: ChrootEngine,
 ) {
     private companion object {
         const val READY_POLL_MS = 500L
         const val LOG_MAX_LINES = 200
-        const val READY_MARKER = "Started on port"
-        const val LISTEN_MARKER = "Listening on"
+
+        /** Matches `ruby /msfrpcd …` without matching this kill command itself. */
+        const val KILL_SCRIPT =
+            "for p in \$(ps -A -o PID,ARGS | grep -F msfrpcd | grep -v grep | awk '{print \$1}'); " +
+                "do kill -9 \$p 2>/dev/null; done"
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -59,10 +75,10 @@ class MsfDaemon @Inject constructor(
     private var startJob: Job? = null
     private var processJob: Job? = null
 
-    /** Last lifecycle operation; the next one joins it so pkill never races a fresh daemon. */
+    /** Last lifecycle operation; the next one joins it so a kill never races a fresh daemon. */
     private var lastOp: Job? = null
 
-    /** Set while a bundle swap replaces ruby/ and msf/: start() is refused. */
+    /** Set while a bundle swap replaces the rootfs: start() is refused. */
     private var maintenance = false
 
     val isRunning: Boolean get() = _state.value == DaemonState.READY
@@ -103,10 +119,12 @@ class MsfDaemon @Inject constructor(
         killOrphanedMsfrpcd()
         if (!isCurrent(gen)) return
         if (!toolManager.isMsfInstalled()) {
-            appendLog("[Metasploit is not installed: download it from the Metasploit screen]")
+            appendLog("[Metasploit is not installed: install it from the Metasploit screen]")
             transition(gen) { DaemonState.FAILED }
             return
         }
+        prepareChroot()
+        if (!isCurrent(gen)) return
         watchProcess(gen, buildMsfrpcdLaunch(settings.msfRpcPort))
         val ready = awaitReadyRpc(gen)
         if (isCurrent(gen)) {
@@ -114,14 +132,23 @@ class MsfDaemon @Inject constructor(
         }
     }
 
+    /**
+     * `/proc`, `/dev` and a resolv.conf inside the rootfs. Ruby and the RPC server need a
+     * writable HOME and a resolver; without them the daemon starts and dies with an error
+     * that looks like a missing file.
+     */
+    private suspend fun prepareChroot() {
+        val script = chrootEngine.setupScriptFor(ChrootType.MSF)
+        processManager.execute(command = script, asSu = true).collect { event ->
+            if (event is ProcessEvent.StderrLine && event.line.isNotBlank()) appendLog(event.line)
+        }
+    }
+
     private fun watchProcess(gen: Long, launch: MsfrpcdLaunch) {
         processJob = scope.launch {
             processManager.execute(
                 command = launch.command,
-                env = launch.env,
-                toolsDir = toolManager.toolsPath,
-                workDir = toolManager.msfPath,
-                asSu = false, // msfrpcd runs in the chroot, which is already root
+                asSu = true, // chroot itself needs root; the rootfs is not app-owned
             ).collect { event -> handleProcessEvent(gen, event) }
         }
     }
@@ -152,8 +179,8 @@ class MsfDaemon @Inject constructor(
             val client = MsfRpcClient.create(
                 host = "127.0.0.1",
                 port = settings.msfRpcPort,
-                user = "msf",
-                password = "msf",
+                user = RPC_USER,
+                password = RPC_PASSWORD,
             )
             if (client != null && client.version() != null) {
                 client.close()
@@ -166,27 +193,15 @@ class MsfDaemon @Inject constructor(
     }
 
     private fun buildMsfrpcdLaunch(port: Int): MsfrpcdLaunch {
-        val msfPath = toolManager.msfPath
-        val rubyPath = toolManager.rubyPath
-        val rubyLib = "$rubyPath/lib"
-        val rubyArch = "$rubyPath/lib/ruby/3.3.0/aarch64-linux"
-        val command = "HOME=${toolManager.msfHomePath} " +
-            "LD_LIBRARY_PATH=$rubyLib:$rubyPath/lib/ruby/3.3.0:$rubyArch " +
-            "$msfPath/msfrpcd -P $port -f -S -a 127.0.0.1"
-        val env = mapOf(
-            "HOME" to toolManager.msfHomePath,
-            "LD_LIBRARY_PATH" to rubyLib,
-            "GEM_HOME" to "$rubyPath/lib/ruby/gems/3.3.0",
-            "GEM_PATH" to "$rubyPath/lib/ruby/gems/3.3.0",
-            "RUBYLIB" to "$rubyPath/lib/ruby/3.3.0:$rubyArch",
-        )
-        return MsfrpcdLaunch(command, env, port)
+        val command = MsfLaunch.rpcd(toolManager.msfPath, port)
+        return MsfrpcdLaunch(command, port)
     }
 
-    private data class MsfrpcdLaunch(val command: String, val env: Map<String, String>, val port: Int)
+    private data class MsfrpcdLaunch(val command: String, val port: Int)
 
-    private fun killOrphanedMsfrpcd() {
+    private suspend fun killOrphanedMsfrpcd() {
         Logger.d("MsfDaemon: killing orphaned msfrpcd (best effort)")
+        processManager.execute(command = KILL_SCRIPT, asSu = true).collect {}
     }
 
     private fun isCurrent(gen: Long): Boolean = gen == generation
@@ -212,7 +227,10 @@ class MsfDaemon @Inject constructor(
                     val previous = lastOp
                     scope.launch {
                         previous?.join()
-                        processManager.execute(command = "pkill -9 msfrpcd", asSu = false).collect {}
+                        // Cancelling the tracked run kills its whole su/chroot tree.
+                        processJob?.cancelAndJoin()
+                        processJob = null
+                        processManager.execute(command = KILL_SCRIPT, asSu = true).collect {}
                         transition(gen) { DaemonState.STOPPED }
                     }.also { lastOp = it }
                 }
@@ -233,7 +251,7 @@ class MsfDaemon @Inject constructor(
     /** Kill any msfrpcd left over from a previous app run. */
     fun reapOrphans() {
         scope.launch {
-            processManager.execute(command = "pkill -9 msfrpcd", asSu = false).collect {}
+            processManager.execute(command = KILL_SCRIPT, asSu = true).collect {}
         }
     }
 }

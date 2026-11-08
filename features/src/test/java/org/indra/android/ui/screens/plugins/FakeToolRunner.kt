@@ -4,7 +4,7 @@ import com.google.gson.Gson
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.flow
-import org.indra.android.core.client.IndraClient
+import org.indra.android.core.client.KotlinDaemonClient
 import org.indra.android.core.engine.Capability
 import org.indra.android.core.engine.CapabilityState
 import org.indra.android.core.system.SmartTool
@@ -111,11 +111,23 @@ class FakeToolRunner : ToolRunner {
         outFile: String?,
     ): Flow<ToolResult> = record("tcpdump", "tcpdump $iface $filter $count ${outFile ?: ""}")
 
+    override fun tcpdumpDirect(
+        iface: String,
+        filter: String,
+        count: Int,
+        outFile: String?,
+    ): Flow<ToolResult> = record("tcpdump", "tcpdump $iface $filter $count ${outFile ?: ""}")
+
     override fun aircrack(args: String): Flow<ToolResult> = record("aircrack", args)
 
     override fun aircrackDirect(args: String): Flow<ToolResult> = record("aircrack", args)
 
     override suspend fun nuclei(
+        target: String,
+        templates: String,
+    ): Flow<ToolResult> = record("nuclei", "$target $templates")
+
+    override suspend fun nucleiDirect(
         target: String,
         templates: String,
     ): Flow<ToolResult> = record("nuclei", "$target $templates")
@@ -198,7 +210,10 @@ class FakeToolRunner : ToolRunner {
                 handler = "raw",
                 description = "",
                 binary = "",
-                client = IndraClient(),
+                client = KotlinDaemonClient(
+                    transportFactory = { _ -> throw UnsupportedOperationException("fake") },
+                    onEvent = { _, _ -> },
+                ),
                 gson = Gson(),
             )
     }

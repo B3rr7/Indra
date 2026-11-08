@@ -39,6 +39,17 @@ class RootManager
             private const val MAX_PROBE_OUTPUT = 8 * 1024
 
             /**
+             * How long a [cachedRootStatus] answer is trusted.
+             *
+             * [detectRoot] execs `su`, and a manager may park it on a grant dialog for up to
+             * [PROBE_TIMEOUT_SECONDS], so it must not run per card: the Tools grid asks
+             * `PluginAvailability` about every plugin on each composition, and five of them are
+             * direct-`su` tools whose only gate is root. Long enough to keep that to one probe
+             * per render, short enough that granting root is noticed on the next action.
+             */
+            private const val ROOT_STATUS_TTL_NANOS = 5_000_000_000L
+
+            /**
              * Launcher activity of each supported manager, used as an explicit component.
              *
              * An explicit component start is not filtered by package visibility, which is the
@@ -54,6 +65,12 @@ class RootManager
                     RootAccess.KERNELSU_NEXT_PACKAGE to "com.rifsxd.ksunext.ui.MainActivity",
                 )
         }
+
+        /**
+         * Rate-limits the `su` probe — see [ROOT_STATUS_TTL_NANOS] for why an uncached
+         * [detectRoot] cannot be called once per plugin card.
+         */
+        private val rootProbe = TtlProbe<RootStatus>(ROOT_STATUS_TTL_NANOS, probe = ::detectRoot)
 
         enum class RootType {
             MAGISK,
@@ -106,6 +123,20 @@ class RootManager
                 detail = probe.detail,
             )
         }
+
+        /**
+         * The probe result, re-read at most once per [ROOT_STATUS_TTL_NANOS].
+         *
+         * Use this from anything that asks per item (the plugin card gate); use [detectRoot]
+         * when a fresh answer is the point of the call.
+         */
+        fun cachedRootStatus(): RootStatus = rootProbe.get()
+
+        /**
+         * Forces a probe, ignoring the TTL — for after the user has granted root in the
+         * manager app, where a cached "refused" would otherwise persist.
+         */
+        fun refreshRootStatus(): RootStatus = rootProbe.refresh()
 
         /** User-facing fix for whatever [detectRoot] found, or null when root is healthy. */
         fun guidance(status: RootStatus = detectRoot()): String? = RootAccess.guidance(status)

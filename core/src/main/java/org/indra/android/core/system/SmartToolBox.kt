@@ -20,7 +20,7 @@ import kotlinx.coroutines.sync.withLock
 import org.indra.android.core.child.ChildProcess
 import org.indra.android.core.child.ChildProcessManager
 import org.indra.android.core.child.ProcessEvent
-import org.indra.android.core.client.IndraClient
+import org.indra.android.core.client.KotlinDaemonClient
 import org.indra.android.core.engine.Capability
 import org.indra.android.core.engine.CapabilityState
 import org.indra.android.core.engine.ChrootEngine
@@ -47,7 +47,7 @@ class SmartToolBox
     @Suppress("LongParameterList")
     constructor(
         @ApplicationContext private val context: Context,
-        private val client: IndraClient,
+        private val client: KotlinDaemonClient,
         private val coreManager: CoreManager,
         private val childProcessManager: ChildProcessManager,
         private val processManager: ProcessManager,
@@ -58,6 +58,12 @@ class SmartToolBox
         companion object {
             /** Shell exit codes 129..159 mean "terminated by signal (exit-128)". */
             private const val SHELL_SIGNAL_BASE = 128
+
+            /** Marker [ProcessManager] appends after the command so the real pid is known. */
+            private const val PID_LINE = "INDRA_PID="
+
+            /** Exit-status echo [runDirect] appends; `$!` is empty for a foreground command. */
+            private const val EXIT_LINE = "INDRA_EXIT="
 
             /** Tools that never emit ChildEnd (long-running daemons) are bounded by this. */
             private const val TOOL_TIMEOUT_MS = 120_000L
@@ -145,6 +151,18 @@ class SmartToolBox
                 setOf("direct")
 
             /**
+             * Whether [name]'s registry entry binds to the direct-`su` pseudo-handler.
+             *
+             * The daemon will never report a handler called `direct`, so a card gated on
+             * `SmartTool.isAvailable()` can only ever dim one of these — which is how Masscan,
+             * Login Cracker, Packet Forger, Credential Tester and WiFi Audit ended up saying
+             * "not in native core" with the binary in the core and root granted. Their gate is
+             * the bundled binary plus root; see [PluginAvailability].
+             */
+            fun isDirectTool(name: String): Boolean =
+                TOOL_SPECS.firstOrNull { it.name == name }?.handler in DIRECT_HANDLERS
+
+            /**
              * Registry, one spec per name. Tools whose real handler exists in
              * the daemon bind to it; every other shipped binary executes
              * through the universal `raw` handler (output streamed verbatim;
@@ -160,13 +178,13 @@ class SmartToolBox
                     ToolSpec("masscan", "direct", "High-speed port scanner", "masscan"),
                     ToolSpec("hydra", "direct", "Login cracker", "hydra"),
                     ToolSpec("aircrack-ng", "direct", "WiFi WEP/WPA cracker", "aircrack-ng"),
-                    ToolSpec("reaver", "raw", "WPS PIN cracker", "reaver"),
+                    ToolSpec("reaver", "direct", "WPS PIN cracker", "reaver"),
                     ToolSpec("hping3", "direct", "Packet crafter", "hping3"),
-                    ToolSpec("nuclei", "raw", "Vulnerability scanner", "nuclei"),
+                    ToolSpec("nuclei", "direct", "Vulnerability scanner", "nuclei"),
                     ToolSpec("gobuster", "raw", "Directory/file brute-forcer", "gobuster"),
-                    ToolSpec("bettercap", "raw", "Network attack framework", "bettercap"),
-                    ToolSpec("arpspoof", "raw", "ARP spoofer", "arpspoof"),
-                    ToolSpec("tcpdump", "raw", "Packet capture", "tcpdump"),
+                    ToolSpec("bettercap", "direct", "Network attack framework", "bettercap"),
+                    ToolSpec("arpspoof", "direct", "ARP spoofer", "arpspoof"),
+                    ToolSpec("tcpdump", "direct", "Packet capture", "tcpdump"),
                     ToolSpec("ettercap", "ettercap", "MITM tool", "ettercap"),
                     ToolSpec("fusemounts", "fusemounts", "FUSE mounts", "fusemounts"),
                     ToolSpec("network-radar", "network-radar", "Network auto-scanner", "network-radar"),
@@ -175,6 +193,18 @@ class SmartToolBox
                     ToolSpec("raw", "raw", "Raw socket", "raw"),
                     ToolSpec("blind", "blind", "Blind shell handler", "sh"),
                 )
+
+            /**
+             * The `tools/<binary>` directory of every bundled tool, absolute.
+             *
+             * Pure so the rule is unit-tested: a direct run that cannot find its binary fails
+             * with a bare `inaccessible or not found` on a rooted device, which is exactly what
+             * `hydra: inaccessible or not found` was until the direct path carried this.
+             */
+            fun directToolDirs(coreDir: File): List<String> =
+                TOOL_SPECS
+                    .map { File(coreDir, "tools/${it.binary}").absolutePath }
+                    .distinct()
         }
 
         private val gson = Gson()
@@ -249,8 +279,7 @@ class SmartToolBox
          */
         fun isDaemonConnected(): Boolean =
             runCatching {
-                IndraClient.isAvailable() &&
-                    !client.hasStartFailed() &&
+                !client.hasStartFailed() &&
                     client.isConnected() &&
                     client.isAuthenticated()
             }.getOrDefault(false)
@@ -263,20 +292,55 @@ class SmartToolBox
          */
         suspend fun requireDirectTool(name: String): ToolHandle =
             withContext(Dispatchers.IO) {
-                val status = rootManager.detectRoot()
+                // refreshRootStatus() probes exactly like detectRoot() and also warms the cache
+                // the Home/Tools card gate reads, so a card and the press cannot disagree.
+                val status = rootManager.refreshRootStatus()
                 if (!status.isRooted) {
                     val msg = rootManager.guidance(status)
                         ?: "Root access required. Enable root in Settings or grant in your root manager."
                     ToolHandle.RootRequired(msg)
                 } else {
                     val tool = getTool(name)
-                    if (tool == null) {
-                        ToolHandle.Missing(name)
-                    } else {
-                        ToolHandle.Ready(tool)
+                    when {
+                        tool == null -> ToolHandle.Missing(name)
+                        // A direct run never asks the daemon, so the binary on disk is the whole
+                        // answer. Without this a core that never extracted `hydra` reached the
+                        // gate as Ready and failed later with `hydra: inaccessible or not found`.
+                        isDirectTool(name) && toolBinaryPath(name) == null -> ToolHandle.Missing(name)
+                        else -> ToolHandle.Ready(tool)
                     }
                 }
             }
+
+        /**
+         * The bundled binary for [name], or null when the core has not extracted it.
+         *
+         * [binary] returns the daemon-relative `./tools/<name>/<name>`; this resolves the same
+         * path against the core directory for callers that need to know the file is really
+         * there. The direct-`su` gate does, because those tools have no daemon handler to ask.
+         */
+        fun toolBinaryPath(name: String): File? =
+            TOOL_SPECS
+                .firstOrNull { it.name == name }
+                ?.let { File(coreManager.coreDir, "tools/${it.binary}/${it.binary}") }
+                ?.takeIf { it.exists() }
+
+        /**
+         * Whether [name] is present on this device, for a caller reporting presence rather than
+         * gating a run (the Settings "Bundled Tools" list).
+         *
+         * A direct-`su` tool has no daemon handler, so `isAvailable()` is permanently false for
+         * it and that list called a bundled `hydra`/`masscan`/`hping3`/`aircrack-ng` "not
+         * bundled". For those, the binary on disk is the answer.
+         *
+         * Known limitations, unchanged here: a handler-backed entry ("raw", "shell", "blind",
+         * "msfrpcd" have no binary of their own) still reports through the daemon's handler list,
+         * so it reads "not bundled" while the daemon is stopped — it is, the core just is not
+         * running; and the separately-installed artifacts (nuclei, bettercap) report whether the
+         * `raw` handler exists, not whether the artifact is installed.
+         */
+        fun isToolBundled(name: String): Boolean =
+            if (isDirectTool(name)) toolBinaryPath(name) != null else getTool(name)?.isAvailable() == true
 
         fun getAvailableTools(): List<SmartTool> = tools.values.filter { it.isAvailable() }
 
@@ -646,104 +710,70 @@ class SmartToolBox
          * The command runs as root, so user-typed fields MUST be [shellQuote]d.
          */
         @Suppress("LongMethod", "CyclomaticComplexMethod", "UnusedParameter")
+        /**
+         * PATH prefix for a direct `su` run: every bundled tool's own directory.
+         *
+         * `su -c` starts in `/` with the system PATH, so a bare `hydra`/`nmap`/`hping3` is not
+         * found even though the core ships it — on device that surfaced as
+         * `/system/bin/sh: hydra: inaccessible or not found` while the daemon path worked. The
+         * daemon never had the problem because it `chdir()`s into the core and execs
+         * `./tools/<name>/<name>`; direct runs get the equivalent through PATH + [coreDir].
+         */
+        private fun directSearchPath(): String = directToolDirs(coreManager.coreDir).joinToString(":")
+
+        /** Mutable state of one [runDirect] run, kept out of the function so detekt can read it. */
+        private class DirectState {
+            val output = StringBuilder()
+            var pid: Int? = null
+            var exitValue: Int? = null
+            var finished = false
+        }
+
         private fun runDirect(
             label: String,
             command: String,
             timeoutMs: Long = TOOL_TIMEOUT_MS,
             secrets: Collection<String> = emptyList(),
         ): Flow<ToolResult> = channelFlow {
-            val output = StringBuilder()
-            var finished = false
-            var exitValue: Int? = null
-            var pid: Int? = null
-
+            val state = DirectState()
             val events = processManager.execute(
-                command = command,
-                env = emptyMap(),
+                // `su -c` has neither the daemon's cwd nor its library path. The bundled
+                // hydra/nmap link against the core's own libssl/libcrypto, so without
+                // LD_LIBRARY_PATH they die in the linker ("cannot locate symbol
+                // PKCS12_SAFEBAG_free") — and `ProcessManager`'s `$!` marker is empty for a
+                // foreground command, so the exit status is captured here instead.
+                command = "{ $command; }; echo $EXIT_LINE\$?",
+                env = mapOf("LD_LIBRARY_PATH" to File(coreManager.coreDir, "lib").absolutePath),
+                toolsDir = directSearchPath(),
+                workDir = coreManager.coreDir.absolutePath,
                 asSu = true,
                 secrets = secrets,
             )
 
-            send(
-                ToolResult(
-                    tool = label,
-                    success = true,
-                    status = STATUS_RUNNING,
-                    pid = -1,
-                    rawOutput = "Executing: $label $command",
-                ),
-            )
+            send(directLine(label, "Executing: $label $command", -1))
 
             try {
-                events.collect { event ->
-                    when (event) {
-                        is SystemProcessEvent.StdoutLine -> {
-                            val line = event.line
-                            if (pid == null && line.startsWith("INDRA_PID=")) {
-                                pid = line.substringAfter("INDRA_PID=").toIntOrNull()
-                            } else {
-                                output.appendLine(line)
-                                send(
-                                    ToolResult(
-                                        tool = label,
-                                        success = true,
-                                        status = STATUS_RUNNING,
-                                        pid = pid ?: -1,
-                                        rawOutput = line,
-                                    ),
-                                )
-                            }
-                        }
-                        is SystemProcessEvent.StderrLine -> {
-                            output.appendLine(event.line)
-                            send(
-                                ToolResult(
-                                    tool = label,
-                                    success = true,
-                                    status = STATUS_RUNNING,
-                                    pid = pid ?: -1,
-                                    rawOutput = event.line,
-                                ),
-                            )
-                        }
-                        is SystemProcessEvent.Exited -> {
-                            exitValue = event.code
-                            finished = true
-                        }
-                        is SystemProcessEvent.Killed -> {
-                            exitValue = SHELL_SIGNAL_BASE + event.signal
-                            finished = true
-                        }
+                // Let ProcessManager's own flow finish rather than closing the channel the
+                // moment the exit marker arrives: closing first cancels its collector, so its
+                // `exited` flag is still false and `awaitClose` fires a tree-kill `su` for a
+                // tool that already exited (observed for every traceroute on device).
+                val completed =
+                    withTimeoutOrNull(timeoutMs) {
+                        events.collect { event -> directStep(label, event, state) { send(it) } }
                     }
-                    if (finished) {
-                        val status = when {
-                            exitValue == 0 || exitValue == 1 -> STATUS_COMPLETED
-                            else -> STATUS_TIMEOUT
-                        }
-                        val success = exitValue == 0 || exitValue == 1
-                        send(
-                            ToolResult(
-                                tool = label,
-                                success = success,
-                                status = status,
-                                pid = pid ?: -1,
-                                rawOutput = output.toString().trim(),
-                                exitValue = exitValue,
-                                error = if (success) null else "Exited with code $exitValue${reasonSuffix(output.toString())}",
-                            ),
-                        )
-                        close()
-                    }
-                }
+                // A null result means the bound elapsed; ProcessManager.awaitClose kills the
+                // process tree when its collector goes away.
+                send(directOutcome(label, state, completed == null, timeoutMs))
+                close()
             } catch (e: Exception) {
-                if (!finished) {
+                if (!state.finished) {
                     send(
                         ToolResult(
                             tool = label,
                             success = false,
                             status = STATUS_FAILED,
-                            pid = pid ?: -1,
-                            rawOutput = output.toString().trim(),
+                            pid = state.pid ?: -1,
+                            rawOutput = state.output.toString().trim(),
                             error = "Direct execution failed: ${e.message}",
                         ),
                     )
@@ -751,6 +781,117 @@ class SmartToolBox
                 }
             }
         }
+
+        /** Folds one process event into [state], emitting live lines as they arrive. */
+        private suspend fun directStep(
+            label: String,
+            event: SystemProcessEvent,
+            state: DirectState,
+            emit: suspend (ToolResult) -> Unit,
+        ) {
+            when (event) {
+                is SystemProcessEvent.StdoutLine -> {
+                    val line = event.line
+                    when {
+                        state.pid == null && line.startsWith(PID_LINE) ->
+                            state.pid = line.substringAfter(PID_LINE).toIntOrNull()
+                        line.startsWith(EXIT_LINE) -> {
+                            state.exitValue = line.substringAfter(EXIT_LINE).toIntOrNull()
+                            state.finished = true
+                        }
+                        else -> {
+                            state.output.appendLine(line)
+                            emit(directLine(label, line, state.pid ?: -1))
+                        }
+                    }
+                }
+                is SystemProcessEvent.StderrLine -> {
+                    state.output.appendLine(event.line)
+                    emit(directLine(label, event.line, state.pid ?: -1))
+                }
+                // The shell's own status is always 0 (the exit echo ran last), so it is only a
+                // fallback for a command that never reached the echo.
+                is SystemProcessEvent.Exited ->
+                    if (state.exitValue == null) {
+                        state.exitValue = event.code
+                        state.finished = true
+                    }
+                is SystemProcessEvent.Killed -> {
+                    state.exitValue = SHELL_SIGNAL_BASE + event.signal
+                    state.finished = true
+                }
+            }
+        }
+
+        /** Final emission: the tool's own exit status, or the bound if it never exited. */
+        private fun directOutcome(
+            label: String,
+            state: DirectState,
+            timedOut: Boolean,
+            timeoutMs: Long,
+        ): ToolResult {
+            val text = state.output.toString().trim()
+            val pid = state.pid ?: -1
+            return when {
+                timedOut -> directTimeout(label, text, timeoutMs, pid)
+                state.finished -> directFinal(label, text, state.exitValue, pid)
+                else ->
+                    ToolResult(
+                        tool = label,
+                        success = false,
+                        status = STATUS_FAILED,
+                        pid = pid,
+                        rawOutput = text,
+                        error = "$label ended without reporting an exit status",
+                    )
+            }
+        }
+
+        private fun directLine(
+            label: String,
+            text: String,
+            pid: Int,
+        ): ToolResult =
+            ToolResult(
+                tool = label,
+                success = true,
+                status = STATUS_RUNNING,
+                pid = pid,
+                rawOutput = text,
+            )
+
+        private fun directFinal(
+            label: String,
+            output: String,
+            exitValue: Int?,
+            pid: Int,
+        ): ToolResult {
+            val success = exitValue == 0 || exitValue == 1
+            return ToolResult(
+                tool = label,
+                success = success,
+                status = if (success) STATUS_COMPLETED else STATUS_TIMEOUT,
+                pid = pid,
+                rawOutput = output,
+                exitValue = exitValue,
+                error = if (success) null else "Exited with code $exitValue${reasonSuffix(output)}",
+            )
+        }
+
+        private fun directTimeout(
+            label: String,
+            output: String,
+            timeoutMs: Long,
+            pid: Int,
+        ): ToolResult =
+            ToolResult(
+                tool = label,
+                success = false,
+                status = STATUS_TIMEOUT,
+                pid = pid,
+                rawOutput = output,
+                error = "$label timed out after ${timeoutMs / 1000}s",
+            )
 
         // ---- Direct su tools (bypass daemon) ---------------------------------
 
@@ -761,19 +902,26 @@ class SmartToolBox
             target: String,
             service: String,
             user: String,
-            passList: String = defaultWordlist(),
+            passList: String? = null,
             port: String? = null,
         ): Flow<ToolResult> =
-            runDirect(
-                "hydra",
-                buildString {
-                    append("hydra -V -l ${shellQuote(user)}")
-                    port?.trim()?.takeIf { it.isNotEmpty() }?.let { append(" -s ${shellQuote(it)}") }
-                    append(" -P ${shellQuote(passList)} ${shellQuote(target)} ${shellQuote(service)}")
-                },
-                timeoutMs = LONG_RUNNING_TIMEOUT_MS,
-                secrets = listOf(user, passList),
-            )
+            flow {
+                // Resolving the bundled wordlist touches filesDir; as a default argument it did
+                // that on the caller's (Main) thread — a StrictMode violation caught on device.
+                val list = passList ?: withContext(Dispatchers.IO) { defaultWordlist() }
+                emitAll(
+                    runDirect(
+                        "hydra",
+                        buildString {
+                            append("hydra -V -l ${shellQuote(user)}")
+                            port?.trim()?.takeIf { it.isNotEmpty() }?.let { append(" -s ${shellQuote(it)}") }
+                            append(" -P ${shellQuote(list)} ${shellQuote(target)} ${shellQuote(service)}")
+                        },
+                        timeoutMs = LONG_RUNNING_TIMEOUT_MS,
+                        secrets = listOf(user, list),
+                    ),
+                )
+            }
 
         /**
          * Tests a single credential pair (`-p`) instead of a whole wordlist.
@@ -866,6 +1014,93 @@ class SmartToolBox
             )
 
         /**
+         * ARP spoofing via direct su. Needs root (raw sockets).
+         */
+        fun arpspoofDirect(
+            iface: String,
+            target: String,
+            gateway: String,
+        ): Flow<ToolResult> =
+            runDirect(
+                "arpspoof",
+                "arpspoof -i ${shellQuote(iface)} -t ${shellQuote(target)} ${shellQuote(gateway)}",
+                timeoutMs = LONG_RUNNING_TIMEOUT_MS,
+            )
+
+        /**
+         * Packet capture via direct su. Needs root (raw sockets).
+         */
+        fun tcpdumpDirect(
+            iface: String = "wlan0",
+            filter: String = "",
+            count: Int = 0,
+            outFile: String? = null,
+        ): Flow<ToolResult> =
+            runDirect(
+                "tcpdump",
+                buildString {
+                    append("tcpdump -i ${shellQuote(iface)}")
+                    if (outFile != null) {
+                        append(" -w ${shellQuote(outFile)}")
+                    } else {
+                        append(" -nn -l")
+                    }
+                    if (count > 0) append(" -c $count")
+                    if (filter.isNotBlank()) append(' ').append(shellQuote(filter))
+                },
+                timeoutMs = LONG_RUNNING_TIMEOUT_MS,
+            )
+
+        /**
+         * WPS PIN cracking via direct su. Needs root (raw sockets).
+         */
+        fun reaverDirect(
+            iface: String,
+            bssid: String,
+            args: String = "",
+        ): Flow<ToolResult> =
+            runDirect(
+                "reaver",
+                "reaver -i ${shellQuote(iface)} -b ${shellQuote(bssid)} $args",
+                timeoutMs = LONG_RUNNING_TIMEOUT_MS,
+            )
+
+        /**
+         * Network interception via direct su. Needs root.
+         */
+        fun ettercapDirect(args: String): Flow<ToolResult> =
+            runDirect(
+                "ettercap",
+                "ettercap $args",
+                timeoutMs = LONG_RUNNING_TIMEOUT_MS,
+            )
+
+        /**
+         * Bettercap via direct su. Needs root.
+         */
+        fun bettercapDirect(args: String): Flow<ToolResult> =
+            runDirect(
+                "bettercap",
+                "bettercap $args",
+                timeoutMs = LONG_RUNNING_TIMEOUT_MS,
+            )
+
+        /**
+         * Vulnerability scanning via direct su.
+         * nuclei needs a writable HOME for ~/.config/nuclei; the daemon's HOME is /
+         * (read-only), so set it explicitly.
+         */
+        suspend fun nucleiDirect(
+            target: String,
+            templates: String = "",
+        ): Flow<ToolResult> =
+            shellDirect(
+                "HOME=${shellQuote(context.filesDir.absolutePath)} nuclei -nc -stats -si 10 -u ${shellQuote(target)} $templates",
+                label = "nuclei",
+                timeoutMs = SCAN_TIMEOUT_MS,
+            )
+
+        /**
          * Runs a POSIX shell script through `/system/bin/sh -c`.
          *
          * The daemon does NOT use a shell: it tokenizes the command string itself and
@@ -890,6 +1125,17 @@ class SmartToolBox
             val script = if (ShellText.startsWithDroppedChar(command)) "\n$command" else command
             return execute("shell", "$SH_BINARY -c ${encodeArg(script)}", label, timeoutMs)
         }
+
+        /**
+         * Runs a POSIX shell script through direct `su -c` (no daemon).
+         * Used by tools that have been migrated off the daemon.
+         */
+        fun shellDirect(
+            command: String,
+            label: String = "shell",
+            timeoutMs: Long = TOOL_TIMEOUT_MS,
+        ): Flow<ToolResult> =
+            runDirect(label, command, timeoutMs)
 
         /** Path (relative to the core dir, the daemon's cwd) of a bundled tool binary. */
         private fun binary(name: String): String = "./tools/$name/$name"
@@ -948,7 +1194,7 @@ class SmartToolBox
             val dir = IndraWorkspace.dir(IndraWorkspace.CAPTURES)
             val quoted = shellQuote(dir.absolutePath)
             return runCatching {
-                val result = shell("mkdir -p $quoted && [ -d $quoted ] && echo present").last()
+                val result = shellDirect("mkdir -p $quoted && [ -d $quoted ] && echo present").last()
                 result.success && result.rawOutput.contains("present")
             }.getOrElse { false }
         }
@@ -1387,7 +1633,7 @@ class SmartTool(
     private val handler: String,
     val description: String,
     val binary: String,
-    private val client: IndraClient,
+    private val client: KotlinDaemonClient,
     private val gson: Gson,
 ) {
     /** Last probe result; only [toJson] reads it directly. */
@@ -1412,11 +1658,7 @@ class SmartTool(
 
     private fun probeAvailability(): Boolean =
         try {
-            if (!IndraClient.isAvailable()) {
-                false
-            } else {
-                client.getHandlers()?.contains(handler) ?: false
-            }
+            client.getHandlers()?.contains(handler) ?: false
         } catch (e: Throwable) {
             Logger.w("refresh '$handler' failed: ${e.message}")
             false

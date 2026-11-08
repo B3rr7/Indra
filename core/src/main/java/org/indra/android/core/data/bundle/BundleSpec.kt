@@ -1,8 +1,6 @@
 package org.indra.android.core.data.bundle
 
 import java.io.File
-import java.nio.file.Files
-import java.nio.file.StandardCopyOption
 
 /**
  * Describes one bundle: where it lives, which files belong to it,
@@ -34,30 +32,24 @@ data class BundleSpec(
             assetBundle = "tools-bundle.tar.gz.bin",
         )
 
-        /** The Metasploit bundle (download-only; ruby + msf chroot). */
+        /**
+         * The Metasploit bundle: one self-contained Alpine/musl rootfs.
+         *
+         * The archive is rooted at the chroot root (`./bin/busybox`, `./usr/bin/ruby`,
+         * `./opt/metasploit-framework/…`), so every entry is mapped under `msf/` and the whole
+         * directory is the chroot. It used to be split into `msf/` + `ruby/`, which only made
+         * sense for a bionic Ruby that can no longer be built without the NDK.
+         */
         fun msf(): BundleSpec = BundleSpec(
             id = "msf",
             primaryDir = "msf",
-            liveDirs = listOf("msf", "ruby", "msf-home"),
-            sentinels = listOf("msf/msfconsole", "ruby/bin/ruby"),
-            mapPath = { name ->
-                when {
-                    name.startsWith("msf/") -> name
-                    name.startsWith("ruby/") -> name
-                    else -> null
-                }
-            },
+            liveDirs = listOf("msf"),
+            sentinels = listOf("msf/bin/busybox", "msf/usr/bin/ruby", "msf/msfconsole"),
+            mapPath = { name -> if (name.isEmpty()) "msf/" else "msf/$name" },
             postInstall = { staging ->
-                // Ensure msf-home exists and migrate legacy .msf4
-                File(staging, "msf-home").mkdirs()
-                val legacy = File(staging, "ruby/.msf4")
-                if (legacy.exists()) {
-                    Files.move(
-                        legacy.toPath(),
-                        File(staging, "msf-home").toPath(),
-                        StandardCopyOption.REPLACE_EXISTING,
-                    )
-                }
+                // Writable HOME and scratch inside the chroot; Metasploit creates ~/.msf4 here.
+                File(staging, "msf/root/.msf4").mkdirs()
+                File(staging, "msf/tmp").mkdirs()
             },
             assetManifest = null, // msf bundle is download-only
             assetBundle = null,

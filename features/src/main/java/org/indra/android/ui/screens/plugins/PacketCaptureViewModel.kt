@@ -133,7 +133,7 @@ class PacketCaptureViewModel
 
             job =
                 viewModelScope.launch {
-                    val gate = toolBox.requireTool("raw")
+                    val gate = toolBox.requireDirectTool("tcpdump")
                     if (gate !is ToolHandle.Ready) {
                         _uiState.value = _uiState.value.copy(error = gate.message)
                         return@launch
@@ -164,7 +164,7 @@ class PacketCaptureViewModel
                         } else {
                             null
                         }
-                    toolBox.tcpdump(iface, state.filter.trim(), count, outFile).collect { result ->
+                    toolBox.tcpdumpDirect(iface, state.filter.trim(), count, outFile).collect { result ->
                         if (result.pid > 0) pid = result.pid
                         result.streamedLine?.let { line ->
                             val current = _uiState.value

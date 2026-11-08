@@ -6,6 +6,12 @@
   uses `adb reverse tcp:` so a LAN build server appears as 127.0.0.1 on the
   device. Production OTA traffic stays HTTPS-pinned; everything else is
   cleartext-blocked by the base config.
+
+  The rootless directory brute-forcer (DirBruteRunner) speaks cleartext HTTP to
+  arbitrary LAN targets through a raw Socket, which does not consult this
+  policy — that is its job, and widening this config would also unblock a
+  mistyped http:// URL in the update paths. The block therefore stays here, and
+  only SocketProbe opts out, in one file.
 -->
 <network-security-config>
     <base-config cleartextTrafficPermitted="false" />
