@@ -108,7 +108,35 @@ class KotlinDaemonClientTest {
         client.login("android", "hash")
         client.loadHandlers()
         assertEquals(-1, client.startCommand("raw", FAIL_COMMAND, null))
-        assertTrue(client.hasStartFailed())
+    }
+
+    @Test
+    fun `liveness follows attach, login and peer loss`() {
+        // Attached but not yet authenticated: the socket is open, the credential is not accepted.
+        assertEquals(false, client.daemonConnected.value)
+
+        assertTrue(client.login("android", "hash"))
+        assertEquals(true, client.daemonConnected.value)
+
+        // The daemon goes away underneath a running app: the reader sees EOF and must publish
+        // false, otherwise every card keeps claiming a daemon that is no longer there.
+        runCatching { toClient.close() }
+        awaitLiveness(false)
+    }
+
+    @Test
+    fun `a refused single start does not report the daemon as down`() {
+        client.login("android", "hash")
+        client.loadHandlers()
+        assertTrue(client.daemonConnected.value)
+
+        assertEquals(-1, client.startCommand("raw", FAIL_COMMAND, null))
+
+        // Per-command failure is not a dead socket (the F4 trap: one refused start used to
+        // dim every card until the app was force-stopped).
+        assertEquals(true, client.daemonConnected.value)
+        assertTrue(client.isConnected())
+        assertTrue(client.isAuthenticated())
     }
 
     @Test
@@ -216,6 +244,15 @@ class KotlinDaemonClientTest {
             Thread.sleep(POLL_MS)
         }
         assertEquals("expected $count events, got ${events.size}", count, events.size)
+    }
+
+    /** The reader thread publishes peer loss asynchronously, so poll the flow. */
+    private fun awaitLiveness(expected: Boolean) {
+        val deadline = System.currentTimeMillis() + AWAIT_MS
+        while (client.daemonConnected.value != expected && System.currentTimeMillis() < deadline) {
+            Thread.sleep(POLL_MS)
+        }
+        assertEquals(expected, client.daemonConnected.value)
     }
 
     private class FakeTransport(

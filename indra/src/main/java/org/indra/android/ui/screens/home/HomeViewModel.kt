@@ -7,6 +7,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.indra.android.core.system.NetworkHelper
@@ -60,6 +61,17 @@ class HomeViewModel
     ) : ViewModel() {
         private val _uiState = MutableStateFlow(HomeUiState())
         val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
+
+        init {
+            // Repaint the cards when the daemon attaches or dies. `drop(1)` skips the value the
+            // StateFlow replays on collection — [HomeScreen] already calls refresh() on entry,
+            // so collecting it would run the whole probe+neighbour-table pass twice.
+            viewModelScope.launch {
+                toolBox.daemonConnected
+                    .drop(1)
+                    .collect { refresh() }
+            }
+        }
 
         /**
          * Reloads the hero and the plugin grid. Called from [HomeScreen] whenever the

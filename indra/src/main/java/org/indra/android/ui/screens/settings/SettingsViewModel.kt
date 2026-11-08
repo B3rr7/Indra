@@ -279,7 +279,12 @@ class SettingsViewModel
                     // the single-button state the Native Core card draws. Reading them twice was
                     // how the card could say "Running" while the hero said "stopped".
                     val coreVersion = system.getCoreVersion()
-                    val coreRunning = coreManager.isDaemonRunning
+                    // Attached, not merely "a socket file exists": a daemon killed underneath
+                    // the app leaves its socket behind, and the card must not claim otherwise.
+                    // Re-attach first, so a daemon started from another screen (or by the
+                    // previous process) is reflected instead of read as "stopped".
+                    if (!coreManager.isDaemonAttached) coreManager.reconnect()
+                    val coreRunning = coreManager.isDaemonAttached
                     // Bundle versions are disk reads (sentinels + .bundle-version), so they
                     // belong on IO with the rest of this block.
                     toolsInstalledVersion = bundleUpdateManager.installedToolsVersion()
@@ -831,7 +836,7 @@ class SettingsViewModel
                 withContext(Dispatchers.IO) {
                     toolBox.reload()
                     val coreVersion = system.getCoreVersion()
-                    val running = coreManager.isDaemonRunning
+                    val running = coreManager.isDaemonAttached
                     _uiState.value =
                         _uiState.value.copy(
                             coreVersion = coreVersion ?: "Not installed",

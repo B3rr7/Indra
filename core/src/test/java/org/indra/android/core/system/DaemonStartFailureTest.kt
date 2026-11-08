@@ -53,4 +53,18 @@ class DaemonStartFailureTest {
     fun `a silent failure still says the exit code`() {
         assertEquals("Daemon failed to start (exit=1)", DaemonStartFailure.explain(1, "", rootless = false))
     }
+
+    @Test
+    fun `a daemon that never answered is not reported as a shell exit`() {
+        // The launcher stays alive as the daemon's parent, so a start that binds nothing has no
+        // exit status at all — reporting `exit=null` was the old shape of that state.
+        assertEquals(
+            "Daemon failed to start (no answer)",
+            DaemonStartFailure.explain(exitCode = null, output = "", rootless = false),
+        )
+        assertEquals(
+            "Daemon failed to start (no answer): libc: cannot bind",
+            DaemonStartFailure.explain(exitCode = null, output = "libc: cannot bind", rootless = false),
+        )
+    }
 }

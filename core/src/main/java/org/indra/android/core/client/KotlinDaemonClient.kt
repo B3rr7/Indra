@@ -13,6 +13,9 @@ import java.io.IOException
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * Pure-Kotlin daemon client — the JNI client's behaviour without JNI.
@@ -59,8 +62,17 @@ class KotlinDaemonClient(
     @Volatile
     private var authenticated = false
 
-    @Volatile
-    private var startFailed = false
+    private val _daemonConnected = MutableStateFlow(false)
+
+    /**
+     * Observable socket liveness: true only while the transport is open and the credential
+     * was accepted. Published on every transition (attach, login, peer loss, disconnect) so
+     * a screen can refresh its cards instead of showing a stale label.
+     *
+     * A refused command start does **not** move this: it is a per-run failure, reported by
+     * the run's own `ToolResult`, not a dead daemon (the F4 trap).
+     */
+    val daemonConnected: StateFlow<Boolean> = _daemonConnected.asStateFlow()
 
     private var seq = 0
     private val handlers = LinkedHashMap<String, DaemonProtocol.HandlerDef>()
@@ -87,7 +99,7 @@ class KotlinDaemonClient(
             transport = opened
             connected = true
         }
-        startFailed = false
+        publishLiveness() // connected but not authenticated yet
         Thread({ readLoop(opened) }, "daemon-reader").apply {
             isDaemon = true
             reader = this
@@ -104,6 +116,7 @@ class KotlinDaemonClient(
             current = transport
             transport = null
         }
+        publishLiveness()
         runCatching { current?.close() }
         reader?.let { runCatching { it.join(JOIN_TIMEOUT_MS) } }
         reader = null
@@ -114,11 +127,12 @@ class KotlinDaemonClient(
 
     fun isAuthenticated(): Boolean = authenticated
 
-    /** True when the last start attempt failed (same signal the JNI client exposes). */
-    fun hasStartFailed(): Boolean = startFailed
-
-    fun noteStartResult(started: Boolean) {
-        startFailed = !started
+    /**
+     * Republished from whichever thread caused the transition. [StateFlow] is safe for that;
+     * readers only ever `collect` the latest value.
+     */
+    private fun publishLiveness() {
+        _daemonConnected.value = connected && authenticated
     }
 
     // ---- handshakes -------------------------------------------------------
@@ -129,6 +143,8 @@ class KotlinDaemonClient(
         authWait = wait
         val ok = send(DaemonProtocol.auth(nextSeq(), user, hash)) && await(wait) == true
         authWait = null
+        // `dispatchControl` owns the `authenticated` flag and republishes liveness, so both a
+        // success and a refused credential are already reflected by the time `await` returns.
         return ok
     }
 
@@ -152,12 +168,7 @@ class KotlinDaemonClient(
         if (!authenticated) return FAILED_ID
         val def = synchronized(lock) { handlers[handler] }
         val id = if (def == null) FAILED_ID else awaitStart(def, command, env)
-        if (id < 0) {
-            startFailed = true
-        } else {
-            children[id] = handler
-            startFailed = false
-        }
+        if (id >= 0) children[id] = handler
         return id
     }
 
@@ -201,6 +212,7 @@ class KotlinDaemonClient(
         when (message.body[0].toInt()) {
             DaemonProtocol.Code.AUTH_OK, DaemonProtocol.Code.AUTH_FAIL -> {
                 authenticated = message.body[0].toInt() == DaemonProtocol.Code.AUTH_OK
+                publishLiveness()
                 authWait?.offer(authenticated)
             }
             DaemonProtocol.Code.CMD_STARTED ->
@@ -255,6 +267,9 @@ class KotlinDaemonClient(
         val wasConnected = connected
         connected = false
         authenticated = false
+        // The missing half of the old fix: without this the flow stayed `true` after the peer
+        // died, so every card kept claiming a daemon that was no longer there.
+        publishLiveness()
         // The native notifier reports every in-flight child as killed when the peer drops.
         if (wasConnected) {
             children.keys.toList().forEach { childId ->

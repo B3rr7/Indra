@@ -24,3 +24,13 @@ features/build/
 
 # graphify knowledge graph output (generated, rebuild with `graphify update .`)
 graphify-out/
+
+# Kotlin 2.x session/build metadata
+.kotlin/
+
+# native build outputs (NDK puts objects under indra/obj, never indra/jni/obj)
+indra/obj/
+dist/
+*.so
+*.o
+*.class

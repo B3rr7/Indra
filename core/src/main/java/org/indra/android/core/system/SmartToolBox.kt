@@ -7,6 +7,7 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.last
@@ -272,17 +273,23 @@ class SmartToolBox
             }
 
         /**
-         * True when the daemon is connected, authenticated **and has not just refused a
-         * command** — not merely when the JNI libraries loaded. This is what separates
-         * "start the daemon" from "the core has no such handler"; reporting one as the other
-         * sends the user to the wrong fix.
+         * True while the socket is open and the credential was accepted.
+         *
+         * Deliberately **not** influenced by whether the last command started: one refused
+         * start (`raw` handler missing, tool rejected by the daemon) is not a dead daemon, and
+         * folding it in here was the F4 trap — `startFailed` latched with no reset path, so
+         * after a single refusal every card read "daemon not running" while `indrad` was
+         * healthy, and no liveness transition ever fired to correct it. A refused start is
+         * reported by the run's own `ToolResult`, which names the real reason.
+         *
+         * [daemonConnected] carries the same state as a flow, for screens that must repaint
+         * when the daemon attaches or dies.
          */
         fun isDaemonConnected(): Boolean =
-            runCatching {
-                !client.hasStartFailed() &&
-                    client.isConnected() &&
-                    client.isAuthenticated()
-            }.getOrDefault(false)
+            runCatching { client.isConnected() && client.isAuthenticated() }.getOrDefault(false)
+
+        /** Observable form of [isDaemonConnected], republished on every transition. */
+        val daemonConnected: StateFlow<Boolean> = client.daemonConnected
 
         /**
          * Asks for a tool that runs via direct `su -c` (bypasses daemon).
@@ -1667,13 +1674,8 @@ class SmartTool(
     /** Starts the handler and returns the child pid, or -1 on failure. */
     fun start(args: String): Int =
         try {
-            val pid = client.startCommand(handler, args, null)
-            // The native `connected` flag cannot see a dead daemon, so a refused start is
-            // what tells the rest of the app (cards, gates) to say "daemon not running".
-            client.noteStartResult(pid != -1)
-            pid
+            client.startCommand(handler, args, null)
         } catch (e: Exception) {
-            client.noteStartResult(false)
             Logger.e("Failed to start $name", e)
             -1
         }

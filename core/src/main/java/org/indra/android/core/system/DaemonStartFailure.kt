@@ -48,6 +48,10 @@ object DaemonStartFailure {
                 "root access in your root manager."
         }
         val detail = if (output.isNotEmpty()) ": $output" else ""
-        return "Daemon failed to start (exit=$exitCode)$detail"
+        // `null` is not an exit status: the launcher is still alive (it is the daemon's
+        // parent), so the start failed because nothing answered in time, not because a shell
+        // command returned non-zero.
+        val status = exitCode?.let { "exit=$it" } ?: "no answer"
+        return "Daemon failed to start ($status)$detail"
     }
 }

@@ -25,6 +25,10 @@ fun ToolsScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
+    // Refresh on entry: the daemon flow covers attach/die transitions, but an artifact
+    // installed from a plugin screen (nuclei, gobuster, msf) only shows up on re-entry.
+    LaunchedEffect(Unit) { viewModel.refresh() }
+
     Scaffold(
         topBar = {
             TopAppBar(

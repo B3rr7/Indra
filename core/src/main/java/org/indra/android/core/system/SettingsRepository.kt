@@ -49,9 +49,20 @@ class SettingsRepository
          * Generated on first use and kept in app-private prefs; the core's `users`
          * file only ever contains its SHA-256. `null` when no secret was generated yet.
          */
+        /**
+         * The daemon credential seed, persisted synchronously.
+         *
+         * `apply()` is asynchronous, and a secret that never reached disk is regenerated on the
+         * next start — the `users` file is rewritten while the *running* daemon still holds the
+         * old hash, so every attach is refused ("Daemon authentication failed") and the daemon
+         * has to be restarted. Observed after an `adb install -r`, which kills the process
+         * before the write lands.
+         */
         var daemonSecret: String?
             get() = prefs.getString("PREF_DAEMON_SECRET", null)
-            set(value) = prefs.edit().putString("PREF_DAEMON_SECRET", value).apply()
+            set(value) {
+                prefs.edit().putString("PREF_DAEMON_SECRET", value).commit()
+            }
 
         var storagePath: String
             get() =

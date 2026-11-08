@@ -3,6 +3,7 @@ package org.indra.android.core.system
 import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -43,14 +44,20 @@ class CoreManager
             private const val MAGIC_BYTES = 6
 
             /**
-             * How long [startDaemon] waits for the `su` handshake before giving up.
+             * How long [startDaemon] waits for the daemon to bind and accept the credential.
              *
-             * `indrad` double-forks: the parent exits once the child has bound the socket,
-             * so a healthy start returns in well under a second. Without a bound, a `su`
-             * that never answers (root prompt denied, hung Magisk) blocked the daemon mutex
-             * — and therefore every later Start/Stop — forever.
+             * Readiness is the socket plus a successful login, **not** the exit of the
+             * launcher: `su -c ./indrad` stays alive as the daemon's parent for as long as the
+             * daemon runs. Without a bound, a `su` that never answers (grant denied, hung
+             * Magisk) held the daemon mutex — and therefore every later Start/Stop — forever.
              */
             private const val DAEMON_START_TIMEOUT_MS = 20_000L
+
+            /** Poll interval while waiting for the daemon socket to appear. */
+            private const val DAEMON_START_POLL_MS = 100L
+
+            /** The launcher's redirected output, read back only when a start fails. */
+            private const val DAEMON_START_LOG = "daemon-start.log"
 
             /** Picks the bundled core archive matching this device's primary ABI. */
             private fun coreAssetName(): String {
@@ -497,8 +504,28 @@ class CoreManager
             }
 
         val socketPath: String get() = File(coreDir, SOCKET_NAME).absolutePath
+
+        /**
+         * Whether the daemon *process* is plausibly there: its socket exists or we are attached.
+         *
+         * Deliberately lenient. It guards writes that must not happen under a live daemon
+         * (overwriting mapped handler `.so` files), where a leftover socket file is a reason to
+         * stop first, not a reason to proceed. **Not** proof the daemon answers — use
+         * [isDaemonAttached] for anything displayed to the user.
+         */
         val isDaemonRunning: Boolean
             get() = File(socketPath).exists() || client.isConnected()
+
+        /**
+         * True when this app is attached: socket open **and** credential accepted.
+         *
+         * A daemon killed underneath the app leaves its socket file behind (it dies without
+         * unlinking), so [isDaemonRunning] keeps answering true while nothing listens. The
+         * Settings card used it and said "daemon listening and authenticated" for a dead
+         * daemon, with Home correctly saying "daemon not running" in the same breath.
+         */
+        val isDaemonAttached: Boolean
+            get() = runCatching { client.isConnected() && client.isAuthenticated() }.getOrDefault(false)
 
         private val daemonMutex = kotlinx.coroutines.sync.Mutex()
 
@@ -653,52 +680,59 @@ class CoreManager
                                 append(" ./").append(DAEMON_NAME)
                             }
 
+                        // The daemon's own output goes to a file rather than a pipe nobody can
+                        // drain: the launcher never exits, so a live pipe read would be a hang
+                        // (and it is what [awaitDaemonReady] reads back on a failure).
+                        val startLog = File(coreDir, DAEMON_START_LOG)
+
                         val process =
                             if (rootless) {
                                 // Run the daemon directly as the app user (no root).
                                 ProcessBuilder("/system/bin/sh", "-c", command)
                                     .redirectErrorStream(true)
+                                    .redirectOutput(startLog)
                                     .start()
                             } else {
                                 val su = root?.suPath ?: error("Root access is not available")
                                 ProcessBuilder(su, "-c", command)
                                     .redirectErrorStream(true)
+                                    .redirectOutput(startLog)
                                     .start()
                             }
-                        // Bounded handshake: read the child's output and wait for it with a
-                        // deadline instead of blocking the daemon mutex forever (see
-                        // DAEMON_START_TIMEOUT_MS). runInterruptible makes the blocking
-                        // stream read/`waitFor` cancellable by the timeout.
-                        val captured = StringBuilder()
-                        val exitCode =
-                            withTimeoutOrNull(DAEMON_START_TIMEOUT_MS) {
-                                runInterruptible(Dispatchers.IO) {
-                                    process.inputStream.bufferedReader().use { reader ->
-                                        reader.forEachLine { captured.appendLine(it) }
-                                    }
-                                }
-                                runInterruptible(Dispatchers.IO) { process.waitFor() }
-                            }
-
-                        if (exitCode == null) {
-                            process.destroyForcibly()
-                            val partial = captured.toString().trim()
-                            error(
-                                "Daemon did not start within ${DAEMON_START_TIMEOUT_MS}ms" +
-                                    (if (partial.isNotEmpty()) ": $partial" else ""),
-                            )
-                        }
-                        val output = captured.toString().trim()
-
-                        if (exitCode != 0 || !File(socketPath).exists()) {
+                        // Readiness is the socket plus a completed login, never the exit of the
+                        // process that launched it (see [awaitDaemonReady]).
+                        if (!awaitDaemonReady(process)) {
+                            val output = runCatching { startLog.readText().trim() }.getOrDefault("")
+                            val exitCode = if (process.isAlive) null else runCatching { process.exitValue() }.getOrNull()
+                            killDaemon()
+                            File(socketPath).delete()
                             error(DaemonStartFailure.explain(exitCode, output, rootless))
                         }
 
-                        connectAndLogin()
                         Logger.i("Native daemon started")
                     }
                 }
             }
+
+        /**
+         * Waits until the daemon is ready to serve: the socket is bound **and** the credential
+         * was accepted.
+         *
+         * Deliberately not `process.waitFor()` or a read to EOF. `su -c ./indrad` stays alive
+         * as the daemon's parent and keeps the write end of its stdout open, so both of those
+         * block for as long as the daemon runs: the timeout could not interrupt a native
+         * `read()`/`waitpid`, so `startDaemon()` hung while holding `daemonMutex` and never
+         * reached `connectAndLogin()`. A start that had actually succeeded therefore left
+         * every card on "daemon not running" and every later Start/Stop waiting on the mutex.
+         */
+        private suspend fun awaitDaemonReady(process: Process): Boolean =
+            withTimeoutOrNull(DAEMON_START_TIMEOUT_MS) {
+                val socket = File(socketPath)
+                while (!socket.exists() && process.isAlive) delay(DAEMON_START_POLL_MS)
+                // The launcher exited before bind(): give the socket one last moment to appear.
+                if (!socket.exists()) delay(DAEMON_START_POLL_MS)
+                socket.exists() && runCatching { connectAndLogin() }.isSuccess
+            } ?: false
 
         /**
          * Root decision for a daemon start: null means "run the daemon as this app user".
@@ -721,12 +755,12 @@ class CoreManager
         /**
          * Re-attaches the JNI client to a daemon that is already running — it never starts one.
          *
-         * `connected`, `authenticated` and `startFailed` are **client-side** flags, and they go
-         * stale: the native reader thread exits when the peer drops (or one command is refused),
-         * and nothing but an app restart used to clear that. Every tool gate then answered
-         * "daemon not running" while `indrad` was perfectly healthy (observed twice in one
-         * sweep). The socket-file check keeps this cheap and silent when the daemon is really
-         * gone, so a gate never triggers a `su` prompt.
+         * `connected` and `authenticated` are **client-side** flags, and they go stale: the
+         * reader thread exits when the peer drops and nothing but an explicit attach (or an app
+         * restart) used to clear that. Every tool gate then answered "daemon not running" while
+         * `indrad` was perfectly healthy (observed twice in one sweep). The socket-file check
+         * keeps this cheap and silent when the daemon is really gone, so a gate never triggers
+         * a `su` prompt.
          */
         suspend fun reconnect(): Boolean =
             withContext(Dispatchers.IO) {
@@ -889,8 +923,6 @@ class CoreManager
             if (!client.isAuthenticated() && !client.login(DAEMON_USER, daemonCredential())) {
                 error("Daemon authentication failed")
             }
-            // Fresh socket + auth: whatever a previous start failure meant, the daemon answers now.
-            client.noteStartResult(true)
             if (!client.loadHandlers()) {
                 Logger.w("Daemon did not report any handlers")
             }
