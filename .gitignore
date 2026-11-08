@@ -1,36 +1,69 @@
-*.iml
-.gradle
-/local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
-.DS_Store
-/build
-/captures
-.externalNativeBuild
-.cxx
-indra/build/
-core/build/
-data/build/
-ui/build/
-features/build/
+# ---------------------------------------------------------------------------
+# Gradle / Android build output
+# ---------------------------------------------------------------------------
+.gradle/
+/build/
+**/build/
+.cxx/
+.externalNativeBuild/
+captures/
+local.properties
 *.apk
 *.aar
-*.keystore
-!gradle-wrapper.jar
+*.hprof
+lint-results-*
 
-# graphify knowledge graph output (generated, rebuild with `graphify update .`)
-graphify-out/
-
-# Kotlin 2.x session/build metadata
+# Kotlin 2.x compiler/session metadata (holds per-run `errors-*.log`)
 .kotlin/
 
-# native build outputs (NDK puts objects under indra/obj, never indra/jni/obj)
+# ---------------------------------------------------------------------------
+# Native build output (NDK writes objects to indra/obj, never indra/jni/obj)
+# ---------------------------------------------------------------------------
 indra/obj/
+indra/libs/
+indra/dist/
 dist/
+rust/**/target/
 *.so
 *.o
+*.a
 *.class
+
+# ---------------------------------------------------------------------------
+# Signing material and binaries that must never be committed
+# ---------------------------------------------------------------------------
+*.iml
+*.jks
+*.keystore
+*.p12
+!gradle-wrapper.jar
+
+# ---------------------------------------------------------------------------
+# IDE / editor state (nothing under .idea is tracked)
+# ---------------------------------------------------------------------------
+.idea/
+*.swp
+*.swo
+*~
+
+# ---------------------------------------------------------------------------
+# OS junk
+# ---------------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---------------------------------------------------------------------------
+# Logs, crash dumps, temp files
+# ---------------------------------------------------------------------------
+*.log
+hs_err_pid*
+*.tmp
+*.bak
+*.orig
+*.rej
+
+# ---------------------------------------------------------------------------
+# Generated knowledge graph output (rebuild with `graphify update .`)
+# ---------------------------------------------------------------------------
+graphify-out/
