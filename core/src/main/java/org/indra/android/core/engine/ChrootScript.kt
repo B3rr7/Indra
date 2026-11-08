@@ -43,18 +43,29 @@ object ChrootScript {
     fun quote(value: String): String = "'" + value.replace("'", "'\\''") + "'"
 
     /**
-     * Alpine's package mirrors, written to `/etc/apk/repositories` by [setup].
+     * Mirror branch of the rootfs pinned in `assets/alpine.json`.
      *
-     * A minirootfs ships no repository list at all, so `apk add` fails with
-     * "no such package" until one is written — and the fix (`apk add iw iproute2`,
-     * `apk add ruby`) is the whole point of having a chroot. Full mirror URLs, not the
-     * bare domain: `apk` needs the release branch path to resolve `main`/`community`.
+     * A current Alpine minirootfs *does* ship `/etc/apk/repositories` (checked against
+     * 3.24.4: it points at its own `v3.24/main` + `v3.24/community`), so this is only the
+     * fallback written by [setup] when a caller passes it — for a rootfs that lost the file,
+     * or for a hand-built one. Keep it equal to the manifest's `major.minor`;
+     * `ChrootScriptTest` fails if they drift.
      */
-    val ALPINE_REPOSITORIES: String =
+    const val ALPINE_BRANCH: String = "v3.24"
+
+    /** Alpine's package mirrors for [branch], e.g. `v3.24`, one per line. */
+    fun repositories(branch: String): String =
         listOf(
-            "https://dl-cdn.alpinelinux.org/alpine/v3.20/main",
-            "https://dl-cdn.alpinelinux.org/alpine/v3.20/community",
+            "https://dl-cdn.alpinelinux.org/alpine/$branch/main",
+            "https://dl-cdn.alpinelinux.org/alpine/$branch/community",
         ).joinToString("\n")
+
+    /**
+     * Full mirror URLs, not the bare domain: `apk` needs the release branch path to resolve
+     * `main`/`community`, and a branch from a different release than the installed rootfs
+     * makes `apk add` pull packages built against another musl/ABI.
+     */
+    val ALPINE_REPOSITORIES: String = repositories(ALPINE_BRANCH)
 
     /**
      * Creates every directory the chroot needs and mounts what is missing.

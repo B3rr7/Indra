@@ -219,7 +219,7 @@ class ChrootEngine
                         "monitor mode is a separate question — some vendor drivers reboot the device."
                 Capability.HASHCAT ->
                     "hashcat cannot be installed in this Alpine chroot: on aarch64 it exists only in " +
-                        "`edge/testing` (not in this 3.20 rootfs) and Alpine ships no OpenCL runtime, so it " +
+                        "`edge/testing` (not in this 3.24 rootfs) and Alpine ships no OpenCL runtime, so it " +
                         "could not run either way. Crack the capture with the bundled aircrack-ng instead — " +
                         "WiFi Audit takes the same capture and wordlist."
                 Capability.HCXTOOLS ->

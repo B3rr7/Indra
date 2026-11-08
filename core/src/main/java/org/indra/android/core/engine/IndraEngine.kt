@@ -18,8 +18,8 @@ enum class Capability(val label: String) {
      * `hashcat`, for GPU/CPU hash cracking.
      *
      * Alpine packages it for aarch64 only in `edge/testing` and ships **no OpenCL runtime**, so
-     * this capability is not satisfiable inside the shipped 3.20 rootfs (checked against the
-     * v3.18 … edge indexes on 2026-10-29). The fix text therefore points at the bundled
+     * this capability is not satisfiable inside the shipped 3.24 rootfs (re-checked against the
+     * v3.24 and edge indexes on 2026-11-08). The fix text therefore points at the bundled
      * aircrack-ng path instead of a command that cannot work.
      */
     HASHCAT("hashcat"),

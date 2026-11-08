@@ -11,7 +11,7 @@ import com.google.gson.JsonSyntaxException
  * returning 404 with no explanation. In an asset, bumping the rootfs is a one-file change and
  * a stale pin can explain itself.
  *
- * @property version Alpine release, e.g. `3.20.0`
+ * @property version Alpine release, e.g. `3.24.4`
  * @property url download template, with `{arch}` and `{version}` placeholders
  * @property sha256 lower-case hex digest per Alpine architecture (`aarch64`, `armv7`, …)
  * @property minAppVersion lowest `versionCode` that may install it — a rootfs built for a

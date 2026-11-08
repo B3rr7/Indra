@@ -66,8 +66,30 @@ class ChrootScriptTest {
 
         assertTrue(script.contains("> \"\$R/etc/apk/repositories\""))
         assertTrue(script.contains("printf '%s\\n'"))
-        assertTrue(script.contains("'https://dl-cdn.alpinelinux.org/alpine/v3.20/main'"))
-        assertTrue(script.contains("'https://dl-cdn.alpinelinux.org/alpine/v3.20/community'"))
+        assertTrue(script.contains("'https://dl-cdn.alpinelinux.org/alpine/${ChrootScript.ALPINE_BRANCH}/main'"))
+        assertTrue(script.contains("'https://dl-cdn.alpinelinux.org/alpine/${ChrootScript.ALPINE_BRANCH}/community'"))
+    }
+
+    @Test
+    fun `the mirror branch matches the rootfs pinned in assets`() {
+        // Gradle runs module tests with the module directory as the working directory.
+        val asset = java.io.File("src/main/assets/alpine.json")
+        org.junit.Assume.assumeTrue("assets/alpine.json not found", asset.isFile)
+
+        val version =
+            Regex("\"version\"\\s*:\\s*\"([0-9.]+)\"")
+                .find(asset.readText())
+                ?.groupValues
+                ?.get(1)
+                ?: error("no version in ${asset.path}")
+
+        val expected = "v" + version.split(".").take(2).joinToString(".")
+        assertEquals(
+            "assets/alpine.json is $version but ChrootScript.ALPINE_BRANCH is " +
+                "${ChrootScript.ALPINE_BRANCH} — bump both together",
+            expected,
+            ChrootScript.ALPINE_BRANCH,
+        )
     }
 
     @Test
