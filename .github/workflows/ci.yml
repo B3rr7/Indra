@@ -22,10 +22,22 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      - name: JNI libs
+      # The core archive embeds the Rust daemon (`indra/jni/build.sh pack_core` refuses to
+      # fall back to the deleted C daemon), so the cross-compiled binaries come first.
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi
+
+      - name: Build Rust daemon
         run: |
+          set -euo pipefail
           export ANDROID_NDK_HOME=$ANDROID_HOME/ndk/25.2.9519653
-          cd indra/jni && ./build.sh jni
+          export PATH="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH"
+          cd rust/indrad
+          cargo test
+          cargo build --target aarch64-linux-android --release
+          cargo build --target armv7-linux-androideabi --release
 
       - name: Core archive
         run: |
