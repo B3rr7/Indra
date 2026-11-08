@@ -129,8 +129,20 @@ unmount_kernel_fs() {
 
 # run_in_rootfs <shell script>
 run_in_rootfs() {
+    # The host's TMPDIR must not leak in: it is a host path that does not exist
+    # inside the rootfs, and `mktemp -d` then fails ("cannot create a temporary
+    # directory in /home/...") — sqlite3's packaged-source build dies exactly
+    # there, halfway through the gem install. The rootfs's own /tmp is 1777 and
+    # lives on the same disk as the rootfs, so it is the right answer for both
+    # runners.
+    local script="TMPDIR=/tmp
+TMP=/tmp
+TEMP=/tmp
+export TMPDIR TMP TEMP
+cd /root || exit 1
+$1"
     if [ "$USE_CHROOT" = "1" ]; then
-        chroot "$ROOT" /bin/sh -c "cd /root && $1"
+        chroot "$ROOT" /bin/sh -c "$script"
         return
     fi
     local qemu_args=()
@@ -138,7 +150,7 @@ run_in_rootfs() {
     "$PROOT" "${qemu_args[@]}" -r "$ROOT" -0 \
         -b /proc -b /dev -b /sys -b /etc/resolv.conf \
         -w /root \
-        /bin/sh -c "$1"
+        /bin/sh -c "$script"
 }
 
 # ---------------------------------------------------------------------------
