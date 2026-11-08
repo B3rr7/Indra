@@ -3,7 +3,7 @@ package org.indra.android.ui.navigation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.EntryProviderScope
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
@@ -73,18 +73,24 @@ fun IndraNavHost(
 ) {
     val onNavigateToPlugin: (String) -> Unit = { name -> pluginDestination(name)?.let(navigator::navigate) }
 
+    // Host-scoped (survives rotation, dies with the Activity): every retained destination ViewModel
+    // lives here, and its `onCleared()` clears them — that is what stops a tool still running
+    // when the app is dismissed.
+    val sessionStores = viewModel<SessionViewModelStores>()
+
     NavDisplay(
         backStack = navigationState.backStack,
         modifier = modifier,
         onBack = { navigator.goBack() },
-        // Both decorators are load-bearing: the saveable one keeps each entry's UI state, the
-        // ViewModel one scopes `hiltViewModel()` to the entry (a new ViewModel per destination,
-        // cleared when it is popped). Without the second, hiltViewModel falls back to the
-        // Activity store and nothing is ever cleared.
+        // Both decorators are load-bearing: the saveable one keeps each entry's UI state, and the
+        // session one keeps each *destination's* ViewModel for the whole app session (a tool keeps
+        // its results and its running coroutine when you leave to open another tool). Dropping
+        // the second makes `hiltViewModel()` bind to the Activity store and nothing is scoped at
+        // all; the per-entry `rememberViewModelStoreNavEntryDecorator` is what erased results.
         entryDecorators =
             listOf(
                 rememberSaveableStateHolderNavEntryDecorator<NavKey>(),
-                rememberViewModelStoreNavEntryDecorator<NavKey>(),
+                rememberSessionNavEntryDecorator(sessionStores),
             ),
         entryProvider =
             entryProvider<NavKey> {

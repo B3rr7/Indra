@@ -112,9 +112,8 @@ dependencies {
     // and this project is on AGP 8.13.2 + compileSdk 36.
     implementation 'androidx.navigation3:navigation3-runtime:1.1.7'
     implementation 'androidx.navigation3:navigation3-ui:1.1.7'
-    // Per-entry ViewModelStore scoping (rememberViewModelStoreNavEntryDecorator), so a
-    // ViewModel is created per destination and cleared when the entry is popped.
-    implementation 'androidx.lifecycle:lifecycle-viewmodel-navigation3:2.10.0'
+    // No `lifecycle-viewmodel-navigation3`: its per-entry ViewModelStore decorator is exactly what
+    // erased a tool's results on navigation, and `SessionViewModelStores` replaces it.
     implementation 'org.jetbrains.kotlinx:kotlinx-serialization-core:1.9.0'
 
     // Hilt DI. `hilt-lifecycle-viewmodel-compose` is the Nav2-free hiltViewModel home;
