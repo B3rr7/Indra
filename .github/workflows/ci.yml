@@ -64,7 +64,12 @@ jobs:
       - name: Core archive
         run: |
           export ANDROID_NDK_HOME=$ANDROID_HOME/ndk/25.2.9519653
+          # `build.sh` calls a bare `ndk-build` (it has always relied on the NDK being on
+          # PATH), and the setup actions only put platform-tools/cmdline-tools there.
+          export PATH="$ANDROID_NDK_HOME:$PATH"
+          command -v ndk-build
           cd indra/jni && ./build.sh cores
+          ls -l ../../indra/dist/core-*.tar.xz
 
       - name: Tests + detekt
         run: ./gradlew test detekt
