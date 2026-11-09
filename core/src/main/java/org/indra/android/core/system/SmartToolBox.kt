@@ -376,14 +376,30 @@ class SmartToolBox
             // calls this (it uses `PortScan`'s connect scan instead). A silent `-sT` here only
             // suggested a rootless nmap path that does not exist, and it was the only reader of
             // the injected `settings`, so both are gone.
-            execute("nmap", "-sS -sV -v -p ${shellQuote(ports)} ${shellQuote(target)}")
+            execute(
+                "nmap",
+                "-sS -sV -v -p ${shellQuote(ports)} ${shellQuote(target)}",
+                // A real scan is minutes, not seconds: `-sV` fingerprints every open port and a
+                // wide range is normal. The 120 s default cut it off mid-scan and rendered
+                // "nmap timed out or stopped" while the daemon child kept running — measured on
+                // device for `-sS -sV -p 1-65535`, which needs far longer than the one-shot
+                // budget. Scans get the scan budget.
+                timeoutMs = SCAN_TIMEOUT_MS,
+            )
 
         /** XML output: the handler's XML parser is the only one reporting service versions. */
         fun nmapXml(
             target: String,
             ports: String = "1-1000",
             withOs: Boolean = false,
-        ): Flow<ToolResult> = execute("nmap", "-sV ${if (withOs) "-O " else ""}-v -oX - -p ${shellQuote(ports)} ${shellQuote(target)}")
+        ): Flow<ToolResult> =
+            execute(
+                "nmap",
+                "-sV ${if (withOs) "-O " else ""}-v -oX - -p ${shellQuote(ports)} ${shellQuote(target)}",
+                // Same reason as [nmap]: the XML path is the Inspector's, and `-O` plus `-sV`
+                // over a wide range is a multi-minute run.
+                timeoutMs = SCAN_TIMEOUT_MS,
+            )
 
         /**
          * Wordlist login crack. [port] is optional — hydra's `service target`
