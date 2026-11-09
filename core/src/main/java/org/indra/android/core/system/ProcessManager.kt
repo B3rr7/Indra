@@ -24,6 +24,28 @@ class ProcessManager @Inject constructor() {
 
         /** How long the descendant-kill script may take before [killTree] gives up on it. */
         private const val KILL_TIMEOUT_MS = 3_000L
+
+        /**
+         * Classifies one stdout line: the launcher's pid marker becomes [ProcessEvent.Started],
+         * everything else is output.
+         *
+         * Only the first line can carry the marker ([PID_MARKER] is echoed first, before the
+         * command), and a tool's own output must never be mistaken for it — so once the marker is
+         * seen, later lines are plain output even if a tool happens to print the same text.
+         *
+         * Pure so the contract is unit-tested: the shipped code consumed this line *without*
+         * emitting anything, leaving every direct run with no pid (see [ProcessEvent.Started]).
+         */
+        internal fun stdoutEvent(
+            line: String,
+            markerSeen: Boolean,
+        ): ProcessEvent {
+            if (!markerSeen) {
+                val pid = PID_PATTERN.find(line)?.groupValues?.get(1)?.toIntOrNull()
+                if (pid != null) return ProcessEvent.Started(pid)
+            }
+            return ProcessEvent.StdoutLine(line)
+        }
     }
 
     // Kill sequences outlive the cancelled flow (TERM, then KILL).
@@ -67,6 +89,9 @@ class ProcessManager @Inject constructor() {
                         val pid = if (!shellPid.isCompleted) PID_PATTERN.find(line)?.groupValues?.get(1)?.toIntOrNull() else null
                         if (pid != null) {
                             shellPid.complete(pid)
+                            // Report it as an event: consuming the marker silently left every
+                            // direct run with no pid, so nothing could be tracked or stopped.
+                            send(ProcessEvent.Started(pid))
                         } else {
                             send(ProcessEvent.StdoutLine(line))
                         }

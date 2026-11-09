@@ -61,9 +61,6 @@ class SmartToolBox
             /** Shell exit codes 129..159 mean "terminated by signal (exit-128)". */
             private const val SHELL_SIGNAL_BASE = 128
 
-            /** Marker [ProcessManager] appends after the command so the real pid is known. */
-            private const val PID_LINE = "INDRA_PID="
-
             /** Exit-status echo [runDirect] appends; `$!` is empty for a foreground command. */
             private const val EXIT_LINE = "INDRA_EXIT="
 
@@ -818,19 +815,23 @@ class SmartToolBox
             emit: suspend (ToolResult) -> Unit,
         ) {
             when (event) {
+                is SystemProcessEvent.Started -> {
+                    state.pid = event.pid
+                    // Track before the pid reaches the screen: a Stop press that arrives with
+                    // the first result must find the entry (ProcessManager emits this before
+                    // any output line).
+                    childProcessManager.track(
+                        ChildProcess(
+                            id = event.pid,
+                            command = label,
+                            handler = label,
+                            kind = ChildKind.DIRECT,
+                        ),
+                    )
+                }
                 is SystemProcessEvent.StdoutLine -> {
                     val line = event.line
                     when {
-                        state.pid == null && line.startsWith(PID_LINE) -> {
-                            state.pid = line.substringAfter(PID_LINE).toIntOrNull()
-                            // Track before the pid reaches the screen: a Stop press that
-                            // arrives with the first result must find the entry.
-                            state.pid?.let {
-                                childProcessManager.track(
-                                    ChildProcess(id = it, command = label, handler = label, kind = ChildKind.DIRECT),
-                                )
-                            }
-                        }
                         line.startsWith(EXIT_LINE) -> {
                             state.exitValue = line.substringAfter(EXIT_LINE).toIntOrNull()
                             state.finished = true

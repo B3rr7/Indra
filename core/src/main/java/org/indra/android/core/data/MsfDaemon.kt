@@ -155,6 +155,8 @@ class MsfDaemon @Inject constructor(
 
     private fun handleProcessEvent(gen: Long, event: ProcessEvent) {
         when (event) {
+            // The launcher's pid is bookkeeping, not transcript.
+            is ProcessEvent.Started -> Unit
             is ProcessEvent.StdoutLine -> appendLog(event.line)
             is ProcessEvent.StderrLine -> appendLog(event.line)
             is ProcessEvent.Exited -> {

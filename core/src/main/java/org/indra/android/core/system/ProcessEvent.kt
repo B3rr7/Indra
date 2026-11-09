@@ -1,6 +1,18 @@
 package org.indra.android.core.system
 
 sealed class ProcessEvent {
+    /**
+     * The launcher shell's pid, reported by the marker the first line of every direct script
+     * echoes.
+     *
+     * It is an event of its own rather than a [StdoutLine] because the marker is protocol, not
+     * output: [org.indra.android.core.system.ProcessManager] used to consume it silently, which
+     * left every direct run with **no pid at all** — so nothing was registered with
+     * `ChildProcessManager` (no long-run notification, no notification Stop) and a screen's Stop
+     * had a `-1` to kill. Always emitted before the first output line.
+     */
+    data class Started(val pid: Int) : ProcessEvent()
+
     data class StdoutLine(val line: String) : ProcessEvent()
     data class StderrLine(val line: String) : ProcessEvent()
     data class Exited(val code: Int) : ProcessEvent()

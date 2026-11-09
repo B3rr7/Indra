@@ -1,5 +1,6 @@
 package org.indra.android.core.system
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -55,5 +56,31 @@ class ProcessManagerTest {
         // Children are found by PPID, then the shell itself is killed.
         assertTrue(script, script.contains("ps -A -o PID,PPID"))
         assertTrue(script, script.contains("kill -9 \$1"))
+    }
+
+    @Test
+    fun `the pid marker becomes a Started event, never output`() {
+        // Consuming it silently left every direct run with no pid on device: nothing was tracked,
+        // so no long-run notification existed and a screen's Stop had `-1` to kill.
+        assertEquals(
+            ProcessEvent.Started(5168),
+            ProcessManager.stdoutEvent("INDRA_PID=5168", markerSeen = false),
+        )
+    }
+
+    @Test
+    fun `tool output is never mistaken for the pid marker`() {
+        assertEquals(
+            ProcessEvent.StdoutLine("INDRA_PID=5168"),
+            ProcessManager.stdoutEvent("INDRA_PID=5168", markerSeen = true),
+        )
+        assertEquals(
+            ProcessEvent.StdoutLine("tcpdump: listening on wlan0"),
+            ProcessManager.stdoutEvent("tcpdump: listening on wlan0", markerSeen = false),
+        )
+        assertEquals(
+            ProcessEvent.StdoutLine("INDRA_PID=abc"),
+            ProcessManager.stdoutEvent("INDRA_PID=abc", markerSeen = false),
+        )
     }
 }
