@@ -8,6 +8,7 @@ import javax.inject.Provider
 import org.indra.android.core.client.KotlinDaemonClient
 import org.indra.android.core.longrun.LongRunController
 import org.indra.android.core.system.Logger
+import org.indra.android.core.system.ProcessManager
 import org.indra.android.events.ChildDied
 import org.indra.android.events.ChildEnd
 import org.indra.android.events.Event
@@ -24,6 +25,7 @@ class ChildProcessManager
     @Inject
     constructor(
         private val clientProvider: Provider<KotlinDaemonClient>,
+        private val processManager: ProcessManager,
         private val longRun: LongRunController,
     ) {
         private val registry = ChildRegistry()
@@ -74,25 +76,66 @@ class ChildProcessManager
             longRun.onRunningChanged(registry.size)
         }
 
-        fun forget(processId: Int) {
-            registry.forget(processId)
+        /**
+         * Drops one tracked child. Called from the run's own `finally`, so a finished or
+         * cancelled run never leaves a phantom "tool running" notification behind.
+         */
+        fun forget(
+            kind: ChildKind,
+            id: Int,
+        ) {
+            registry.forget(kind, id)
             longRun.onRunningChanged(registry.size)
         }
 
-        fun get(processId: Int): ChildProcess? = registry.get(processId)
+        fun get(
+            kind: ChildKind,
+            id: Int,
+        ): ChildProcess? = registry.get(kind, id)
+
+        /** True when [id] belongs to a live direct run (an OS pid, not a daemon child id). */
+        fun isDirect(id: Int): Boolean = registry.get(ChildKind.DIRECT, id) != null
 
         /** True while at least one tracked child is believed to be running. */
         fun hasRunning(): Boolean = registry.size > 0
 
+        /**
+         * Stops the child an id belongs to, sending the kill to the killer that owns it.
+         *
+         * Screens only hold an `Int` (the pid of the last streamed result), so the registry
+         * decides: a direct run is a `kill(2)` tree walk, everything else is a daemon signal.
+         * Sending a direct OS pid to the daemon — which is what this used to do — both left
+         * the tool running and, once the daemon could actually kill, could signal an unrelated
+         * child that happened to own that id.
+         */
+        fun stop(id: Int) {
+            if (id <= 0) return
+            when (val action = StopPlan.of(registry.processes(), id)) {
+                is StopAction.DaemonKill -> killDaemonChild(action.childId)
+                is StopAction.TreeKill -> processManager.kill(action.osPid)
+            }
+            // Forget whichever entry the id matched. A TreeKill with no registry entry is a
+            // no-op here (the run already ended); a daemon entry is dropped either way, because
+            // a pid that cannot be killed is almost always already gone.
+            registry.forget(ChildKind.DIRECT, id)
+            registry.forget(ChildKind.DAEMON, id)
+            longRun.onRunningChanged(registry.size)
+        }
+
         /** Stops every tracked child (used before a binary swap underneath running tools). */
         fun stopAllRunning() {
-            registry.ids().forEach { pid ->
-                runCatching { clientProvider.get().kill(pid, 9) }
-                    .onFailure { Logger.w("kill($pid) failed before a binary swap: ${it.message}") }
-                // Forget it either way: a pid that cannot be killed is almost always
-                // already gone, and keeping it would report a phantom running tool forever.
-                registry.forget(pid)
+            registry.processes().forEach { process ->
+                when (val action = StopPlan.of(process)) {
+                    is StopAction.DaemonKill -> killDaemonChild(action.childId)
+                    is StopAction.TreeKill -> processManager.kill(action.osPid)
+                }
+                registry.forget(process.kind, process.id)
             }
             longRun.onRunningChanged(registry.size)
+        }
+
+        private fun killDaemonChild(childId: Int) {
+            runCatching { clientProvider.get().kill(childId, 9) }
+                .onFailure { Logger.w("kill($childId) failed before a binary swap: ${it.message}") }
         }
     }

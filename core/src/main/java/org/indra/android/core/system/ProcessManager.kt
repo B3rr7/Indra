@@ -162,6 +162,31 @@ class ProcessManager @Inject constructor() {
         "kill_desc() { for c in \$(ps -A -o PID,PPID | awk -v p=\$1 '\$2==p{print \$1}'); " +
             "do kill_desc \$c; done; kill -9 \$1 2>/dev/null; }; kill_desc $shellPid"
 
+    /**
+     * Kills a direct run by its OS pid, from outside the flow that started it.
+     *
+     * The flow's own `awaitClose` does this when the collector is cancelled, but a stop that
+     * arrives through the child registry (the long-run notification's **Stop**, or an OTA
+     * swap calling `stopAllRunning()`) has no `Process` handle — only the pid the registry
+     * recorded — so the tree walk has to be reachable on its own.
+     */
+    fun kill(pid: Int) {
+        if (pid <= 0) return
+        killScope.launch {
+            val script = descendantKillScript(pid)
+            try {
+                ProcessBuilder("su", "-c", script)
+                    .redirectErrorStream(true)
+                    .start()
+                    .waitFor(KILL_TIMEOUT_MS, java.util.concurrent.TimeUnit.MILLISECONDS)
+            } catch (_: java.io.IOException) {
+                // Best-effort: the run is already gone, or su was refused.
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+            }
+        }
+    }
+
     private fun killTree(
         process: java.lang.Process,
         asSu: Boolean,

@@ -18,6 +18,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import org.indra.android.core.child.ChildKind
 import org.indra.android.core.child.ChildProcess
 import org.indra.android.core.child.ChildProcessManager
 import org.indra.android.core.child.ProcessEvent
@@ -802,6 +803,10 @@ class SmartToolBox
                     )
                     close()
                 }
+            } finally {
+                // The registry is what makes this run visible to the long-run notification and
+                // to stopAllRunning(); leaving an entry behind would report a phantom tool.
+                state.pid?.let { childProcessManager.forget(ChildKind.DIRECT, it) }
             }
         }
 
@@ -816,8 +821,16 @@ class SmartToolBox
                 is SystemProcessEvent.StdoutLine -> {
                     val line = event.line
                     when {
-                        state.pid == null && line.startsWith(PID_LINE) ->
+                        state.pid == null && line.startsWith(PID_LINE) -> {
                             state.pid = line.substringAfter(PID_LINE).toIntOrNull()
+                            // Track before the pid reaches the screen: a Stop press that
+                            // arrives with the first result must find the entry.
+                            state.pid?.let {
+                                childProcessManager.track(
+                                    ChildProcess(id = it, command = label, handler = label, kind = ChildKind.DIRECT),
+                                )
+                            }
+                        }
                         line.startsWith(EXIT_LINE) -> {
                             state.exitValue = line.substringAfter(EXIT_LINE).toIntOrNull()
                             state.finished = true
@@ -1222,13 +1235,16 @@ class SmartToolBox
             }.getOrElse { false }
         }
 
-        /** Kills a running child started by [execute]. */
+        /** Kills a running child started by [execute] or [runDirect]. */
         fun stop(pid: Int) {
             if (pid <= 0) return
-            stoppedPids += pid
-            runCatching { client.kill(pid, 9) }
-                .onFailure { Logger.w("kill($pid) failed: ${it.message}") }
-            childProcessManager.forget(pid)
+            // Track which stops were ours, so a signal death is not reported as a crash. A
+            // direct run never reports one, so only a daemon child id belongs in this set.
+            if (!childProcessManager.isDirect(pid)) stoppedPids += pid
+            // The registry owns the routing: a direct run is an OS pid that needs a `kill(2)`
+            // tree walk, everything else is a daemon child id. Sending a direct pid to the
+            // daemon used to leave the tool running (and could signal an unrelated child).
+            childProcessManager.stop(pid)
         }
 
         /**
@@ -1494,6 +1510,11 @@ class SmartToolBox
                     return@channelFlow
                 }
 
+                // Register it so stopAllRunning() (OTA binary swap) has something to stop,
+                // *before* the first result is emitted: a screen that presses Stop the moment
+                // it sees a pid must find the entry, or the tool keeps running.
+                childProcessManager.track(ChildProcess(id = pid, command = args, handler = tool))
+
                 send(
                     ToolResult(
                         tool = label,
@@ -1503,10 +1524,6 @@ class SmartToolBox
                         rawOutput = "Executing: $label $args",
                     ),
                 )
-
-                // Register it so stopAllRunning() (OTA binary swap) has something to stop.
-                // Nothing ever called track() before this, which made that call a no-op.
-                childProcessManager.track(ChildProcess(id = pid, command = args, handler = tool))
 
                 val output = StringBuilder()
                 val ports = mutableListOf<ToolPort>()
@@ -1601,7 +1618,7 @@ class SmartToolBox
                         Logger.w("$label (pid $pid) did not finish; killing it")
                         stop(pid)
                     }
-                    childProcessManager.forget(pid)
+                    childProcessManager.forget(ChildKind.DAEMON, pid)
                     // Do not let a finished execution leave a stale "we killed it" mark
                     // that would mislabel a later crash of the same pid.
                     stoppedPids.remove(pid)

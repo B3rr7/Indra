@@ -4,6 +4,8 @@ data class ChildProcess(
     val id: Int,
     val command: String,
     val handler: String,
+    /** Which id space [id] means; a daemon child id and an OS pid are not interchangeable. */
+    val kind: ChildKind = ChildKind.DAEMON,
 )
 
 sealed class ProcessEvent {
