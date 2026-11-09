@@ -170,7 +170,10 @@ object DaemonProtocol {
     fun parseStarted(body: ByteArray): Started = Started(le16(body, OFF_ID_LO))
 
     fun parseEnded(body: ByteArray): Ended =
-        Ended(le16(body, OFF_ID_LO), body[OFF_EXIT].toInt() and 0xFF)
+        // The exit value is a 32-bit field (`int` in the wire struct). This used to read one
+        // byte, which turned a negative/status-above-255 exit into an unrelated small number
+        // (and `-1` into 255) — the Rust daemon has always written `u32` here.
+        Ended(le16(body, OFF_ID_LO), le32(body, OFF_EXIT))
 
     fun parseDied(body: ByteArray): Died = Died(le16(body, OFF_ID_LO), le32(body, OFF_SIGNAL))
 

@@ -219,8 +219,15 @@ class KotlinDaemonClientTest {
 
     private fun startedBody(id: Int): ByteArray = byteArrayOf(DaemonProtocol.Code.CMD_STARTED.toByte(), 0, id.toByte(), 0)
 
-    /** Body minus the leading code byte (which [emitControl] prepends): `[pad, id, id, exit, pad]`. */
-    private fun endedBody(id: Int, exit: Int): ByteArray = byteArrayOf(0, id.toByte(), 0, exit.toByte(), 0)
+    /**
+     * Body minus the leading code byte (which [emitControl] prepends):
+     * `[pad, id_lo, id_hi, exit: u32 LE]` — the exit value is 32-bit, matching the wire struct.
+     */
+    private fun endedBody(id: Int, exit: Int): ByteArray =
+        byteArrayOf(
+            0, id.toByte(), (id shr 8).toByte(),
+            exit.toByte(), (exit shr 8).toByte(), (exit shr 16).toByte(), (exit shr 24).toByte(),
+        )
 
     /** Body minus the leading code byte: `[pad, id, id, line..., 0]`. */
     private fun stderrBody(id: Int, line: String): ByteArray =

@@ -127,7 +127,7 @@ class DaemonProtocolTest {
     @Test
     fun `parses started, ended, died and stderr`() {
         assertEquals(7, DaemonProtocol.parseStarted(byteArrayOf(4, 0, 7, 0)).id)
-        assertEquals(DaemonProtocol.Ended(7, 5), DaemonProtocol.parseEnded(byteArrayOf(7, 0, 7, 0, 5, 0)))
+        assertEquals(DaemonProtocol.Ended(7, 5), DaemonProtocol.parseEnded(byteArrayOf(7, 0, 7, 0, 5, 0, 0, 0)))
         assertEquals(DaemonProtocol.Died(7, 11), DaemonProtocol.parseDied(byteArrayOf(8, 0, 7, 0, 11, 0, 0, 0)))
         assertEquals(
             DaemonProtocol.StderrLine(7, "hi"),
