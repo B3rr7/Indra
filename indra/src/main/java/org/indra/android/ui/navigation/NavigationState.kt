@@ -10,7 +10,7 @@ import androidx.navigation3.runtime.rememberNavBackStack
  * Indra's navigation state: **one** back stack.
  *
  * The app deliberately does not use Navigation 3's per-tab back stacks. Tabs here are flat
- * (Home / Tools / Settings) and today's behavior is "switching tabs drops the nested screen",
+ * (Home / Tools / Terminal) and today's behavior is "switching tabs drops the nested screen",
  * which a single stack reproduces exactly. It also avoids the unsupported case of a destination
  * reachable from more than one tab — every plugin screen is opened from both Home and Tools.
  *

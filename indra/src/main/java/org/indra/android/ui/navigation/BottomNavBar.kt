@@ -42,8 +42,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation3.runtime.NavKey
 import org.indra.android.ui.theme.StatusCyan
+import org.indra.android.ui.theme.StatusGreen
 import org.indra.android.ui.theme.StatusOrange
-import org.indra.android.ui.theme.StatusPurple
 
 // Geometry and motion constants. Every literal lives here so the layout reads as a shape rather
 // than a pile of magic numbers (detekt MagicNumber).
@@ -66,7 +66,7 @@ private const val PILL_ALPHA = 0.16f
  *
  * A solid `surface` bar with one hairline divider and **no** elevation, glow or gradient. Every
  * tab shows its icon and label at all times (balanced, minimal), and the selected tab owns an
- * accent colour from the shared status palette (Home cyan, Tools orange, Settings purple) that
+ * accent colour from the shared status palette (Home cyan, Tools orange, Terminal green) that
  * tints its icon, its label and a small flat pill behind the icon.
  *
  * Tabs are equal width so the bar never shifts as the selection changes; only the colour and the
@@ -82,7 +82,7 @@ fun BottomNavBar(
         listOf(
             BottomNavItem("Home", Screen.Home, Icons.Filled.Home, Icons.Outlined.Home, StatusCyan),
             BottomNavItem("Tools", Screen.Tools, Icons.Filled.Build, Icons.Outlined.Build, StatusOrange),
-            BottomNavItem("Settings", Screen.Settings, Icons.Filled.Settings, Icons.Outlined.Settings, StatusPurple),
+            BottomNavItem("Terminal", Screen.Terminal, Icons.Filled.Terminal, Icons.Outlined.Terminal, StatusGreen),
         )
 
     val currentRoute = navigationState.currentRoute
