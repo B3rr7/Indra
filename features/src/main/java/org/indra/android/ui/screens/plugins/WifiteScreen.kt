@@ -10,6 +10,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.indra.android.ui.components.LiveOutputCard
+import org.indra.android.ui.components.EngineFixCard
 import org.indra.android.ui.components.FormError
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -20,18 +21,7 @@ fun WifiteScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Wifite (auto WiFi audit)") },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-            )
-        },
-    ) { paddingValues ->
+    Scaffold(topBar = { WifiteTopBar(onNavigateBack) }) { paddingValues ->
         Column(
             modifier =
                 Modifier
@@ -91,7 +81,23 @@ fun WifiteScreen(
                 placeholder = "No output yet",
                 isRunning = uiState.isRunning,
             )
+            uiState.gate?.let { gate ->
+                EngineFixCard(gate, uiState.install, viewModel::installFix)
+            }
             uiState.error?.let { FormError(it) }
         }
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun WifiteTopBar(onNavigateBack: () -> Unit) {
+    TopAppBar(
+        title = { Text("Wifite (auto WiFi audit)") },
+        navigationIcon = {
+            IconButton(onClick = onNavigateBack) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+            }
+        },
+    )
 }

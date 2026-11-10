@@ -9,6 +9,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import org.indra.android.core.engine.Capability
+import org.indra.android.core.engine.CapabilityFix
+import org.indra.android.core.engine.CapabilityState
+import org.indra.android.core.engine.EngineInstallState
 import org.indra.android.core.system.MonitorMode
 import org.indra.android.core.system.SmartToolBox
 import org.indra.android.core.system.ToolHandle
@@ -27,6 +31,10 @@ data class WifiteUiState(
     val isRunning: Boolean = false,
     val output: List<String> = emptyList(),
     val error: String? = null,
+    /** Set when monitor mode failed only because `iw` is missing: the fix, not a failure. */
+    val gate: CapabilityFix? = null,
+    /** The shared engine-install state (another screen may have started the same install). */
+    val install: EngineInstallState = EngineInstallState.Idle,
 )
 
 @HiltViewModel
@@ -48,6 +56,25 @@ class WifiteViewModel
 
         private var job: Job? = null
         private var pid = -1
+
+        init {
+            // One install for the whole app: show whatever another screen started, and clear the
+            // gate once it finished (pressing Run again is the retry — a whole run is not
+            // something to restart behind the user's back).
+            viewModelScope.launch {
+                toolBox.engineInstall.collect { state ->
+                    _uiState.value = _uiState.value.copy(install = state)
+                    if (state is EngineInstallState.Done) {
+                        _uiState.value = _uiState.value.copy(gate = null)
+                    }
+                }
+            }
+        }
+
+        /** The fix card's button — starts a single-flight install shared with every screen. */
+        fun installFix() {
+            _uiState.value.gate?.let { toolBox.installEngineFix(it) }
+        }
 
         /**
          * Collects one stage, appending only live lines (the final emission repeats the
@@ -104,11 +131,25 @@ class WifiteViewModel
                     // so a failure at any step still looked like a completed run.
                     val monitor = stage("monitor", toolBox.monitorMode(iface, monitor = true))
                     if (monitor?.success != true) {
-                        abort(
-                            "Monitor mode could not be enabled",
-                            monitor,
-                            MonitorMode.explainFailure(monitor?.error, monitor?.rawOutput),
-                        )
+                        // A missing `iw` is the one failure this screen can fix in-app, so it is
+                        // not an error line: the card installs the rootfs or `iw` + `iproute2`,
+                        // and Run retries.
+                        if (MonitorMode.explainFailure(monitor?.error, monitor?.rawOutput) == null) {
+                            abort("Monitor mode could not be enabled", monitor)
+                        } else {
+                            // A fresh fix gets a fresh card: the shared state still says
+                            // "Installed." from the run that just finished.
+                            toolBox.resetEngineInstall()
+                            _uiState.value =
+                                _uiState.value.copy(
+                                    isRunning = false,
+                                    stage = "idle",
+                                    // The engine decides which fix: `apk add iw iproute2` when the
+                                    // chroot exists, "Install Alpine" when there is no rootfs.
+                                    gate = CapabilityFix.of(toolBox.capability(Capability.IW)),
+                                )
+                            pid = -1
+                        }
                         return@launch
                     }
 

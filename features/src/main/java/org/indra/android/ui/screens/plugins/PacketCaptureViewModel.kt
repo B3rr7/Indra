@@ -8,6 +8,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import org.indra.android.core.engine.Capability
+import org.indra.android.core.engine.CapabilityFix
+import org.indra.android.core.engine.CapabilityState
+import org.indra.android.core.engine.EngineInstallState
 import org.indra.android.core.system.MonitorMode
 import org.indra.android.core.system.ToolRunner
 import org.indra.android.core.system.ToolHandle
@@ -35,9 +39,17 @@ data class PacketCaptureUiState(
      */
     val packetCount: Long = 0,
     val error: String? = null,
+    /**
+     * Set when the mode switch failed only because `iw` is missing: the fix, not a failure, so
+     * the screen offers the `apk add` itself instead of telling the user to open a Terminal.
+     */
+    val gate: CapabilityFix? = null,
+    /** The shared engine-install state (another screen may have started the same install). */
+    val install: EngineInstallState = EngineInstallState.Idle,
 )
 
 @HiltViewModel
+@Suppress("TooManyFunctions")
 class PacketCaptureViewModel
     @Inject
     constructor(
@@ -51,6 +63,30 @@ class PacketCaptureViewModel
 
         private var job: Job? = null
         private var pid = -1
+
+        /** True when the user asked to enter monitor mode and only `iw` was in the way. */
+        private var retryEnterMonitor = false
+
+        init {
+            // One install for the whole app — this screen shows whatever any other screen
+            // started, and retries the switch the missing `iw` stopped.
+            viewModelScope.launch {
+                toolBox.engineInstall.collect { state ->
+                    _uiState.value = _uiState.value.copy(install = state)
+                    if (state !is EngineInstallState.Done) return@collect
+                    _uiState.value = _uiState.value.copy(gate = null)
+                    if (retryEnterMonitor) {
+                        retryEnterMonitor = false
+                        switchMode(enterMonitor = true)
+                    }
+                }
+            }
+        }
+
+        /** The fix card's button — starts a single-flight install shared with every screen. */
+        fun installFix() {
+            _uiState.value.gate?.let { toolBox.installEngineFix(it) }
+        }
 
         fun updateIface(iface: String) {
             _uiState.value = _uiState.value.copy(iface = iface)
@@ -105,17 +141,39 @@ class PacketCaptureViewModel
                 // The engine runs this inside the chroot when `iw` is installed there (the ROM
                 // has none), and falls back to the host binary otherwise.
                 toolBox.monitorMode(iface, enterMonitor).collect { result ->
-                    if (!result.isStreaming && !result.success) {
-                        _uiState.value =
-                            _uiState.value.copy(
-                                // The device did not switch — don't leave the switch on.
-                                monitorMode = if (enterMonitor) false else _uiState.value.monitorMode,
-                                error =
-                                    MonitorMode.explainFailure(result.error, result.rawOutput)
-                                        ?: result.error
-                                        ?: "monitor mode change failed",
-                            )
+                    if (result.isStreaming) return@collect
+                    if (result.success) {
+                        // The switch follows what actually happened, not what was requested —
+                        // which matters for the retry an install triggers.
+                        _uiState.value = _uiState.value.copy(monitorMode = enterMonitor, gate = null, error = null)
+                        return@collect
                     }
+                    val fixText = MonitorMode.explainFailure(result.error, result.rawOutput)
+                    // Ask the engine which fix applies rather than assuming an `apk add`: with no
+                    // rootfs at all the answer is `InstallEngine`, and `apk add` would fail.
+                    val fix =
+                        if (fixText == null) {
+                            null
+                        } else {
+                            CapabilityFix.of(toolBox.capability(Capability.IW))
+                        }
+                    retryEnterMonitor = fix != null && enterMonitor
+                    // A fresh fix gets a fresh card: the shared state still says "Installed."
+                    // from the run that just finished, which would read as this fix's result.
+                    if (fix != null) toolBox.resetEngineInstall()
+                    _uiState.value =
+                        _uiState.value.copy(
+                            // The device did not switch — don't leave the switch on.
+                            monitorMode = if (enterMonitor) false else _uiState.value.monitorMode,
+                            gate = fix,
+                            // The fixable case is not an error: the card carries the fix.
+                            error =
+                                if (fix != null) {
+                                    null
+                                } else {
+                                    result.error ?: "monitor mode change failed"
+                                },
+                        )
                 }
             }
         }

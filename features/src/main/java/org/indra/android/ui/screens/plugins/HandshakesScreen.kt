@@ -24,6 +24,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.io.File
 import org.indra.android.core.engine.Hashcat
+import org.indra.android.ui.components.EngineFixCard
 import org.indra.android.ui.components.FormError
 import org.indra.android.ui.components.LiveOutputCard
 
@@ -195,7 +196,11 @@ fun HandshakesScreen(
                     Text("Share ${file.name}")
                 }
             }
-            uiState.gate?.let { FormError(it) }
+            uiState.gate?.let { gate ->
+                // The sentence said what was missing and left the user to find Settings; the
+                // card carries the fix for the one capability this screen needs.
+                EngineFixCard(gate, uiState.install, viewModel::installFix)
+            }
             uiState.error?.let { FormError(it) }
             HandshakeCrackPanel(
                 uiState = uiState,

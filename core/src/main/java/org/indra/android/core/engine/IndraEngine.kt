@@ -103,7 +103,7 @@ interface IndraEngine {
     /** Throws-capability check; cheap enough for a card, it only stats files. */
     fun capability(capability: Capability): CapabilityState
 
-    /** Everything [install] adds, for the progress copy ("≈ 350 MB"). */
+    /** Everything [install] adds, for the progress copy (a few MB for the Alpine minirootfs). */
     fun artifactSummary(): String
 
     /**

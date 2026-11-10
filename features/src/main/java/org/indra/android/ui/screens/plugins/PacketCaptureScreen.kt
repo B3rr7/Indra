@@ -10,6 +10,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import org.indra.android.ui.components.EngineFixCard
 import org.indra.android.ui.components.LiveOutputCard
 import org.indra.android.ui.components.FormError
 
@@ -190,6 +191,9 @@ fun PacketCaptureScreen(
                 isRunning = uiState.isActive,
             )
 
+            uiState.gate?.let { gate ->
+                EngineFixCard(gate, uiState.install, viewModel::installFix)
+            }
             uiState.error?.let { FormError(it) }
         }
     }

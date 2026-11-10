@@ -27,6 +27,7 @@ import org.indra.android.core.engine.Capability
 import org.indra.android.core.engine.CapabilityState
 import org.indra.android.core.engine.ChrootEngine
 import org.indra.android.core.engine.ChrootScript
+import org.indra.android.core.engine.EnginePackages
 import org.indra.android.core.engine.Hashcat
 import org.indra.android.core.system.ProcessEvent as SystemProcessEvent
 import org.indra.android.core.system.ProcessManager
@@ -591,6 +592,36 @@ class SmartToolBox
          */
         suspend fun capability(capability: Capability): CapabilityState =
             withContext(Dispatchers.IO) { chrootEngine.capability(capability) }
+
+        /**
+         * `apk add` inside the installed chroot — the one-tap fix for a missing `iw`/`ip`.
+         *
+         * The chroot is prepared first ([ensureChroot] writes the `resolv.conf` `apk` needs) and
+         * every name is checked against [EnginePackages] here as well as at the call site: they
+         * are interpolated into a root shell, so a name that did not come from that set is
+         * refused rather than quoted and hoped for.
+         */
+        suspend fun installPackages(packages: List<String>): Flow<ToolResult> {
+            // Checked before `ensureChroot()` so a refused name cannot trigger any work at all.
+            val rejection = packageRejection(packages) ?: ensureChroot()
+            if (rejection != null) return failure("apk", rejection)
+            val args = packages.joinToString(" ") { shellQuote(it) }
+            return execInChroot(
+                chrootEngine.wrapShell("apk add --no-cache $args"),
+                label = "apk add",
+                timeoutMs = SCAN_TIMEOUT_MS,
+            )
+        }
+
+        /** Why [packages] must not be installed, or null when the request is one this app allows. */
+        private fun packageRejection(packages: List<String>): String? {
+            val rejected = EnginePackages.firstRejected(packages)
+            return when {
+                rejected != null -> "Refusing to install `$rejected`: not a package this app installs."
+                packages.isEmpty() -> "No packages were requested."
+                else -> null
+            }
+        }
 
         /**
          * Cracks a captured WPA handshake with hashcat inside the chroot.

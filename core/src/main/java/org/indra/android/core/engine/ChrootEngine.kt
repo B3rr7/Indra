@@ -210,13 +210,13 @@ class ChrootEngine
         private fun fixFor(capability: Capability): String =
             when (capability) {
                 Capability.GNU_TOOLS ->
-                    "The chroot is incomplete — reinstall it in Settings → Native Core."
+                    "The chroot is incomplete — it has no working shell or busybox. Reinstall the Alpine environment."
                 Capability.PYTHON ->
-                    "Not in the chroot yet. Add it in the Terminal with chroot on: `apk add ${capability.tool}`."
+                    "Not in the chroot yet — add it with `apk add ${capability.tool}` on the Terminal with chroot on, or from this card."
                 Capability.IW ->
-                    "Monitor mode needs `iw` and `ip`, neither of which the ROM ships. Add both in the " +
-                        "Terminal with chroot on: `apk add iw iproute2`. Whether the driver then allows " +
-                        "monitor mode is a separate question — some vendor drivers reboot the device."
+                    "Monitor mode needs `iw` and `ip`, neither of which the ROM ships. Add both here " +
+                        "(or in the Terminal with chroot on: `apk add iw iproute2`). Whether the driver then " +
+                        "allows monitor mode is a separate question — some vendor drivers reboot the device."
                 Capability.HASHCAT ->
                     "hashcat cannot be installed in this Alpine chroot: on aarch64 it exists only in " +
                         "`edge/testing` (not in this 3.24 rootfs) and Alpine ships no OpenCL runtime, so it " +
@@ -241,9 +241,18 @@ class ChrootEngine
             /** Where the app unpacks nuclei templates, visible inside as `/indra/nuclei-templates`. */
             const val TEMPLATES_DIR = "nuclei-templates"
 
+            /**
+             * The sentence every `EngineNotInstalled` carries.
+             *
+             * Deliberately about the environment, not about one feature: the same string reaches
+             * Packet Capture (monitor mode), Handshakes (hashcat) and the nuclei screens, and it
+             * used to name nuclei alone and send the user to Settings — where the install had
+             * moved out of, since the card installs in place.
+             */
             private const val INSTALL_FIX =
-                "Alpine chroot is not installed. Install it in Settings → Native Core (≈ 350 MB); it gives " +
-                    "nuclei a writable HOME and a working DNS resolver."
+                "The Alpine environment is not installed — a small rootfs (≈ 5 MB) that runs the tools " +
+                    "the ROM does not ship (`iw`/`ip`, hashcat, Python). Install it here in one tap; the " +
+                    "packages themselves are the next tap."
 
             /** Both are writable inside the chroot; nuclei creates `~/.config/nuclei` before it reads a template. */
             private val HOME = mapOf("HOME" to "/root", "XDG_CACHE_HOME" to "/root/.cache")

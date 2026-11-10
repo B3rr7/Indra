@@ -1,8 +1,11 @@
 package org.indra.android.core.system
 
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.StateFlow
 import org.indra.android.core.engine.Capability
+import org.indra.android.core.engine.CapabilityFix
 import org.indra.android.core.engine.CapabilityState
+import org.indra.android.core.engine.EngineInstallState
 
 /**
  * The part of [SmartToolBox] a screen is allowed to use.
@@ -104,6 +107,18 @@ interface ToolRunner {
 
     /** `capability()` off the main thread, with the fix when it is missing. */
     suspend fun capability(capability: Capability): CapabilityState
+
+    /**
+     * The shared state of the one engine install, so a screen can show progress and re-check its
+     * capability at [EngineInstallState.Done] instead of sending the user to Settings.
+     */
+    val engineInstall: StateFlow<EngineInstallState>
+
+    /** Starts the install for [fix] (single-flight; another screen joins the same run). */
+    fun installEngineFix(fix: CapabilityFix)
+
+    /** Forgets a finished/failed install so the card can disappear. */
+    fun resetEngineInstall()
 
     fun stop(pid: Int)
 

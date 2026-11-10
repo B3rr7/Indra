@@ -7,6 +7,10 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import org.indra.android.core.engine.Capability
+import org.indra.android.core.engine.CapabilityFix
+import org.indra.android.core.engine.CapabilityState
+import org.indra.android.core.engine.EngineInstallState
 import org.indra.android.core.system.MonitorMode
 import org.indra.android.core.system.ToolHandle
 import org.indra.android.core.system.ToolResult
@@ -83,16 +87,93 @@ class WifiteViewModelTest {
                         ),
                     ),
                 )
+            // The engine's own answer: only the `iw` package is missing, not the rootfs.
+            runner.capabilities[Capability.IW] =
+                CapabilityState.Missing(Capability.IW, MonitorMode.MISSING_IW_MESSAGE)
             val vm = WifiteViewModel(runner)
 
             vm.run()
             advanceUntilIdle()
 
-            assertEquals(MonitorMode.MISSING_IW_MESSAGE, vm.uiState.value.error)
+            // A missing `iw` is fixable in-app now, so it is a fix card, not a red error line.
+            assertNull(vm.uiState.value.error)
+            assertEquals(MonitorMode.MISSING_IW_MESSAGE, vm.uiState.value.gate?.fix)
+            assertEquals(
+                listOf("iw", "iproute2"),
+                (vm.uiState.value.gate as? CapabilityFix.RunApk)?.packages,
+            )
             assertEquals("idle", vm.uiState.value.stage)
             assertFalse(vm.uiState.value.isRunning)
             // Only the monitor stage ran: no capture, no crack.
             assertEquals(listOf("monitor"), runner.calls.map { it.first })
+        }
+
+    @Test
+    fun `the fix card's button starts the shared install and clears on Done`() =
+        runTest(dispatcher) {
+            runner.scripts +=
+                listOf(
+                    listOf(
+                        ToolResult(
+                            tool = "monitor mode",
+                            success = false,
+                            status = "completed",
+                            rawOutput = "sh: iw: not found",
+                            error = "shell exited with code 127: sh: iw: not found",
+                        ),
+                    ),
+                )
+            runner.capabilities[Capability.IW] =
+                CapabilityState.Missing(Capability.IW, MonitorMode.MISSING_IW_MESSAGE)
+            val vm = WifiteViewModel(runner)
+            vm.run()
+            advanceUntilIdle()
+
+            vm.installFix()
+
+            assertEquals(1, runner.engineFixes.size)
+            assertTrue(runner.engineFixes.single() is CapabilityFix.RunApk)
+
+            runner.engineInstallFlow.value = EngineInstallState.Done
+            advanceUntilIdle()
+
+            assertNull("the card must go away once the fix is installed", vm.uiState.value.gate)
+        }
+
+    @Test
+    fun `a new fix does not inherit the previous install's Done state`() =
+        runTest(dispatcher) {
+            // The device flow is two installs in a row: the rootfs, and then the package from the
+            // fix the rootfs exposes. The shared state said "Installed." next to the second card
+            // until this was pinned.
+            runner.capabilities[Capability.IW] =
+                CapabilityState.Missing(Capability.IW, MonitorMode.MISSING_IW_MESSAGE)
+            val refused =
+                listOf(
+                    ToolResult(
+                        tool = "monitor mode",
+                        success = false,
+                        status = "completed",
+                        rawOutput = "sh: iw: not found",
+                        error = "shell exited with code 127: sh: iw: not found",
+                    ),
+                )
+            runner.scripts += refused
+            val vm = WifiteViewModel(runner)
+
+            vm.run()
+            advanceUntilIdle()
+            runner.engineInstallFlow.value = EngineInstallState.Done
+            advanceUntilIdle()
+            assertNull(vm.uiState.value.gate)
+
+            // Run again: still no `iw`, so a fresh fix appears — and the card must start idle.
+            runner.scripts += refused
+            vm.run()
+            advanceUntilIdle()
+
+            assertTrue("the fix must come back", vm.uiState.value.gate != null)
+            assertEquals(EngineInstallState.Idle, vm.uiState.value.install)
         }
 
     @Test

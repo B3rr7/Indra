@@ -3,10 +3,14 @@ package org.indra.android.ui.screens.plugins
 import com.google.gson.Gson
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flow
 import org.indra.android.core.client.KotlinDaemonClient
 import org.indra.android.core.engine.Capability
+import org.indra.android.core.engine.CapabilityFix
 import org.indra.android.core.engine.CapabilityState
+import org.indra.android.core.engine.EngineInstallState
 import org.indra.android.core.system.SmartTool
 import org.indra.android.core.system.ToolHandle
 import org.indra.android.core.system.ToolResult
@@ -148,6 +152,23 @@ class FakeToolRunner : ToolRunner {
 
     override suspend fun capability(capability: Capability): CapabilityState =
         capabilities[capability] ?: CapabilityState.Available
+
+    /** Every fix the screen asked to install, in order. */
+    val engineFixes = mutableListOf<CapabilityFix>()
+
+    /** What [engineInstall] replays; a test sets it to `Done`/`Failed` to render that state. */
+    val engineInstallFlow = MutableStateFlow<EngineInstallState>(EngineInstallState.Idle)
+
+    override val engineInstall: StateFlow<EngineInstallState> = engineInstallFlow
+
+    override fun installEngineFix(fix: CapabilityFix) {
+        engineFixes += fix
+        engineInstallFlow.value = EngineInstallState.Installing(fix.fix)
+    }
+
+    override fun resetEngineInstall() {
+        engineInstallFlow.value = EngineInstallState.Idle
+    }
 
     override fun stop(pid: Int) {
         stopped += pid

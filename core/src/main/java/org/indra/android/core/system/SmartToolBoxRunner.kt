@@ -1,8 +1,12 @@
 package org.indra.android.core.system
 
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.StateFlow
 import org.indra.android.core.engine.Capability
+import org.indra.android.core.engine.CapabilityFix
 import org.indra.android.core.engine.CapabilityState
+import org.indra.android.core.engine.EngineInstallState
+import org.indra.android.core.engine.EngineInstaller
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -21,6 +25,7 @@ class SmartToolBoxRunner
     @Inject
     constructor(
         private val box: SmartToolBox,
+        private val installer: EngineInstaller,
     ) : ToolRunner {
         override suspend fun requireTool(name: String): ToolHandle = box.requireTool(name)
 
@@ -93,6 +98,12 @@ class SmartToolBoxRunner
         override suspend fun msfProblem(root: String): String? = box.msfProblem(root)
 
         override suspend fun capability(capability: Capability): CapabilityState = box.capability(capability)
+
+        override val engineInstall: StateFlow<EngineInstallState> = installer.state
+
+        override fun installEngineFix(fix: CapabilityFix) = installer.run(fix)
+
+        override fun resetEngineInstall() = installer.reset()
 
         override fun stop(pid: Int) = box.stop(pid)
 

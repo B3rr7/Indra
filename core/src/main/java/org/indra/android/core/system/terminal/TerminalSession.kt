@@ -180,6 +180,12 @@ class TerminalSession
                 )
                 return
             }
+            // Refused at the switch, not at the first command: the toggle used to flip on and
+            // then fail on use, which reads as a broken terminal rather than a missing install.
+            if (enabled && !_state.value.alpineInstalled) {
+                append(Kind.INFO, ALPINE_MISSING)
+                return
+            }
             _state.update { it.copy(chroot = enabled) }
         }
 
@@ -192,7 +198,7 @@ class TerminalSession
                 command == "clear" -> clear()
                 handleExport(command) -> Unit
                 _state.value.chroot && !_state.value.rootless && !coreManager.isAlpineInstalled() ->
-                    append(Kind.ERROR, "Alpine is not installed — install it in Settings, or turn chroot off.")
+                    append(Kind.ERROR, ALPINE_MISSING)
                 else -> {
                     val current = _state.value
                     append(Kind.COMMAND, "${current.prompt} $command")
@@ -325,5 +331,13 @@ class TerminalSession
         private companion object {
             const val TRANSCRIPT_LIMIT = 4000
             const val HISTORY_LIMIT = 200
+
+            /**
+             * One sentence for both the switch and the first command: Settings is where the
+             * install lives for a console with no room for a card, and a user who just flipped
+             * the switch must not have to discover that from a failed command.
+             */
+            const val ALPINE_MISSING =
+                "Alpine is not installed — install it from Settings → Alpine Linux chroot (or turn chroot off)."
         }
     }

@@ -7,6 +7,10 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import org.indra.android.core.engine.Capability
+import org.indra.android.core.engine.CapabilityFix
+import org.indra.android.core.engine.CapabilityState
+import org.indra.android.core.engine.EngineInstallState
 import org.indra.android.core.system.MonitorMode
 import org.indra.android.core.system.ToolHandle
 import org.indra.android.core.system.ToolResult
@@ -216,6 +220,9 @@ class PacketCaptureViewModelTest {
                         error = "shell exited with code 127: iw: inaccessible or not found",
                     ),
                 )
+            // The engine's own answer: only the `iw`/`ip` packages are missing, not the rootfs.
+            runner.capabilities[Capability.IW] =
+                CapabilityState.Missing(Capability.IW, MonitorMode.MISSING_IW_MESSAGE)
             val vm = PacketCaptureViewModel(runner)
 
             vm.requestMonitorMode(true)
@@ -223,8 +230,47 @@ class PacketCaptureViewModelTest {
             advanceUntilIdle()
 
             assertFalse("the device did not switch", vm.uiState.value.monitorMode)
-            assertEquals(MonitorMode.MISSING_IW_MESSAGE, vm.uiState.value.error)
-            assertTrue("the fix names the chroot package", vm.uiState.value.error!!.contains("apk add iw iproute2"))
+            // The missing `iw` is fixable in-app, so it is a fix card — not the error colour,
+            // which is reserved for failures the app cannot do anything about.
+            assertNull(vm.uiState.value.error)
+            val gate = vm.uiState.value.gate
+            assertEquals(MonitorMode.MISSING_IW_MESSAGE, gate?.fix)
+            assertTrue("the fix names the chroot package", gate!!.fix.contains("apk add iw iproute2"))
+            assertEquals(listOf("iw", "iproute2"), (gate as? CapabilityFix.RunApk)?.packages)
+        }
+
+    @Test
+    fun `a finished install retries the switch the missing iw stopped`() =
+        runTest(dispatcher) {
+            runner.script =
+                listOf(
+                    ToolResult(
+                        tool = "monitor mode",
+                        success = false,
+                        status = "completed",
+                        rawOutput = "/system/bin/sh: iw: inaccessible or not found",
+                        error = "shell exited with code 127",
+                    ),
+                )
+            runner.capabilities[Capability.IW] =
+                CapabilityState.Missing(Capability.IW, MonitorMode.MISSING_IW_MESSAGE)
+            val vm = PacketCaptureViewModel(runner)
+            vm.requestMonitorMode(true)
+            vm.onMonitorDialog(true)
+            advanceUntilIdle()
+
+            // The retry has to succeed, so script a successful switch for it.
+            runner.script =
+                listOf(ToolResult(tool = "monitor mode", success = true, status = "completed", rawOutput = ""))
+            runner.engineInstallFlow.value = EngineInstallState.Done
+            advanceUntilIdle()
+
+            assertNull(vm.uiState.value.gate)
+            assertTrue("monitor mode must be retried after the install", vm.uiState.value.monitorMode)
+            assertEquals(
+                listOf("monitor" to "wlan0 true", "monitor" to "wlan0 true"),
+                runner.calls,
+            )
         }
 
     @Test

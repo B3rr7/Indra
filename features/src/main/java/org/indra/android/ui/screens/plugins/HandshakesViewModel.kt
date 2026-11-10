@@ -14,7 +14,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.indra.android.core.engine.Capability
-import org.indra.android.core.engine.CapabilityState
+import org.indra.android.core.engine.CapabilityFix
+import org.indra.android.core.engine.EngineInstallState
 import org.indra.android.core.engine.Hashcat
 import org.indra.android.core.system.IndraWorkspace
 import org.indra.android.core.system.ToolRunner
@@ -43,8 +44,13 @@ data class HandshakesUiState(
      */
     val lineCount: Int = 0,
     val verdict: Hashcat.Verdict? = null,
-    /** Set when the chroot is missing hashcat/hcxtools: the fix, not a failure. */
-    val gate: String? = null,
+    /**
+     * The capability this screen needs and does not have — the fix, not a failure, so the screen
+     * can offer the install itself instead of pointing at Settings.
+     */
+    val gate: CapabilityFix? = null,
+    /** The shared engine-install state, so this screen shows the same progress as any other. */
+    val install: EngineInstallState = EngineInstallState.Idle,
     /** True once a crack run ended, so "not cracked yet" can differ from "ran, found nothing". */
     val finished: Boolean = false,
 )
@@ -69,6 +75,22 @@ class HandshakesViewModel
 
         init {
             refresh()
+            // One install for the whole app: another screen may have started it, and this one
+            // must show the same progress rather than a second card that starts a second run.
+            viewModelScope.launch {
+                toolBox.engineInstall.collect { state ->
+                    _uiState.value = _uiState.value.copy(install = state)
+                    // Re-check after a finished install: the gate is what tells the user what to
+                    // do next, so it must reflect the rootfs as it is now, not as it was.
+                    if (state is EngineInstallState.Done && _uiState.value.gate != null) {
+                        val next = missingCapability()
+                        _uiState.value = _uiState.value.copy(gate = next)
+                        // The card must not carry the previous run's "Installed." next to a
+                        // button that installs something else.
+                        if (next != null) toolBox.resetEngineInstall()
+                    }
+                }
+            }
         }
 
         fun refresh() {
@@ -175,6 +197,8 @@ class HandshakesViewModel
                         )
                     val gate = missingCapability()
                     if (gate != null) {
+                        // Whatever the previous install left behind must not label this fix.
+                        toolBox.resetEngineInstall()
                         _uiState.value = _uiState.value.copy(cracking = false, gate = gate)
                         return@launch
                     }
@@ -242,16 +266,19 @@ class HandshakesViewModel
         private fun stagedPath(capture: String): String = File(File(context.cacheDir, STAGING_DIR), File(capture).name).absolutePath
 
         /** The first missing piece of the hashcat pipeline, with its fix; null when both exist. */
-        @Suppress("ReturnCount")
-        private suspend fun missingCapability(): String? {
+        private suspend fun missingCapability(): CapabilityFix? {
             for (capability in CRACK_CAPABILITIES) {
-                when (val state = toolBox.capability(capability)) {
-                    is CapabilityState.Available -> Unit
-                    is CapabilityState.Missing -> return state.fix
-                    is CapabilityState.EngineNotInstalled -> return state.fix
-                }
+                // `Available` maps to null; the first capability that is not maps to what would
+                // clear it (an install, an `apk add`, or a sentence when neither can work).
+                val fix = CapabilityFix.of(toolBox.capability(capability)) ?: continue
+                return fix
             }
             return null
+        }
+
+        /** The fix card's button — starts a single-flight install shared with every other screen. */
+        fun installFix() {
+            _uiState.value.gate?.let { toolBox.installEngineFix(it) }
         }
 
         override fun onCleared() {
