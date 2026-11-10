@@ -56,6 +56,7 @@ class SmartToolBox
         private val rootManager: RootManager,
         private val chrootEngine: ChrootEngine,
         private val networkHelper: NetworkHelper,
+        private val settings: SettingsRepository,
     ) {
         companion object {
             /** Shell exit codes 129..159 mean "terminated by signal (exit-128)". */
@@ -1546,7 +1547,17 @@ class SmartToolBox
                                                 event.line.contains("Operation not permitted", ignoreCase = true) ||
                                                 event.line.contains("EPERM", ignoreCase = true)
                                             ) {
-                                                output.appendLine("[hint] This feature requires root. Disable rootless mode in Settings or run as root.")
+                                                // This hint is about *rootless mode*: the daemon runs the
+                                                // tool as root, so on a rooted device "disable rootless
+                                                // mode" is advice about a mode that is already off — it was
+                                                // appended for every permission denial, which read as a
+                                                // misconfiguration the user could not fix.
+                                                if (settings.rootlessMode) {
+                                                    output.appendLine(
+                                                        "[hint] Rootless mode is on — this feature needs root. " +
+                                                            "Turn rootless mode off in Settings.",
+                                                    )
+                                                }
                                             }
                                             send(
                                                 ToolResult(

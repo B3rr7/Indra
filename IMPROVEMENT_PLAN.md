@@ -109,7 +109,7 @@ Goal: ship a real binary for each plugin card. Removal is only the last resort, 
 - [x] **Wifite**: Kotlin orchestration (monitor mode → tcpdump capture → aircrack-ng crack) with risk warning. Done.
 - [x] **Responder**: Kotlin LLMNR responder (UDP 5355 listener + spoofed A replies). Done.
 - [ ] **Traceroute**: keep using `nmap --traceroute` (already done); no separate binary needed.
-- [ ] **sqlmap**: requires Python 3 + large dep tree. Recommend: port the "test a single URL for SQLi" flow to a Kotlin HTTP fuzzer using nuclei's sqli templates, instead of shipping Python. Mark the card "SQLi scan (nuclei-based)".
+- [x] **sqlmap**: **closed — not shipping Python.** The core has no Python interpreter and Web Tester already performs SQLi testing through nuclei's sqli templates, so the item is resolved by the existing screen rather than by a new binary. SQLi coverage lives in `web_tester` (nuclei) and the registry ships neither `sqlmap` nor `nikto`.
 
 ### Infeasible — drop only these (genuinely can't run on Android)
 - [ ] **msf** is heavy but feasible as optional download (not "infeasible" — keep as optional component).
