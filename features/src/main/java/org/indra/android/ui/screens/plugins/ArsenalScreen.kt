@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
@@ -15,10 +14,10 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.indra.android.core.system.ArsenalTemplate
-import org.indra.android.ui.components.LiveOutputCard
 import org.indra.android.ui.components.FormError
+import org.indra.android.ui.components.LiveOutputCard
+import org.indra.android.ui.components.PluginScaffold
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ArsenalScreen(
     onNavigateBack: () -> Unit,
@@ -35,21 +34,13 @@ fun ArsenalScreen(
         )
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Arsenal (custom templates)") },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { viewModel.startEdit(null) }) {
-                        Icon(Icons.Default.Add, contentDescription = "Add")
-                    }
-                },
-            )
+    PluginScaffold(
+        title = "Arsenal (custom templates)",
+        onNavigateBack = onNavigateBack,
+        actions = {
+            IconButton(onClick = { viewModel.startEdit(null) }) {
+                Icon(Icons.Default.Add, contentDescription = "Add")
+            }
         },
     ) { paddingValues ->
         Column(

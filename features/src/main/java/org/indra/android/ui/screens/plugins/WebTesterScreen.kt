@@ -1,8 +1,6 @@
 package org.indra.android.ui.screens.plugins
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -16,8 +14,8 @@ import org.indra.android.core.system.NucleiSeverity
 import org.indra.android.ui.components.FormError
 import org.indra.android.ui.components.HostSuggestions
 import org.indra.android.ui.components.LiveOutputCard
+import org.indra.android.ui.components.PluginScaffold
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WebTesterScreen(
     onNavigateBack: () -> Unit,
@@ -25,18 +23,7 @@ fun WebTesterScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Web Tester") },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-            )
-        },
-    ) { paddingValues ->
+    PluginScaffold(title = "Web Tester", onNavigateBack = onNavigateBack) { paddingValues ->
         Column(
             modifier =
                 Modifier

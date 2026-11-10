@@ -1,19 +1,17 @@
 package org.indra.android.ui.screens.plugins
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import org.indra.android.ui.components.LiveOutputCard
 import org.indra.android.ui.components.EngineFixCard
 import org.indra.android.ui.components.FormError
+import org.indra.android.ui.components.LiveOutputCard
+import org.indra.android.ui.components.PluginScaffold
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WifiteScreen(
     onNavigateBack: () -> Unit,
@@ -21,7 +19,7 @@ fun WifiteScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    Scaffold(topBar = { WifiteTopBar(onNavigateBack) }) { paddingValues ->
+    PluginScaffold(title = "Wifite (auto WiFi audit)", onNavigateBack = onNavigateBack) { paddingValues ->
         Column(
             modifier =
                 Modifier
@@ -87,17 +85,4 @@ fun WifiteScreen(
             uiState.error?.let { FormError(it) }
         }
     }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun WifiteTopBar(onNavigateBack: () -> Unit) {
-    TopAppBar(
-        title = { Text("Wifite (auto WiFi audit)") },
-        navigationIcon = {
-            IconButton(onClick = onNavigateBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-            }
-        },
-    )
 }

@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FileDownload
@@ -27,8 +26,8 @@ import org.indra.android.core.engine.Hashcat
 import org.indra.android.ui.components.EngineFixCard
 import org.indra.android.ui.components.FormError
 import org.indra.android.ui.components.LiveOutputCard
+import org.indra.android.ui.components.PluginScaffold
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HandshakesScreen(
     onNavigateBack: () -> Unit,
@@ -98,24 +97,16 @@ fun HandshakesScreen(
         )
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Handshakes / Captures") },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { viewModel.refresh() }) {
-                        Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
-                    }
-                    IconButton(onClick = { viewModel.exportAll() }) {
-                        Icon(Icons.Filled.FileDownload, contentDescription = "Export")
-                    }
-                },
-            )
+    PluginScaffold(
+        title = "Handshakes / Captures",
+        onNavigateBack = onNavigateBack,
+        actions = {
+            IconButton(onClick = { viewModel.refresh() }) {
+                Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
+            }
+            IconButton(onClick = { viewModel.exportAll() }) {
+                Icon(Icons.Filled.FileDownload, contentDescription = "Export")
+            }
         },
     ) { paddingValues ->
         Column(

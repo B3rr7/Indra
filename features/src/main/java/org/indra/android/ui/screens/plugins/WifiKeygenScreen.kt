@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.WifiLock
@@ -24,6 +23,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.indra.android.core.system.WifiKeygen
 import org.indra.android.ui.components.EmptyState
 import org.indra.android.ui.components.FormError
+import org.indra.android.ui.components.PluginScaffold
 
 /**
  * Offline WiFi key candidates for a BSSID/ESSID pair.
@@ -32,7 +32,6 @@ import org.indra.android.ui.components.FormError
  * a pattern a router may have shipped, so the copy says "try these" and each card carries its own
  * confidence instead of presenting one string as an answer.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WifiKeygenScreen(
     onNavigateBack: () -> Unit,
@@ -40,18 +39,7 @@ fun WifiKeygenScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("WiFi Keygen") },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-            )
-        },
-    ) { paddingValues ->
+    PluginScaffold(title = "WiFi Keygen", onNavigateBack = onNavigateBack) { paddingValues ->
         Column(
             modifier =
                 Modifier

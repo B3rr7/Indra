@@ -16,8 +16,11 @@ import androidx.compose.foundation.layout.RowScope
  * The one plugin screen frame: back arrow, title, optional actions, and the content slot.
  *
  * Every plugin screen used to declare its own `Scaffold` + `TopAppBar` + `IconButton` +
- * `Icons.AutoMirrored.Filled.ArrowBack` (36 copies, drifted in padding and title style).
- * New screens use this; `3.2` migrates the rest.
+ * `Icons.AutoMirrored.Filled.ArrowBack` (36 copies, drifted in padding and title style). All 36
+ * plugin screens now use this frame.
+ *
+ * The `actions` slot is the only extension point: a screen that needs a trailing button (Arsenal's
+ * add, Handshakes' refresh/export) passes it here rather than reintroducing a `TopAppBar`.
  *
  * @param actions trailing `TopAppBar` actions, e.g. a Clear button.
  * @param content receives the scaffold's padding values; it owns its own layout so a

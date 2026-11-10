@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -14,10 +13,10 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import org.indra.android.ui.components.LiveOutputCard
 import org.indra.android.ui.components.FormError
+import org.indra.android.ui.components.LiveOutputCard
+import org.indra.android.ui.components.PluginScaffold
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MacChangerScreen(
     onNavigateBack: () -> Unit,
@@ -25,18 +24,7 @@ fun MacChangerScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("MAC Changer") },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-            )
-        },
-    ) { paddingValues ->
+    PluginScaffold(title = "MAC Changer", onNavigateBack = onNavigateBack) { paddingValues ->
         Column(
             modifier =
                 Modifier
