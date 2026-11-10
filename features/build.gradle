@@ -1,10 +1,10 @@
 plugins {
-    id 'com.android.library'
-    id 'org.jetbrains.kotlin.android'
-    id 'org.jetbrains.kotlin.plugin.compose'
-    id 'com.google.dagger.hilt.android'
+    alias(libs.plugins.android.library)
+    alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.hilt)
     id 'kotlin-kapt'
-    id 'io.gitlab.arturbosch.detekt'
+    alias(libs.plugins.detekt)
 }
 
 android {
@@ -39,26 +39,23 @@ dependencies {
     implementation project(':core')
     implementation project(':data')
     implementation project(':ui')
-    implementation 'androidx.lifecycle:lifecycle-runtime-compose:2.10.0'
-    def composeBom = platform('androidx.compose:compose-bom:2025.10.01')
-    implementation composeBom
-    implementation 'androidx.core:core-ktx:1.17.0'
-    implementation 'androidx.compose.ui:ui'
-    implementation 'androidx.compose.material3:material3'
-    implementation 'androidx.compose.material:material-icons-extended'
-    implementation 'androidx.hilt:hilt-lifecycle-viewmodel-compose:1.3.0'
-    implementation 'com.google.dagger:hilt-android:2.57.2'
-    implementation 'org.osmdroid:osmdroid-android:6.1.18'
-    implementation 'com.google.code.gson:gson:2.10.1'
-    kapt 'com.google.dagger:hilt-android-compiler:2.57.2'
+    implementation libs.androidx.lifecycle.runtime.compose
+    implementation platform(libs.compose.bom)
+    implementation libs.androidx.core.ktx
+    implementation libs.compose.ui
+    implementation libs.compose.material3
+    implementation libs.compose.material.icons.extended
+    implementation libs.androidx.hilt.lifecycle.viewmodel.compose
+    implementation libs.hilt.android
+    implementation libs.osmdroid.android
+    implementation libs.gson
+    kapt libs.hilt.android.compiler
 
-    testImplementation 'junit:junit:4.13.2'
-    // Same version as kotlinx-coroutines-android in :core/:indra — a newer test artifact
-    // (1.10+) is compiled against Kotlin 2.x metadata and will not load on this Kotlin 1.9.
-    testImplementation 'org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2'
+    testImplementation libs.junit
+    testImplementation libs.kotlinx.coroutines.test
     // The fake builds the real `ToolHandle.Ready` payload, whose type takes a Gson instance;
     // `:core` declares gson as `implementation`, so it is not on this module's test classpath.
-    testImplementation 'com.google.code.gson:gson:2.10.1'
+    testImplementation libs.gson
 }
 
 detekt {

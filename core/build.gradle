@@ -1,9 +1,9 @@
 plugins {
-    id 'com.android.library'
-    id 'org.jetbrains.kotlin.android'
-    id 'com.google.dagger.hilt.android'
+    alias(libs.plugins.android.library)
+    alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.hilt)
     id 'kotlin-kapt'
-    id 'io.gitlab.arturbosch.detekt'
+    alias(libs.plugins.detekt)
 }
 
 android {
@@ -43,23 +43,23 @@ android {
 }
 
 dependencies {
-    implementation 'androidx.core:core-ktx:1.17.0'
-    implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.10.0'
-    implementation 'com.google.dagger:hilt-android:2.57.2'
-    kapt 'com.google.dagger:hilt-android-compiler:2.57.2'
-    implementation 'javax.inject:javax.inject:1'
-    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2'
-    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
-    implementation 'com.google.code.gson:gson:2.10.1'
-    implementation 'org.apache.commons:commons-compress:1.26.0'
-    implementation 'org.tukaani:xz:1.9'
+    implementation libs.androidx.core.ktx
+    implementation libs.androidx.lifecycle.runtime.ktx
+    implementation libs.hilt.android
+    kapt libs.hilt.android.compiler
+    implementation libs.javax.inject
+    implementation libs.kotlinx.coroutines.android
+    implementation libs.okhttp
+    implementation libs.gson
+    implementation libs.commons.compress
+    implementation libs.xz
 
-    testImplementation 'junit:junit:4.13.2'
+    testImplementation libs.junit
     // commons-compress's TarArchiveOutputStream reaches for org.apache.commons.codec.Charsets
     // at runtime (the TarExtract tests build archives), and it is not a transitive dependency.
-    testImplementation 'commons-codec:commons-codec:1.16.1'
+    testImplementation libs.commons.codec
     // A real org.json for unit tests: the mockable android.jar stub returns defaults.
-    testImplementation 'org.json:json:20240303'
+    testImplementation libs.json
 }
 
 detekt {
