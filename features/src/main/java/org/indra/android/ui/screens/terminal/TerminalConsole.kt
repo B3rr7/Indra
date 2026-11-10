@@ -3,8 +3,10 @@ package org.indra.android.ui.screens.terminal
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -30,15 +32,15 @@ import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.AnnotatedString
@@ -61,10 +63,8 @@ import org.indra.android.core.system.terminal.AnsiStyle
 import org.indra.android.core.system.terminal.TerminalInputMode
 import org.indra.android.core.system.terminal.TerminalKeys
 import org.indra.android.core.system.terminal.TerminalSession
-import org.indra.android.ui.components.AutoFollowScrollEffect
 import org.indra.android.ui.components.rememberAutoFollowState
 
-private const val NO_HISTORY = -1
 private const val FONT_NORMAL = 12
 private const val FONT_COMPACT = 10
 private const val LINE_NORMAL = 17
@@ -79,7 +79,8 @@ private const val DIM_ALPHA = 0.65f
 private const val SNIPPET_ALPHA = 0.35f
 
 /**
- * The terminal itself: a scrolling transcript of ANSI-coloured lines plus the prompt input.
+ * The terminal itself: a scrolling transcript of ANSI-coloured lines with the prompt as its
+ * **last line**, the way Termux lays one out.
  *
  * Used by three surfaces — the full screen, the floating bubble and the over-app overlay —
  * so all three read the same [TerminalSession] state and look identical. Commands are not
@@ -95,37 +96,25 @@ fun TerminalConsole(
     onRun: (String) -> Unit,
     onStop: () -> Unit,
 ) {
-    var input by remember { mutableStateOf("") }
-    var historyIndex by remember { mutableIntStateOf(NO_HISTORY) }
-    // The cursor is tracked here rather than left to the field: the symbol row inserts *at* the
-    // cursor, and a BasicTextField's own selection is not readable from outside it.
-    var cursor by remember { mutableIntStateOf(0) }
+    val editor = remember { PromptEditor() }
     val listState = rememberLazyListState()
     val follow = rememberAutoFollowState(listState)
-    // The transcript is capped at 4000 lines, so "how many lines are missing from the head"
-    // is the first line's id — a size-keyed auto-follow would freeze once the cap is hit.
-    val headTrimmed = state.lines.firstOrNull()?.id?.toInt() ?: 0
+    // Focus requests go through a counter rather than a direct call: the prompt is an item of
+    // the transcript now, so it has to be scrolled into view — and composed — before it can
+    // hold the caret.
+    var focusRequest by remember { mutableIntStateOf(if (!compact && state.lines.isEmpty()) 1 else 0) }
+    // Tapping the output focuses the prompt, so the caret lives here rather than in the field:
+    // one line at the end of a phone screen is easy to miss, and a terminal is a thing you tap
+    // to type into.
+    val focusRequester = remember { FocusRequester() }
 
-    AutoFollowScrollEffect(listState, state.appendCount.toInt(), { state.lines.size - 1 }, follow, headTrimmed)
-    LaunchedEffect(state.running) {
-        if (state.running) follow.resumeFollowing()
-    }
-
-    fun submit() {
-        val command = input.trim()
-        if (command.isEmpty() || state.running) return
-        onRun(command)
-        input = ""
-        cursor = 0
-        historyIndex = NO_HISTORY
-    }
-
-    /** Applies a key-row edit and puts the cursor where the edit left it. */
-    fun apply(edit: TerminalKeys.Edit) {
-        input = edit.text
-        cursor = edit.cursor
-        historyIndex = NO_HISTORY
-    }
+    TerminalScrollBehaviour(
+        state = state,
+        listState = listState,
+        follow = follow,
+        focusRequest = focusRequest,
+        focusRequester = focusRequester,
+    )
 
     Column(
         modifier =
@@ -137,57 +126,55 @@ fun TerminalConsole(
             state = state,
             listState = listState,
             compact = compact,
-            modifier = Modifier.weight(1f),
+            // The transcript owns the whole space above the key rows: the prompt is inside it,
+            // so a short session starts at the top with the prompt right under it (Termux) and
+            // a long one scrolls, with auto-follow keeping the prompt at the bottom.
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                    ) { focusRequest++ },
+            prompt = {
+                // The line the user types into, emitted as the transcript's last row: the
+                // prompt flows out of the output instead of living in a separate bar.
+                InputRow(
+                    state = state,
+                    field =
+                        InputState(
+                            text = editor.text,
+                            cursor = editor.cursor,
+                            onTextChange = editor::type,
+                            onRecall = { step -> editor.recall(state.history, step) },
+                            onSubmit = { editor.submit(state.running, onRun) },
+                        ),
+                    compact = compact,
+                    inline = true,
+                    focusRequester = focusRequester,
+                    onStop = onStop,
+                )
+            },
         )
+        // Snippets and symbols stay *below* the transcript — next to the keyboard, where the
+        // thumb already is — and never scroll away with the output above them.
         if (showSnippets && !compact) {
             SnippetRow(
-                enabled = !state.running,
                 chroot = state.chroot,
                 onPick = { picked ->
-                    input = picked
-                    cursor = picked.length
+                    editor.pick(picked)
+                    focusRequest++
                 },
             )
         }
         if (state.symbolKeys) {
             SymbolKeyRow(
-                enabled = !state.running,
                 compact = compact,
-                onKey = { symbol ->
-                    apply(TerminalKeys.insert(input, cursor, cursor, symbol.text))
-                },
-                onMove = { delta -> cursor = TerminalKeys.moveCursor(input, cursor, delta) },
-                onBackspace = {
-                    // Delete the character before the cursor, not the last character of the line:
-                    // with a cursor in the middle those are different characters.
-                    if (cursor > 0) {
-                        apply(TerminalKeys.insert(input, cursor - 1, cursor, ""))
-                    }
-                },
+                onKey = { symbol -> editor.insert(symbol.text) },
+                onMove = editor::moveCursor,
+                onBackspace = editor::backspace,
             )
         }
-        InputRow(
-            state = state,
-            field =
-                InputState(
-                    text = input,
-                    cursor = cursor,
-                    onTextChange = { text, newCursor ->
-                        input = text
-                        cursor = newCursor
-                        historyIndex = NO_HISTORY
-                    },
-                    onRecall = { step ->
-                        val (index, text) = recall(state.history, historyIndex, step)
-                        historyIndex = index
-                        input = text
-                        cursor = text.length
-                    },
-                    onSubmit = ::submit,
-                ),
-            compact = compact,
-            onStop = onStop,
-        )
     }
 }
 
@@ -197,15 +184,17 @@ private fun Transcript(
     listState: LazyListState,
     compact: Boolean,
     modifier: Modifier = Modifier,
+    prompt: @Composable () -> Unit,
 ) {
     val padding = if (compact) PAD_COMPACT else PAD_NORMAL
     val empty = state.lines.isEmpty()
     LazyColumn(
         state = listState,
-        modifier =
-            modifier
-                .fillMaxWidth()
-                .padding(horizontal = padding.dp, vertical = padding.dp),
+        modifier = modifier.fillMaxWidth(),
+        // Content padding rather than a modifier: the padding belongs *inside* the scrollable
+        // area, so the first line is not clipped at the top once it scrolls and the prompt lines
+        // up with the output it follows.
+        contentPadding = PaddingValues(horizontal = padding.dp, vertical = padding.dp),
         verticalArrangement = Arrangement.spacedBy(1.dp),
     ) {
         if (empty) {
@@ -237,6 +226,8 @@ private fun Transcript(
                 )
             }
         }
+        // Last, and always present: a terminal always shows a prompt.
+        item(key = "prompt") { prompt() }
     }
 }
 
@@ -267,6 +258,8 @@ private fun InputRow(
     state: TerminalSession.State,
     field: InputState,
     compact: Boolean,
+    inline: Boolean,
+    focusRequester: FocusRequester,
     onStop: () -> Unit,
 ) {
     val font = (if (compact) FONT_COMPACT else FONT_NORMAL).sp
@@ -283,7 +276,13 @@ private fun InputRow(
             Modifier
                 .fillMaxWidth()
                 .background(TerminalPalette.background)
-                .padding(horizontal = if (compact) 4.dp else 8.dp, vertical = 2.dp),
+                // Inline (the transcript's last row) it inherits the list's content padding, so
+                // it needs none of its own — otherwise the prompt would be indented past every
+                // line of the output it follows.
+                .padding(
+                    horizontal = if (inline) 0.dp else if (compact) 4.dp else 8.dp,
+                    vertical = 2.dp,
+                ),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(2.dp),
     ) {
@@ -297,9 +296,16 @@ private fun InputRow(
         BasicTextField(
             value = fieldValue,
             onValueChange = { value -> field.onTextChange(value.text, value.selection.end) },
-            modifier = Modifier.weight(1f),
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .focusRequester(focusRequester),
             singleLine = state.inputMode != TerminalInputMode.PLAIN,
-            enabled = !state.running,
+            // Deliberately **not** `enabled = !state.running`: disabling the field while a
+            // command runs drops its focus, and dropping focus closes the IME — so every
+            // command the user typed dismissed the keyboard mid-sentence. A terminal keeps
+            // accepting input while its child runs; only *submission* waits (the send button
+            // becomes Stop, and `submit()` refuses while running, keeping the text for later).
             textStyle =
                 LocalTextStyle.current.copy(
                     color = TerminalPalette.foreground,
@@ -310,7 +316,7 @@ private fun InputRow(
             keyboardOptions = state.inputMode.keyboardOptions(),
             keyboardActions = KeyboardActions(onSend = { field.onSubmit() }, onDone = { field.onSubmit() }),
             decorationBox = { field ->
-                if (input.isEmpty() && !state.running) {
+                if (input.isEmpty()) {
                     Text(
                         text = "command…",
                         color = TerminalPalette.info.copy(alpha = DIM_ALPHA),
@@ -420,10 +426,13 @@ private fun InputActions(
  * [TerminalKeys] for why they would be lies in this app (no pty, no stdin, nothing to send a
  * control byte to). What is here is the part that genuinely helps on a phone: the symbols that
  * are two taps deep on an IME, and a way to move the caret without tapping a 12sp target.
+ *
+ * Always live, even while a command runs: these keys only edit the prompt's text, so there is
+ * nothing to protect — and a key row that greys out for the length of a scan is a key row the
+ * user cannot use to write the next command.
  */
 @Composable
 private fun SymbolKeyRow(
-    enabled: Boolean,
     compact: Boolean,
     onKey: (TerminalKeys.Symbol) -> Unit,
     onMove: (Int) -> Unit,
@@ -439,11 +448,11 @@ private fun SymbolKeyRow(
                 .padding(horizontal = if (compact) 4.dp else 8.dp, vertical = 2.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        KeyChip(label = "←", enabled = enabled, compact = compact) { onMove(-1) }
-        KeyChip(label = "→", enabled = enabled, compact = compact) { onMove(1) }
-        KeyChip(label = "⌫", enabled = enabled, compact = compact) { onBackspace() }
+        KeyChip(label = "←", compact = compact) { onMove(-1) }
+        KeyChip(label = "→", compact = compact) { onMove(1) }
+        KeyChip(label = "⌫", compact = compact) { onBackspace() }
         TerminalKeys.SYMBOLS.forEach { symbol ->
-            KeyChip(label = symbol.label, enabled = enabled, compact = compact) { onKey(symbol) }
+            KeyChip(label = symbol.label, compact = compact) { onKey(symbol) }
         }
     }
 }
@@ -453,20 +462,19 @@ private fun SymbolKeyRow(
 @Composable
 private fun KeyChip(
     label: String,
-    enabled: Boolean,
     compact: Boolean,
     onClick: () -> Unit,
 ) {
     Text(
         text = label,
-        color = if (enabled) TerminalPalette.foreground else TerminalPalette.info.copy(alpha = DIM_ALPHA),
+        color = TerminalPalette.foreground,
         fontFamily = FontFamily.Monospace,
         fontSize = (if (compact) KEY_FONT_COMPACT else KEY_FONT).sp,
         modifier =
             Modifier
                 .clip(RoundedCornerShape(5.dp))
                 .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = SNIPPET_ALPHA))
-                .clickable(enabled = enabled) { onClick() }
+                .clickable { onClick() }
                 .padding(horizontal = if (compact) 7.dp else 9.dp, vertical = 5.dp),
     )
 }
@@ -474,7 +482,6 @@ private fun KeyChip(
 /** The commands worth one tap on a phone keyboard: nothing to type, and no `sudo` needed. */
 @Composable
 private fun SnippetRow(
-    enabled: Boolean,
     chroot: Boolean,
     onPick: (String) -> Unit,
 ) {
@@ -497,36 +504,19 @@ private fun SnippetRow(
         snippets.forEach { command ->
             Text(
                 text = command,
-                color = if (enabled) TerminalPalette.accent else TerminalPalette.info,
+                color = TerminalPalette.accent,
                 fontFamily = FontFamily.Monospace,
                 fontSize = 11.sp,
                 modifier =
                     Modifier
                         .clip(RoundedCornerShape(6.dp))
                         .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = SNIPPET_ALPHA))
-                        .clickable(enabled = enabled) { onPick(command) }
+                        .clickable { onPick(command) }
                         .padding(horizontal = 8.dp, vertical = 4.dp),
             )
         }
     }
 }
-
-/**
- * Walks the history: `step = -1` is older, `1` is newer. Returns the new cursor index (or
- * [NO_HISTORY]) and the text to put in the field — stepping past the newest entry clears it.
- */
-private fun recall(
-    history: List<String>,
-    from: Int,
-    step: Int,
-): Pair<Int, String> =
-    when {
-        history.isEmpty() -> NO_HISTORY to ""
-        step > 0 && from < 0 -> NO_HISTORY to ""
-        step > 0 -> (from + 1).takeIf { it <= history.lastIndex }?.let { it to history[it] } ?: (NO_HISTORY to "")
-        from < 0 -> history.lastIndex to history.last()
-        else -> (from - 1).coerceAtLeast(0).let { it to history[it] }
-    }
 
 /** Turns one transcript line into styled text — this is what makes the output *look* a terminal. */
 private fun TerminalSession.Line.annotated(): AnnotatedString =
