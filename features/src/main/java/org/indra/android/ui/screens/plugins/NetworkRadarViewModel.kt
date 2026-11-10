@@ -173,7 +173,9 @@ class NetworkRadarViewModel
                 }
             _uiState.value =
                 _uiState.value.copy(hosts = merged.values.sortedBy { it.ip })
-            merged.keys.forEach { networkRepository.addDiscoveredHost(it) }
+            // One emission for the whole sweep rather than one per host: 14 screens collect this
+            // flow and each re-derives its chip list on every emission.
+            networkRepository.addDiscoveredHosts(merged.keys)
             return entries
         }
 
