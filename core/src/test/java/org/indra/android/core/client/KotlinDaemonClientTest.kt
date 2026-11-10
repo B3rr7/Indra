@@ -75,7 +75,7 @@ class KotlinDaemonClientTest {
     fun `authenticates, loads handlers and streams raw output`() {
         assertTrue(client.login("android", "hash"))
         assertTrue(client.loadHandlers())
-        assertEquals(listOf("raw"), client.getHandlers())
+        assertEquals(listOf("raw", "shell"), client.getHandlers())
 
         assertEquals(CHILD_ID, client.startCommand("raw", "echo hi", null))
         assertEquals(listOf("echo", "hi"), recordedArgv)
@@ -88,6 +88,27 @@ class KotlinDaemonClientTest {
         assertEquals("world", (events[1].second as Newline).line)
         assertEquals(0, (events[2].second as ChildEnd).exitValue)
         assertEquals(CHILD_ID, events[0].first)
+    }
+
+    /**
+     * The daemon sends one message per line with the terminator already stripped
+     * (`BufReader::lines()`), and `shell` is a handler like any other. The client used to
+     * dispatch only `raw`/`nmap` and wait for a `\n` inside the body, so a `shell` child
+     * streamed nothing at all and the Terminal showed a command as if it never ran.
+     */
+    @Test
+    fun `streams the shell handler`() {
+        client.login("android", "hash")
+        client.loadHandlers()
+        assertEquals(CHILD_ID, client.startCommand("shell", "/system/bin/sh -c id", null))
+
+        emitChild(msgSeq(), "uid=0(root) gid=0(root)".toByteArray())
+        emitControl(DaemonProtocol.Code.CMD_END, endedBody(CHILD_ID, 0))
+
+        awaitEvents(2)
+        assertEquals("uid=0(root) gid=0(root)", (events[0].second as Newline).line)
+        assertEquals(CHILD_ID, events[0].first)
+        assertEquals(0, (events[1].second as ChildEnd).exitValue)
     }
 
     @Test
@@ -211,11 +232,14 @@ class KotlinDaemonClientTest {
     private fun msgSeq(): Int = CHILD_SEQ
 
     private fun handlerListBody(): ByteArray =
-        byteArrayOf(
-            DaemonProtocol.Code.HNDL_LIST.toByte(),
-            HANDLER_RAW.toByte(), (FLAG_STDIN or FLAG_STDOUT).toByte(),
-            'r'.code.toByte(), 'a'.code.toByte(), 'w'.code.toByte(), 0,
-        )
+        listOf("raw", "shell").fold(byteArrayOf(DaemonProtocol.Code.HNDL_LIST.toByte())) { body, name ->
+            body +
+                byteArrayOf(
+                    (HANDLER_RAW + if (name == "shell") 1 else 0).toByte(),
+                    (FLAG_STDIN or FLAG_STDOUT).toByte(),
+                ) +
+                name.toByteArray() + byteArrayOf(0)
+        }
 
     private fun startedBody(id: Int): ByteArray = byteArrayOf(DaemonProtocol.Code.CMD_STARTED.toByte(), 0, id.toByte(), 0)
 

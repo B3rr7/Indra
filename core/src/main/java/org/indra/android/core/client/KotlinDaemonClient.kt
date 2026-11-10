@@ -25,10 +25,10 @@ import kotlinx.coroutines.flow.asStateFlow
  * `org.indra.android.events.Event` objects the JNI path hands to `ChildProcessManager.onEvent`,
  * so it is a drop-in for the event contract.
  *
- * Scope today: the `raw` handler (raw bytes split into `Newline`s) and the `nmap` handler
- * (structured `Port`/`Os`/`Hop`), plus the full control plane. Every other bundled handler is
- * unused by the app (`SmartToolBox` runs them through `raw`); their structured bodies are
- * ignored rather than mis-decoded.
+ * Scope today: every handler's output. The daemon sends `nmap` as structured bodies, `blind`
+ * as nothing, and **every other handler** — `raw` and `shell` included — as one message per
+ * line of text, which is emitted here as a [Newline]. Telling those two shapes apart is the
+ * whole job of `dispatchChild`.
  *
  * All methods are blocking and bounded by [timeoutMs], mirroring the native `AUTH_TIMEOUT`/
  * `START_TIMEOUT` — a coroutine calling this never parks forever on a dead daemon.
@@ -44,9 +44,12 @@ class KotlinDaemonClient(
         private const val SIGKILL = 9
         private const val SEQ_MASK = 0xFFFF
         private const val JOIN_TIMEOUT_MS = 500L
-        private const val RAW_HANDLER = "raw"
         private const val NMAP_HANDLER = "nmap"
+        private const val BLIND_HANDLER = "blind"
         private const val FAILED_ID = -1
+
+        /** One line terminator, appended to each per-line body the daemon sends. */
+        private val NEWLINE = byteArrayOf('\n'.code.toByte())
     }
 
     private val lock = Any()
@@ -245,20 +248,29 @@ class KotlinDaemonClient(
     }
 
     private fun dispatchChild(message: DaemonMessage) {
-        when (children[message.id]) {
-            RAW_HANDLER -> emitLines(message.id, message.body)
+        // An id the table no longer holds is a child that already ended (a late body must not
+        // be attributed to a recycled id).
+        val handler = children[message.id] ?: return
+        when (handler) {
             NMAP_HANDLER -> NmapOutputParser.parse(message.body)?.let { onEvent(message.id, it) }
-            // Blind sends nothing; the remaining structured handlers are unused by the app.
-            else -> Unit
+            // Every other handler — `raw`, `shell`, and the structured ones the app never runs —
+            // is streamed by the daemon as one message per line, so it is a line of text here.
+            BLIND_HANDLER -> Unit
+            else -> emitLines(message.id, message.body)
         }
     }
 
     private fun emitLines(childId: Int, data: ByteArray) {
         val buffer = lineBuffers.getOrPut(childId) { LineBuffer() }
         buffer.append(data)
+        // The daemon sends one message per line with the terminator already stripped
+        // (`BufReader::lines()`), so the body is a whole line that needs its newline back.
+        // Without it the buffer waits for a `\n` that never arrives and the child streams
+        // nothing at all — which is what silenced the Terminal's `shell` handler.
+        buffer.append(NEWLINE)
         var line = buffer.poll()
         while (line != null) {
-            onEvent(childId, Newline(line))
+            if (line.isNotEmpty()) onEvent(childId, Newline(line))
             line = buffer.poll()
         }
     }
