@@ -36,11 +36,9 @@ import org.indra.android.ui.screens.plugins.PacketForgerScreen
 import org.indra.android.ui.screens.plugins.PasswordAuditorScreen
 import org.indra.android.ui.screens.plugins.PortScannerScreen
 import org.indra.android.ui.screens.plugins.ReaverScreen
-import org.indra.android.ui.screens.plugins.ResponderScreen
 import org.indra.android.ui.screens.plugins.RouterPwnScreen
 import org.indra.android.ui.screens.plugins.SearchSploitScreen
 import org.indra.android.ui.screens.plugins.SessionHijackScreen
-import org.indra.android.ui.screens.plugins.TopologyScreen
 import org.indra.android.ui.screens.plugins.TracerouteScreen
 import org.indra.android.ui.screens.plugins.VulnScannerScreen
 import org.indra.android.ui.screens.plugins.WebTesterScreen
@@ -144,7 +142,6 @@ private fun EntryProviderScope<NavKey>.networkEntries(navigator: Navigator) {
     entry<Screen.PacketCapture> { PacketCaptureScreen(onNavigateBack = { navigator.goBack() }) }
     entry<Screen.PacketForger> { PacketForgerScreen(onNavigateBack = { navigator.goBack() }) }
     entry<Screen.Masscan> { MasscanScreen(onNavigateBack = { navigator.goBack() }) }
-    entry<Screen.Topology> { TopologyScreen(onNavigateBack = { navigator.goBack() }) }
 }
 
 /** Man-in-the-middle and routing attacks. */
@@ -154,7 +151,6 @@ private fun EntryProviderScope<NavKey>.attackEntries(navigator: Navigator) {
     entry<Screen.DnsSpoofer> { DnsSpooferScreen(onNavigateBack = { navigator.goBack() }) }
     entry<Screen.SessionHijack> { SessionHijackScreen(onNavigateBack = { navigator.goBack() }) }
     entry<Screen.Bettercap> { BettercapScreen(onNavigateBack = { navigator.goBack() }) }
-    entry<Screen.Responder> { ResponderScreen(onNavigateBack = { navigator.goBack() }) }
     entry<Screen.RouterPwn> { RouterPwnScreen(onNavigateBack = { navigator.goBack() }) }
     entry<Screen.Iptables> { IptablesScreen(onNavigateBack = { navigator.goBack() }) }
 }

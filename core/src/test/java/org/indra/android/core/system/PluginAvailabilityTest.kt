@@ -13,10 +13,16 @@ import org.junit.Test
  */
 class PluginAvailabilityTest {
     @Test
-    fun responderIsInfeasibleOnAndroid() {
-        // Responder is CPython-based and the core ships no interpreter — every card
-        // must dim it (Home and Tools used to disagree on this).
-        assertFalse(PluginAvailability.isFeasibleOnAndroid("responder"))
+    fun everyShippedPluginIsFeasibleOnAndroid() {
+        // The two unreachable screens (Responder — CPython-based with no interpreter in the
+        // core — and Topology, which had no data source) were deleted, so the infeasible set
+        // is empty. Shipping a plugin that cannot run here must add it to that set *and*
+        // update this test, instead of leaving a card that can only lie.
+        val manager = PluginManager()
+        manager.getAllPlugins().forEach { plugin ->
+            assertTrue("${plugin.id} is shipped but claimed infeasible", PluginAvailability.isFeasibleOnAndroid(plugin.id))
+        }
+        assertFalse(manager.getAllPlugins().any { it.id == "responder" || it.id == "topology" })
     }
 
     @Test

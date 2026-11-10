@@ -214,15 +214,6 @@ class PluginManager
             )
             registerPlugin(
                 Plugin(
-                    id = "responder",
-                    name = "Responder",
-                    description = "LLMNR/NBT-NS poisoning (LLMNR listener)",
-                    targetTypes = setOf("network"),
-                    requires = "shell",
-                ),
-            )
-            registerPlugin(
-                Plugin(
                     id = "reaver",
                     name = "Reaver (WPS)",
                     description = "WPS PIN brute-force",
@@ -345,15 +336,6 @@ class PluginManager
                     description = "Automated ARP spoof + DNS redirect",
                     targetTypes = setOf("network", "endpoint"),
                     requires = "arpspoof"
-                ),
-            )
-            registerPlugin(
-                Plugin(
-                    id = "topology",
-                    name = "Network Topology",
-                    description = "Visual map of hosts and connections",
-                    targetTypes = setOf("network"),
-                    requires = "shell"
                 ),
             )
             registerPlugin(

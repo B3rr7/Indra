@@ -50,7 +50,6 @@ class PluginManagerTest {
         for (id in listOf(
             "masscan",
             "reaver",
-            "responder",
             "wifite",
             "terminal",
             "mac_changer",

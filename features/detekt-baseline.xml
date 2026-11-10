@@ -23,7 +23,6 @@
     <ID>LongMethod:RouterPwnScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun RouterPwnScreen( onNavigateBack: () -&gt; Unit, viewModel: RouterPwnViewModel = hiltViewModel(), )</ID>
     <ID>LongMethod:WhisperPairScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun WhisperPairScreen( onNavigateBack: () -&gt; Unit, viewModel: WhisperPairViewModel = hiltViewModel(), )</ID>
     <ID>LongMethod:WifiAuditScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun WifiAuditScreen( onNavigateBack: () -&gt; Unit, viewModel: WifiAuditViewModel = hiltViewModel(), )</ID>
-    <ID>LoopWithTooManyJumpStatements:ResponderViewModel.kt$ResponderViewModel$while</ID>
     <ID>MagicNumber:BettercapScreen.kt$100</ID>
     <ID>MagicNumber:DuckyScriptViewModel.kt$0x04</ID>
     <ID>MagicNumber:DuckyScriptViewModel.kt$0x05</ID>
@@ -110,30 +109,7 @@
     <ID>MagicNumber:PasswordAuditorViewModel.kt$PasswordAuditorViewModel$32</ID>
     <ID>MagicNumber:PasswordAuditorViewModel.kt$PasswordAuditorViewModel$6</ID>
     <ID>MagicNumber:PasswordAuditorViewModel.kt$PasswordAuditorViewModel$8</ID>
-    <ID>MagicNumber:ResponderViewModel.kt$ResponderViewModel$0x04</ID>
-    <ID>MagicNumber:ResponderViewModel.kt$ResponderViewModel$0x1E</ID>
-    <ID>MagicNumber:ResponderViewModel.kt$ResponderViewModel$0xff</ID>
-    <ID>MagicNumber:ResponderViewModel.kt$ResponderViewModel$10</ID>
-    <ID>MagicNumber:ResponderViewModel.kt$ResponderViewModel$11</ID>
-    <ID>MagicNumber:ResponderViewModel.kt$ResponderViewModel$12</ID>
-    <ID>MagicNumber:ResponderViewModel.kt$ResponderViewModel$13</ID>
-    <ID>MagicNumber:ResponderViewModel.kt$ResponderViewModel$14</ID>
-    <ID>MagicNumber:ResponderViewModel.kt$ResponderViewModel$15</ID>
-    <ID>MagicNumber:ResponderViewModel.kt$ResponderViewModel$16</ID>
-    <ID>MagicNumber:ResponderViewModel.kt$ResponderViewModel$24</ID>
-    <ID>MagicNumber:ResponderViewModel.kt$ResponderViewModel$3</ID>
-    <ID>MagicNumber:ResponderViewModel.kt$ResponderViewModel$4</ID>
-    <ID>MagicNumber:ResponderViewModel.kt$ResponderViewModel$5</ID>
-    <ID>MagicNumber:ResponderViewModel.kt$ResponderViewModel$512</ID>
-    <ID>MagicNumber:ResponderViewModel.kt$ResponderViewModel$5355</ID>
-    <ID>MagicNumber:ResponderViewModel.kt$ResponderViewModel$6</ID>
-    <ID>MagicNumber:ResponderViewModel.kt$ResponderViewModel$63</ID>
-    <ID>MagicNumber:ResponderViewModel.kt$ResponderViewModel$7</ID>
-    <ID>MagicNumber:ResponderViewModel.kt$ResponderViewModel$8</ID>
-    <ID>MagicNumber:ResponderViewModel.kt$ResponderViewModel$9</ID>
     <ID>MagicNumber:SearchSploitScreen.kt$100</ID>
-    <ID>MagicNumber:TopologyScreen.kt$0xFF448AFF</ID>
-    <ID>MagicNumber:TopologyScreen.kt$24f</ID>
     <ID>MagicNumber:WifiteViewModel.kt$WifiteViewModel$50</ID>
     <ID>MaxLineLength:BettercapViewModel.kt$BettercapViewModel$private val _uiState = MutableStateFlow(BettercapUiState(bettercapInstalled = coreManager.isBettercapInstalled(), bettercapUrl = settings.bettercapUrl))</ID>
     <ID>MaxLineLength:DuckyScriptScreen.kt$Button(onClick = { viewModel.run() }, modifier = Modifier.weight(1f)) { Text(if (uiState.status == "Running…") "Running…" else "Run") }</ID>
@@ -143,7 +119,6 @@
     <ID>MaxLineLength:OneTapMitmScreen.kt$"Automates ARP spoofing: tells the target that this device is the gateway. Run Session Hijacking in parallel to capture cookies. Requires root."</ID>
     <ID>MaxLineLength:PacketCaptureScreen.kt$"Enabling monitor mode on this interface may crash or reboot the device on some vendor drivers (similar risk to MITM/arpspoof). Continue?"</ID>
     <ID>MaxLineLength:SessionHijackViewModel.kt$SessionHijackViewModel$val host = _uiState.value.output.lastOrNull { it.lowercase().contains("host:") }?.substringAfter(":", "")?.trim() ?: "unknown"</ID>
-    <ID>MaxLineLength:TopologyScreen.kt$Text("Visual map of hosts and connections. Add nodes via the Network Radar / Port Scanner results.", style = MaterialTheme.typography.bodySmall)</ID>
     <ID>MaxLineLength:WhisperPairScreen.kt$"Scans for Fast Pair (0xFE2C) devices. CVE-2025-36911 exploit chain (RAW/RETROACTIVE/EXTENDED_RESPONSE) requires additional research; discovery only for now."</ID>
     <ID>MaxLineLength:WifiAuditScreen.kt$text = "Needs a capture file that contains the WPA handshake or WEP traffic — capture one first, then run the cracker against it"</ID>
     <ID>ReturnCount:MacChangerViewModel.kt$MacChangerViewModel$fun apply()</ID>
@@ -151,14 +126,11 @@
     <ID>ReturnCount:NetworkRadarViewModel.kt$NetworkRadarViewModel$fun start()</ID>
     <ID>ReturnCount:NetworkRadarViewModel.kt$fun parseHostLine(line: String): Pair&lt;String, Map&lt;String, String&gt;&gt;?</ID>
     <ID>ReturnCount:OneTapMitmViewModel.kt$OneTapMitmViewModel$fun start()</ID>
-    <ID>ReturnCount:ResponderViewModel.kt$ResponderViewModel$private fun buildLlmnrResponse( query: ByteArray, ip: ByteArray, ): ByteArray?</ID>
-    <ID>ReturnCount:ResponderViewModel.kt$ResponderViewModel$private fun parseLlmnrQuestion(data: ByteArray): String?</ID>
     <ID>ReturnCount:WhisperPairViewModel.kt$WhisperPairViewModel$@SuppressLint("MissingPermission") fun startScan()</ID>
     <ID>ReturnCount:WifiAuditViewModel.kt$WifiAuditViewModel$fun crack()</ID>
     <ID>SwallowedException:GadgetProfilesViewModel.kt$GadgetProfilesViewModel$e: Exception</ID>
     <ID>SwallowedException:MacChangerViewModel.kt$MacChangerViewModel$e: Exception</ID>
     <ID>SwallowedException:PasswordAuditorViewModel.kt$PasswordAuditorViewModel$e: Exception</ID>
-    <ID>SwallowedException:ResponderViewModel.kt$ResponderViewModel$e: Exception</ID>
     <ID>TooGenericExceptionCaught:DnsSpooferViewModel.kt$DnsSpooferViewModel$e: Exception</ID>
     <ID>TooGenericExceptionCaught:ExploitFinderViewModel.kt$ExploitFinderViewModel$e: Exception</ID>
     <ID>TooGenericExceptionCaught:GadgetProfilesViewModel.kt$GadgetProfilesViewModel$e: Exception</ID>
@@ -166,7 +138,6 @@
     <ID>TooGenericExceptionCaught:PacketForgerViewModel.kt$PacketForgerViewModel$e: Exception</ID>
     <ID>TooGenericExceptionCaught:PasswordAuditorViewModel.kt$PasswordAuditorViewModel$e: Exception</ID>
     <ID>TooGenericExceptionCaught:PortScannerViewModel.kt$PortScannerViewModel$e: Exception</ID>
-    <ID>TooGenericExceptionCaught:ResponderViewModel.kt$ResponderViewModel$e: Exception</ID>
     <ID>TooGenericExceptionCaught:RouterPwnViewModel.kt$RouterPwnViewModel$e: Exception</ID>
     <ID>TooGenericExceptionCaught:VulnScannerViewModel.kt$VulnScannerViewModel$e: Exception</ID>
     <ID>TooGenericExceptionCaught:WebTesterViewModel.kt$WebTesterViewModel$e: Exception</ID>

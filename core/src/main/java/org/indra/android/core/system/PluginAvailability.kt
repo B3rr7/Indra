@@ -7,9 +7,9 @@ import javax.inject.Singleton
  * Single source of truth for "can this plugin run on this device".
  *
  * Home and Tools both render plugin cards from this — they used to carry two private
- * copies of the rules that had already drifted apart (Home dimmed Responder, Tools
- * offered it as available). Any availability rule change happens here and both
- * screens agree again.
+ * copies of the rules that had already drifted apart (one dimmed a plugin the other
+ * offered as available). Any availability rule change happens here and both screens
+ * agree again.
  *
  * Threading: [pluginStatus] does blocking work (JNI handler probe via
  * [SmartToolBox.getTool] and `File.canExecute` artifact checks) — call it off the
@@ -55,7 +55,7 @@ class PluginAvailability
             /** Needs raw sockets or root, but the user enabled rootless mode. */
             NEEDS_ROOT("needs root", false),
 
-            /** Cannot work on Android no matter what is installed (e.g. Responder). */
+            /** Cannot work on Android no matter what is installed (see `isFeasibleOnAndroid`). */
             UNSUPPORTED("not supported on Android", false),
         }
 
@@ -167,10 +167,15 @@ class PluginAvailability
 
             /**
              * Plugins that cannot work on Android no matter what is installed, so the
-             * card stays dimmed everywhere. Responder is CPython-based and the core
-             * ships no interpreter. Wifite deliberately is NOT here: its screen drives
-             * the bundled ip/iw/tcpdump/aircrack-ng binaries, not `wifite.py`.
+             * card stays dimmed everywhere.
+             *
+             * Currently empty: the one entry it held (Responder, CPython-based with no
+             * interpreter in the core) was deleted with its screen, and Topology had no
+             * data source to be blocked *from*. The mechanism stays because a plugin that
+             * genuinely cannot run here must be blocked for all users, not hidden per
+             * screen — Wifite is deliberately NOT a candidate: its screen drives the
+             * bundled ip/iw/tcpdump/aircrack-ng binaries, not `wifite.py`.
              */
-            fun isFeasibleOnAndroid(id: String): Boolean = id !in setOf("responder", "topology")
+            fun isFeasibleOnAndroid(id: String): Boolean = id !in emptySet<String>()
         }
     }

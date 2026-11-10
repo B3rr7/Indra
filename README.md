@@ -38,9 +38,7 @@ and requires a **rooted** device.
 - Handshakes (capture file browser)
 - Arsenal (custom template exploits)
 - SearchSploit (ExploitDB browser)
-- Network Topology (visual host map)
 - Bettercap (optional download)
-- Responder (LLMNR)
 - Plugin marketplace UI (Tools screen), with availability badges
 
 **Native core ships:** nmap, hydra, ettercap, tcpdump, arpspoof, fusemounts,
@@ -144,15 +142,15 @@ ui/screens/      # Home, Tools, Settings
 
 ### Tools
 
-`SmartToolBox` registers 30+ tools (nmap, masscan, hydra, aircrack, reaver,
-hping3, nuclei, sqlmap, nikto, wifite, bettercap, responder, arpspoof, ettercap,
-iptables, tcpdump, msf, msfrpcd, ruby, shell, raw, ip, logcat, fusemounts,
-network-radar, traceroute, blind, …). Only a subset is currently bundled in the
-native core; cards for missing tools are dimmed with "· not in native core".
+`SmartToolBox` registers 18 tool specs (nmap, masscan, hydra, aircrack-ng,
+reaver, hping3, nuclei, gobuster, bettercap, arpspoof, tcpdump, ettercap,
+fusemounts, network-radar, msfrpcd, shell, raw, blind). Only a subset is
+currently bundled in the native core; cards for missing tools are dimmed with
+"· not in native core".
 
 ### Plugins
 
-18 plugins (`PluginManager`): Port Scanner, Inspector, Traceroute, MITM,
+37 plugins (`PluginManager`): Port Scanner, Inspector, Traceroute, MITM,
 Network Radar, Packet Capture, Exploit Finder, Login Cracker, Packet Forger,
 RouterPwn, WiFi Audit, Vuln Scanner, Web Tester, Credential Tester, and more.
 Each declares a `requires` tool; unavailable tools disable the card.
