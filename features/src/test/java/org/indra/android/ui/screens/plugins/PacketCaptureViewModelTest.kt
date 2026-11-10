@@ -1,5 +1,6 @@
 package org.indra.android.ui.screens.plugins
 
+import androidx.lifecycle.SavedStateHandle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -47,7 +48,7 @@ class PacketCaptureViewModelTest {
         runTest(dispatcher) {
             runner.directReady = false
             runner.directGate = ToolHandle.DaemonDown
-            val vm = PacketCaptureViewModel(runner)
+            val vm = PacketCaptureViewModel(SavedStateHandle(), runner)
 
             vm.start()
             advanceUntilIdle()
@@ -60,7 +61,7 @@ class PacketCaptureViewModelTest {
     @Test
     fun `an empty interface is refused before the gate`() =
         runTest(dispatcher) {
-            val vm = PacketCaptureViewModel(runner)
+            val vm = PacketCaptureViewModel(SavedStateHandle(), runner)
             vm.updateIface("  ")
 
             vm.start()
@@ -78,7 +79,7 @@ class PacketCaptureViewModelTest {
                 ToolResult(tool = "tcpdump", success = true, status = "running", pid = 5, rawOutput = "packet $i")
             }
             runner.script = live
-            val vm = PacketCaptureViewModel(runner)
+            val vm = PacketCaptureViewModel(SavedStateHandle(), runner)
             vm.updateCount("600")
 
             vm.start()
@@ -97,7 +98,7 @@ class PacketCaptureViewModelTest {
                 listOf(
                     ToolResult(tool = "tcpdump", success = true, status = "running", pid = 5, rawOutput = "1 packet"),
                 )
-            val vm = PacketCaptureViewModel(runner)
+            val vm = PacketCaptureViewModel(SavedStateHandle(), runner)
 
             vm.start()
             advanceUntilIdle()
@@ -111,7 +112,7 @@ class PacketCaptureViewModelTest {
     @Test
     fun `the count field becomes tcpdump's -c`() =
         runTest(dispatcher) {
-            val vm = PacketCaptureViewModel(runner)
+            val vm = PacketCaptureViewModel(SavedStateHandle(), runner)
             vm.updateIface("wlan0")
             vm.updateFilter("tcp port 80")
             vm.updateCount("25")
@@ -126,7 +127,7 @@ class PacketCaptureViewModelTest {
     @Test
     fun `a non-numeric count captures until stopped instead of failing`() =
         runTest(dispatcher) {
-            val vm = PacketCaptureViewModel(runner)
+            val vm = PacketCaptureViewModel(SavedStateHandle(), runner)
             vm.updateCount("lots")
 
             vm.start()
@@ -141,7 +142,7 @@ class PacketCaptureViewModelTest {
     fun `save to file needs the root daemon to create the folder`() =
         runTest(dispatcher) {
             runner.captureDirCreated = false
-            val vm = PacketCaptureViewModel(runner)
+            val vm = PacketCaptureViewModel(SavedStateHandle(), runner)
             vm.setSaveToFile(true)
 
             vm.start()
@@ -158,7 +159,7 @@ class PacketCaptureViewModelTest {
     @Test
     fun `save to file passes the shared capture path`() =
         runTest(dispatcher) {
-            val vm = PacketCaptureViewModel(runner)
+            val vm = PacketCaptureViewModel(SavedStateHandle(), runner)
             vm.setSaveToFile(true)
 
             vm.start()
@@ -180,7 +181,7 @@ class PacketCaptureViewModelTest {
                         error = "tcpdump exited with code 1: tcpdump: wlan0: No such device exists",
                     ),
                 )
-            val vm = PacketCaptureViewModel(runner)
+            val vm = PacketCaptureViewModel(SavedStateHandle(), runner)
 
             vm.start()
             advanceUntilIdle()
@@ -194,7 +195,7 @@ class PacketCaptureViewModelTest {
     @Test
     fun `entering monitor mode asks first, then switches through the runner`() =
         runTest(dispatcher) {
-            val vm = PacketCaptureViewModel(runner)
+            val vm = PacketCaptureViewModel(SavedStateHandle(), runner)
 
             vm.requestMonitorMode(true)
             assertTrue(vm.uiState.value.monitorWarningShown)
@@ -223,7 +224,7 @@ class PacketCaptureViewModelTest {
             // The engine's own answer: only the `iw`/`ip` packages are missing, not the rootfs.
             runner.capabilities[Capability.IW] =
                 CapabilityState.Missing(Capability.IW, MonitorMode.MISSING_IW_MESSAGE)
-            val vm = PacketCaptureViewModel(runner)
+            val vm = PacketCaptureViewModel(SavedStateHandle(), runner)
 
             vm.requestMonitorMode(true)
             vm.onMonitorDialog(true)
@@ -254,7 +255,7 @@ class PacketCaptureViewModelTest {
                 )
             runner.capabilities[Capability.IW] =
                 CapabilityState.Missing(Capability.IW, MonitorMode.MISSING_IW_MESSAGE)
-            val vm = PacketCaptureViewModel(runner)
+            val vm = PacketCaptureViewModel(SavedStateHandle(), runner)
             vm.requestMonitorMode(true)
             vm.onMonitorDialog(true)
             advanceUntilIdle()
@@ -276,7 +277,7 @@ class PacketCaptureViewModelTest {
     @Test
     fun `leaving monitor mode switches immediately, without the warning`() =
         runTest(dispatcher) {
-            val vm = PacketCaptureViewModel(runner)
+            val vm = PacketCaptureViewModel(SavedStateHandle(), runner)
 
             vm.requestMonitorMode(false)
             advanceUntilIdle()
@@ -292,7 +293,7 @@ class PacketCaptureViewModelTest {
                 listOf(
                     ToolResult(tool = "tcpdump", success = true, status = "running", pid = 31, rawOutput = "1 packet"),
                 )
-            val vm = PacketCaptureViewModel(runner)
+            val vm = PacketCaptureViewModel(SavedStateHandle(), runner)
 
             vm.start()
             advanceUntilIdle()
@@ -300,5 +301,38 @@ class PacketCaptureViewModelTest {
 
             assertEquals(listOf(31), runner.stopped)
             assertFalse(vm.uiState.value.isActive)
+        }
+
+    @Test
+    fun `typed capture input is restored after a process death`() =
+        runTest(dispatcher) {
+            val handle =
+                SavedStateHandle(mapOf("iface" to "eth0", "filter" to "udp port 53", "count" to "25"))
+
+            val vm = PacketCaptureViewModel(handle, runner)
+            advanceUntilIdle()
+
+            assertEquals("eth0", vm.uiState.value.iface)
+            assertEquals("udp port 53", vm.uiState.value.filter)
+            assertEquals("25", vm.uiState.value.count)
+            // A restored screen must not claim a capture is live or that one had finished.
+            assertFalse(vm.uiState.value.isActive)
+            assertFalse(vm.uiState.value.hasRun)
+            assertTrue(vm.uiState.value.packets.isEmpty())
+        }
+
+    @Test
+    fun `every capture edit is persisted as it is made`() =
+        runTest(dispatcher) {
+            val handle = SavedStateHandle()
+            val vm = PacketCaptureViewModel(handle, runner)
+
+            vm.updateIface("eth0")
+            vm.updateFilter("tcp port 22")
+            vm.updateCount("7")
+
+            assertEquals("eth0", handle.get<String>("iface"))
+            assertEquals("tcp port 22", handle.get<String>("filter"))
+            assertEquals("7", handle.get<String>("count"))
         }
 }

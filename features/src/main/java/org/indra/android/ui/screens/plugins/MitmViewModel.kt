@@ -1,5 +1,6 @@
 package org.indra.android.ui.screens.plugins
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -35,15 +36,25 @@ data class MitmUiState(
 class MitmViewModel
     @Inject
     constructor(
+        private val savedState: SavedStateHandle,
         private val networkHelper: NetworkHelper,
         private val toolBox: SmartToolBox,
         private val networkRepository: NetworkRepository,
     ) : ViewModel() {
-        private val _uiState =
-            MutableStateFlow(
-                MitmUiState(gateway = networkHelper.getWifiGatewayAddress().orEmpty()),
-            )
+        private val _uiState = MutableStateFlow(restoredInputs(MitmUiState(gateway = networkHelper.getWifiGatewayAddress().orEmpty()),))
         val uiState: StateFlow<MitmUiState> = _uiState.asStateFlow()
+
+        /**
+         * Input fields, so a process death does not throw away what the user typed.
+         * Results, run state and errors stay volatile on purpose: a restored screen must
+         * not claim a scan is still running.
+         */
+        private fun restoredInputs(state: MitmUiState) =
+            state.copy(
+                target = savedState["target"] ?: state.target,
+                gateway = savedState["gateway"] ?: state.gateway,
+                iface = savedState["iface"] ?: state.iface,
+            )
 
         init {
             refreshSuggestions()
@@ -62,14 +73,17 @@ class MitmViewModel
         private var pid = -1
 
         fun updateTarget(target: String) {
+            savedState["target"] = target
             _uiState.value = _uiState.value.copy(target = target)
         }
 
         fun updateGateway(gateway: String) {
+            savedState["gateway"] = gateway
             _uiState.value = _uiState.value.copy(gateway = gateway)
         }
 
         fun updateIface(iface: String) {
+            savedState["iface"] = iface
             _uiState.value = _uiState.value.copy(iface = iface)
         }
 

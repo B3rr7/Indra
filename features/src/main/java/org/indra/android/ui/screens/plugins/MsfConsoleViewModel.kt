@@ -1,5 +1,6 @@
 package org.indra.android.ui.screens.plugins
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -35,12 +36,23 @@ private const val DEFAULT_COMMAND = "version"
 class MsfConsoleViewModel
     @Inject
     constructor(
+        private val savedState: SavedStateHandle,
         private val toolBox: ToolRunner,
         private val coreManager: CoreManager,
         private val settings: SettingsRepository,
     ) : ViewModel() {
-        private val _uiState = MutableStateFlow(MsfConsoleUiState(msfUrl = settings.msfChrootUrl))
+        private val _uiState = MutableStateFlow(restoredInputs(MsfConsoleUiState(msfUrl = settings.msfChrootUrl)))
         val uiState: StateFlow<MsfConsoleUiState> = _uiState.asStateFlow()
+
+        /**
+         * Input fields, so a process death does not throw away what the user typed.
+         * Results, run state and errors stay volatile on purpose: a restored screen must
+         * not claim a scan is still running.
+         */
+        private fun restoredInputs(state: MsfConsoleUiState) =
+            state.copy(
+                command = savedState["command"] ?: state.command,
+            )
 
         private var job: Job? = null
         private var pid = -1
@@ -54,6 +66,7 @@ class MsfConsoleViewModel
         }
 
         fun updateCommand(value: String) {
+            savedState["command"] = value
             _uiState.value = _uiState.value.copy(command = value)
         }
 

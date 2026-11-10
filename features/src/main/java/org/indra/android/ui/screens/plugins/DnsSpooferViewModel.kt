@@ -1,5 +1,6 @@
 package org.indra.android.ui.screens.plugins
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -101,9 +102,19 @@ data class DnsSpooferUiState(
 class DnsSpooferViewModel
     @Inject
     constructor(
+        private val savedState: SavedStateHandle,
         private val toolBox: SmartToolBox,
     ) : ViewModel() {
-        private val _uiState = MutableStateFlow(DnsSpooferUiState())
+        private val _uiState =
+            MutableStateFlow(
+                DnsSpooferUiState().let { state ->
+                    // Input fields only: the run state and the error stay volatile.
+                    state.copy(
+                        domain = savedState["domain"] ?: state.domain,
+                        spoofIp = savedState["spoofIp"] ?: state.spoofIp,
+                    )
+                },
+            )
         val uiState: StateFlow<DnsSpooferUiState> = _uiState.asStateFlow()
 
         private var job: Job? = null
@@ -114,6 +125,10 @@ class DnsSpooferViewModel
             domain: String? = null,
             ip: String? = null,
         ) {
+            // Only the field the caller passed is written: this one entry point updates whichever
+            // of the two inputs the screen touched, so persisting both would resurrect a stale one.
+            domain?.let { savedState["domain"] = it }
+            ip?.let { savedState["spoofIp"] = it }
             _uiState.value =
                 _uiState.value.copy(
                     domain = domain ?: _uiState.value.domain,

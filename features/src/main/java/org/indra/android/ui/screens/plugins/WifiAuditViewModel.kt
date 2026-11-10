@@ -1,5 +1,6 @@
 package org.indra.android.ui.screens.plugins
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -34,10 +35,24 @@ data class WifiAuditUiState(
 class WifiAuditViewModel
     @Inject
     constructor(
+        private val savedState: SavedStateHandle,
         private val toolBox: SmartToolBox,
     ) : ViewModel() {
-        private val _uiState = MutableStateFlow(WifiAuditUiState())
+        private val _uiState = MutableStateFlow(restoredInputs(WifiAuditUiState()))
         val uiState: StateFlow<WifiAuditUiState> = _uiState.asStateFlow()
+
+        /**
+         * Input fields, so a process death does not throw away what the user typed.
+         * Results, run state and errors stay volatile on purpose: a restored screen must
+         * not claim a scan is still running.
+         */
+        private fun restoredInputs(state: WifiAuditUiState) =
+            state.copy(
+                capture = savedState["capture"] ?: state.capture,
+                wordlist = savedState["wordlist"] ?: state.wordlist,
+                bssid = savedState["bssid"] ?: state.bssid,
+                essid = savedState["essid"] ?: state.essid,
+            )
 
         private var job: Job? = null
         private var pid = -1
@@ -56,18 +71,22 @@ class WifiAuditViewModel
         }
 
         fun updateCapture(capture: String) {
+            savedState["capture"] = capture
             _uiState.value = _uiState.value.copy(capture = capture)
         }
 
         fun updateWordlist(wordlist: String) {
+            savedState["wordlist"] = wordlist
             _uiState.value = _uiState.value.copy(wordlist = wordlist)
         }
 
         fun updateBssid(bssid: String) {
+            savedState["bssid"] = bssid
             _uiState.value = _uiState.value.copy(bssid = bssid)
         }
 
         fun updateEssid(essid: String) {
+            savedState["essid"] = essid
             _uiState.value = _uiState.value.copy(essid = essid)
         }
 

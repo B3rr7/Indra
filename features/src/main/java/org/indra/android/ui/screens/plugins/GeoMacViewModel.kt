@@ -1,6 +1,7 @@
 package org.indra.android.ui.screens.plugins
 
 import android.content.Context
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -30,20 +31,36 @@ data class GeoMacUiState(
 class GeoMacViewModel
     @Inject
     constructor(
+        private val savedState: SavedStateHandle,
         @ApplicationContext private val context: Context,
     ) : ViewModel() {
-        private val _uiState = MutableStateFlow(GeoMacUiState())
+        private val _uiState = MutableStateFlow(restoredInputs(GeoMacUiState()))
         val uiState: StateFlow<GeoMacUiState> = _uiState.asStateFlow()
 
+        /**
+         * Input fields, so a process death does not throw away what the user typed.
+         * Results, run state and errors stay volatile on purpose: a restored screen must
+         * not claim a scan is still running.
+         */
+        private fun restoredInputs(state: GeoMacUiState) =
+            state.copy(
+                bssid = savedState["bssid"] ?: state.bssid,
+                lat = savedState["lat"] ?: state.lat,
+                lon = savedState["lon"] ?: state.lon,
+            )
+
         fun updateBssid(v: String) {
+            savedState["bssid"] = v
             _uiState.value = _uiState.value.copy(bssid = v)
         }
 
         fun updateLat(v: String) {
+            savedState["lat"] = v
             _uiState.value = _uiState.value.copy(lat = v)
         }
 
         fun updateLon(v: String) {
+            savedState["lon"] = v
             _uiState.value = _uiState.value.copy(lon = v)
         }
 

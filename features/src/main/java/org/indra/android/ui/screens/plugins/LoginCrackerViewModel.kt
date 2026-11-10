@@ -1,5 +1,6 @@
 package org.indra.android.ui.screens.plugins
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -19,12 +20,26 @@ import javax.inject.Inject
 class LoginCrackerViewModel
     @Inject
     constructor(
+        private val savedState: SavedStateHandle,
         private val toolBox: SmartToolBox,
         private val networkHelper: NetworkHelper,
         private val networkRepository: NetworkRepository,
     ) : ViewModel() {
-        private val _uiState = MutableStateFlow(LoginCrackerUiState())
+        private val _uiState = MutableStateFlow(restoredInputs(LoginCrackerUiState()))
         val uiState: StateFlow<LoginCrackerUiState> = _uiState.asStateFlow()
+
+        /**
+         * Input fields, so a process death does not throw away what the user typed.
+         * Results, run state and errors stay volatile on purpose: a restored screen must
+         * not claim a scan is still running.
+         */
+        private fun restoredInputs(state: LoginCrackerUiState) =
+            state.copy(
+                target = savedState["target"] ?: state.target,
+                service = savedState["service"] ?: state.service,
+                port = savedState["port"] ?: state.port,
+                username = savedState["username"] ?: state.username,
+            )
 
         init {
             refreshSuggestions()
@@ -40,18 +55,22 @@ class LoginCrackerViewModel
         }
 
         fun updateTarget(target: String) {
+            savedState["target"] = target
             _uiState.value = _uiState.value.copy(target = target)
         }
 
         fun updateService(service: String) {
+            savedState["service"] = service
             _uiState.value = _uiState.value.copy(service = service)
         }
 
         fun updatePort(port: String) {
+            savedState["port"] = port
             _uiState.value = _uiState.value.copy(port = port)
         }
 
         fun updateUsername(username: String) {
+            savedState["username"] = username
             _uiState.value = _uiState.value.copy(username = username)
         }
 

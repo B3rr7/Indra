@@ -1,5 +1,6 @@
 package org.indra.android.ui.screens.plugins
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -26,16 +27,30 @@ data class ReaverUiState(
 class ReaverViewModel
     @Inject
     constructor(
+        private val savedState: SavedStateHandle,
         private val toolBox: SmartToolBox,
     ) : ViewModel() {
-        private val _uiState = MutableStateFlow(ReaverUiState())
+        private val _uiState = MutableStateFlow(restoredInputs(ReaverUiState()))
         val uiState: StateFlow<ReaverUiState> = _uiState.asStateFlow()
 
+        /**
+         * Input fields, so a process death does not throw away what the user typed.
+         * Results, run state and errors stay volatile on purpose: a restored screen must
+         * not claim a scan is still running.
+         */
+        private fun restoredInputs(state: ReaverUiState) =
+            state.copy(
+                iface = savedState["iface"] ?: state.iface,
+                bssid = savedState["bssid"] ?: state.bssid,
+            )
+
         fun updateIface(v: String) {
+            savedState["iface"] = v
             _uiState.value = _uiState.value.copy(iface = v)
         }
 
         fun updateBssid(v: String) {
+            savedState["bssid"] = v
             _uiState.value = _uiState.value.copy(bssid = v)
         }
 

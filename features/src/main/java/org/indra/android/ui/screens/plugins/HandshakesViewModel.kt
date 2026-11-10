@@ -1,6 +1,7 @@
 package org.indra.android.ui.screens.plugins
 
 import android.content.Context
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import java.io.File
 import androidx.lifecycle.viewModelScope
@@ -64,11 +65,23 @@ data class HandshakesUiState(
 class HandshakesViewModel
     @Inject
     constructor(
+        private val savedState: SavedStateHandle,
         @ApplicationContext private val context: Context,
         private val toolBox: ToolRunner,
     ) : ViewModel() {
-        private val _uiState = MutableStateFlow(HandshakesUiState(wordlist = toolBox.defaultWordlist()))
+        private val _uiState = MutableStateFlow(restoredInputs(HandshakesUiState(wordlist = toolBox.defaultWordlist())))
         val uiState: StateFlow<HandshakesUiState> = _uiState.asStateFlow()
+
+        /**
+         * Input fields, so a process death does not throw away what the user typed.
+         * Results, run state and errors stay volatile on purpose: a restored screen must
+         * not claim a scan is still running.
+         */
+        private fun restoredInputs(state: HandshakesUiState) =
+            state.copy(
+                crackTarget = savedState["crackTarget"] ?: state.crackTarget,
+                wordlist = savedState["wordlist"] ?: state.wordlist,
+            )
 
         private var job: Job? = null
         private var pid = -1
@@ -162,6 +175,7 @@ class HandshakesViewModel
         // ---------------------------------------------------------------- cracking
 
         fun openCrack(path: String) {
+            savedState["crackTarget"] = path
             _uiState.value = _uiState.value.copy(crackTarget = path)
         }
 
@@ -170,6 +184,7 @@ class HandshakesViewModel
         }
 
         fun updateWordlist(wordlist: String) {
+            savedState["wordlist"] = wordlist
             _uiState.value = _uiState.value.copy(wordlist = wordlist)
         }
 

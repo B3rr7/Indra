@@ -1,5 +1,6 @@
 package org.indra.android.ui.screens.plugins
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -32,12 +33,26 @@ data class MasscanUiState(
 class MasscanViewModel
     @Inject
     constructor(
+        private val savedState: SavedStateHandle,
         private val toolBox: ToolRunner,
         private val networkHelper: NetworkHelper,
         private val networkRepository: NetworkRepository,
     ) : ViewModel() {
-        private val _uiState = MutableStateFlow(MasscanUiState())
+        private val _uiState = MutableStateFlow(restoredInputs(MasscanUiState()))
         val uiState: StateFlow<MasscanUiState> = _uiState.asStateFlow()
+
+        /**
+         * Input fields, so a process death does not throw away what the user typed.
+         * Results, run state and errors stay volatile on purpose: a restored screen must
+         * not claim a scan is still running.
+         */
+        private fun restoredInputs(state: MasscanUiState) =
+            state.copy(
+                target = savedState["target"] ?: state.target,
+                ports = savedState["ports"] ?: state.ports,
+                rate = savedState["rate"] ?: state.rate,
+                iface = savedState["iface"] ?: state.iface,
+            )
 
         init {
             refreshSuggestions()
@@ -53,18 +68,22 @@ class MasscanViewModel
         }
 
         fun updateTarget(v: String) {
+            savedState["target"] = v
             _uiState.value = _uiState.value.copy(target = v)
         }
 
         fun updatePorts(v: String) {
+            savedState["ports"] = v
             _uiState.value = _uiState.value.copy(ports = v)
         }
 
         fun updateRate(v: String) {
+            savedState["rate"] = v
             _uiState.value = _uiState.value.copy(rate = v)
         }
 
         fun updateIface(v: String) {
+            savedState["iface"] = v
             _uiState.value = _uiState.value.copy(iface = v)
         }
 

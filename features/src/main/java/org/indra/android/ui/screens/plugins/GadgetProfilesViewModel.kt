@@ -1,6 +1,7 @@
 package org.indra.android.ui.screens.plugins
 
 import android.content.Context
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.gson.Gson
@@ -32,6 +33,7 @@ data class GadgetProfilesUiState(
 
 @HiltViewModel
 class GadgetProfilesViewModel @Inject constructor(
+    private val savedState: SavedStateHandle,
     @ApplicationContext private val context: Context,
     private val hidCapability: HidCapability,
     private val toolBox: SmartToolBox
@@ -39,8 +41,23 @@ class GadgetProfilesViewModel @Inject constructor(
     private val prefs = context.getSharedPreferences("gadget_profiles", Context.MODE_PRIVATE)
     private val gson = Gson()
 
-    private val _uiState = MutableStateFlow(GadgetProfilesUiState(capability = hidCapability.detect(), profiles = loadProfiles()))
+    private val _uiState =
+        MutableStateFlow(
+            restoredInputs(
+                GadgetProfilesUiState(capability = hidCapability.detect(), profiles = loadProfiles()),
+            ),
+        )
     val uiState: StateFlow<GadgetProfilesUiState> = _uiState.asStateFlow()
+
+    /**
+     * Input fields, so a process death does not throw away what the user typed.
+     * Results, run state and errors stay volatile on purpose: a restored screen must
+     * not claim a scan is still running.
+     */
+    private fun restoredInputs(state: GadgetProfilesUiState) =
+        state.copy(
+            newProfileName = savedState["newProfileName"] ?: state.newProfileName,
+        )
 
     private fun loadProfiles(): List<GadgetProfile> {
         val json = prefs.getString("profiles", "[]") ?: "[]"
@@ -57,7 +74,9 @@ class GadgetProfilesViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(selectedFunctions = if (s.contains(f)) s - f else s + f)
     }
 
-    fun updateName(v: String) { _uiState.value = _uiState.value.copy(newProfileName = v) }
+    fun updateName(v: String) {
+        savedState["newProfileName"] = v
+        _uiState.value = _uiState.value.copy(newProfileName = v) }
 
     fun saveProfile() {
         val st = _uiState.value

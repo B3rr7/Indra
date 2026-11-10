@@ -1,6 +1,7 @@
 package org.indra.android.ui.screens.plugins
 
 import android.content.Context
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.gson.Gson
@@ -50,6 +51,7 @@ data class MacProfile(
 class MacChangerViewModel
     @Inject
     constructor(
+        private val savedState: SavedStateHandle,
         @ApplicationContext private val context: Context,
         private val toolBox: SmartToolBox,
     ) : ViewModel() {
@@ -57,8 +59,19 @@ class MacChangerViewModel
         private val gson = Gson()
         private val fetchMutex = Mutex()
 
-        private val _uiState = MutableStateFlow(MacChangerUiState())
+        private val _uiState = MutableStateFlow(restoredInputs(MacChangerUiState()))
         val uiState: StateFlow<MacChangerUiState> = _uiState.asStateFlow()
+
+        /**
+         * Input fields, so a process death does not throw away what the user typed.
+         * Results, run state and errors stay volatile on purpose: a restored screen must
+         * not claim a scan is still running.
+         */
+        private fun restoredInputs(state: MacChangerUiState) =
+            state.copy(
+                iface = savedState["iface"] ?: state.iface,
+                newMac = savedState["newMac"] ?: state.newMac,
+            )
 
         private var job: Job? = null
         private var pid = -1
@@ -110,6 +123,7 @@ class MacChangerViewModel
 
         /** Called when user changes interface — fetches current MAC and sets as original if first time. */
         fun updateIface(v: String) {
+            savedState["iface"] = v
             _uiState.value = _uiState.value.copy(iface = v)
             viewModelScope.launch {
                 val trimmed = v.trim()
@@ -126,6 +140,7 @@ class MacChangerViewModel
         }
 
         fun updateMac(v: String) {
+            savedState["newMac"] = v
             _uiState.value = _uiState.value.copy(newMac = v)
         }
 

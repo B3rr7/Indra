@@ -1,5 +1,6 @@
 package org.indra.android.ui.screens.plugins
 
+import androidx.lifecycle.SavedStateHandle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -42,7 +43,7 @@ class IptablesViewModelTest {
         runTest(dispatcher) {
             runner.ready = false
             runner.gate = ToolHandle.DaemonDown
-            val vm = IptablesViewModel(runner)
+            val vm = IptablesViewModel(SavedStateHandle(), runner)
 
             vm.run()
             advanceUntilIdle()
@@ -57,7 +58,7 @@ class IptablesViewModelTest {
         runTest(dispatcher) {
             runner.ready = false
             runner.gate = ToolHandle.Missing("shell")
-            val vm = IptablesViewModel(runner)
+            val vm = IptablesViewModel(SavedStateHandle(), runner)
 
             vm.run()
             advanceUntilIdle()
@@ -68,7 +69,7 @@ class IptablesViewModelTest {
     @Test
     fun `the arguments go through as one argv, so a semicolon is not a command`() =
         runTest(dispatcher) {
-            val vm = IptablesViewModel(runner)
+            val vm = IptablesViewModel(SavedStateHandle(), runner)
             vm.updateArgs("-L -n; id")
 
             vm.run()
@@ -92,7 +93,7 @@ class IptablesViewModelTest {
                         rawOutput = "Chain INPUT\ntarget     prot",
                     ),
                 )
-            val vm = IptablesViewModel(runner)
+            val vm = IptablesViewModel(SavedStateHandle(), runner)
 
             vm.run()
             advanceUntilIdle()
@@ -118,7 +119,7 @@ class IptablesViewModelTest {
                         error = "iptables exited with code 1: iptables: No chain/target/match by that name.",
                     ),
                 )
-            val vm = IptablesViewModel(runner)
+            val vm = IptablesViewModel(SavedStateHandle(), runner)
 
             vm.run()
             advanceUntilIdle()
@@ -137,7 +138,7 @@ class IptablesViewModelTest {
                 listOf(
                     ToolResult(tool = "iptables", success = true, status = "running", pid = 99, rawOutput = "Chain INPUT"),
                 )
-            val vm = IptablesViewModel(runner)
+            val vm = IptablesViewModel(SavedStateHandle(), runner)
 
             vm.run()
             advanceUntilIdle()
@@ -150,11 +151,32 @@ class IptablesViewModelTest {
     @Test
     fun `the default arguments are the chain listing`() =
         runTest(dispatcher) {
-            val vm = IptablesViewModel(runner)
+            val vm = IptablesViewModel(SavedStateHandle(), runner)
 
             vm.run()
             advanceUntilIdle()
 
             assertEquals("iptables -L -n -v", runner.calls.single().second)
+        }
+
+    @Test
+    fun `typed arguments survive a process death, output does not`() =
+        runTest(dispatcher) {
+            val vm = IptablesViewModel(SavedStateHandle(mapOf("args" to "-t nat -L")), runner)
+
+            assertEquals("-t nat -L", vm.uiState.value.args)
+            assertTrue(vm.uiState.value.output.isEmpty())
+            assertFalse(vm.uiState.value.isRunning)
+        }
+
+    @Test
+    fun `an argument edit is persisted as it is made`() =
+        runTest(dispatcher) {
+            val handle = SavedStateHandle()
+            val vm = IptablesViewModel(handle, runner)
+
+            vm.updateArgs("-L INPUT -v")
+
+            assertEquals("-L INPUT -v", handle.get<String>("args"))
         }
 }

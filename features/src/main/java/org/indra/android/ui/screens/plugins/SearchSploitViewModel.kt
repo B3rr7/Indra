@@ -1,5 +1,6 @@
 package org.indra.android.ui.screens.plugins
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -19,17 +20,31 @@ import javax.inject.Inject
 class SearchSploitViewModel
     @Inject
     constructor(
+        private val savedState: SavedStateHandle,
         private val toolBox: SmartToolBox,
         private val coreManager: CoreManager,
         private val settings: SettingsRepository,
     ) : ViewModel() {
         private val _uiState =
             MutableStateFlow(
-                SearchSploitUiState(exploitdbInstalled = coreManager.isExploitdbInstalled(), exploitdbUrl = settings.exploitdbUrl),
+                restoredInputs(
+                    SearchSploitUiState(exploitdbInstalled = coreManager.isExploitdbInstalled(), exploitdbUrl = settings.exploitdbUrl),
+                ),
             )
         val uiState: StateFlow<SearchSploitUiState> = _uiState.asStateFlow()
 
+        /**
+         * Input fields, so a process death does not throw away what the user typed.
+         * Results, run state and errors stay volatile on purpose: a restored screen must
+         * not claim a scan is still running.
+         */
+        private fun restoredInputs(state: SearchSploitUiState) =
+            state.copy(
+                query = savedState["query"] ?: state.query,
+            )
+
         fun updateQuery(v: String) {
+            savedState["query"] = v
             _uiState.value = _uiState.value.copy(query = v)
         }
 

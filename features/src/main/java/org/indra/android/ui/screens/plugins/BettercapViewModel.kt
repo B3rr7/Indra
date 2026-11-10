@@ -1,5 +1,6 @@
 package org.indra.android.ui.screens.plugins
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -18,14 +19,32 @@ import javax.inject.Inject
 
 @HiltViewModel
 class BettercapViewModel @Inject constructor(
+    private val savedState: SavedStateHandle,
     private val toolBox: SmartToolBox,
     private val coreManager: CoreManager,
     private val settings: SettingsRepository
 ) : ViewModel() {
-    private val _uiState = MutableStateFlow(BettercapUiState(bettercapInstalled = coreManager.isBettercapInstalled(), bettercapUrl = settings.bettercapUrl))
+    private val _uiState =
+        MutableStateFlow(
+            restoredInputs(
+                BettercapUiState(bettercapInstalled = coreManager.isBettercapInstalled(), bettercapUrl = settings.bettercapUrl),
+            ),
+        )
     val uiState: StateFlow<BettercapUiState> = _uiState.asStateFlow()
 
-    fun updateArgs(v: String) { _uiState.value = _uiState.value.copy(args = v) }
+    /**
+     * Input fields, so a process death does not throw away what the user typed.
+     * Results, run state and errors stay volatile on purpose: a restored screen must
+     * not claim a scan is still running.
+     */
+    private fun restoredInputs(state: BettercapUiState) =
+        state.copy(
+            args = savedState["args"] ?: state.args,
+        )
+
+    fun updateArgs(v: String) {
+        savedState["args"] = v
+        _uiState.value = _uiState.value.copy(args = v) }
     fun updateUrl(v: String) { settings.bettercapUrl = v; _uiState.value = _uiState.value.copy(bettercapUrl = v) }
 
     fun install() {

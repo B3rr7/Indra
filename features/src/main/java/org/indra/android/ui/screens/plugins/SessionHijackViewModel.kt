@@ -1,5 +1,6 @@
 package org.indra.android.ui.screens.plugins
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -39,14 +40,30 @@ data class SessionHijackUiState(
 
 @HiltViewModel
 class SessionHijackViewModel @Inject constructor(
+    private val savedState: SavedStateHandle,
     private val toolBox: SmartToolBox
 ) : ViewModel() {
-    private val _uiState = MutableStateFlow(SessionHijackUiState())
+    private val _uiState = MutableStateFlow(restoredInputs(SessionHijackUiState()))
     val uiState: StateFlow<SessionHijackUiState> = _uiState.asStateFlow()
 
-    fun updateIface(v: String) { _uiState.value = _uiState.value.copy(iface = v) }
+    /**
+     * Input fields, so a process death does not throw away what the user typed.
+     * Results, run state and errors stay volatile on purpose: a restored screen must
+     * not claim a scan is still running.
+     */
+    private fun restoredInputs(state: SessionHijackUiState) =
+        state.copy(
+            iface = savedState["iface"] ?: state.iface,
+            filter = savedState["filter"] ?: state.filter,
+        )
 
-    fun updateFilter(v: String) { _uiState.value = _uiState.value.copy(filter = v) }
+    fun updateIface(v: String) {
+        savedState["iface"] = v
+        _uiState.value = _uiState.value.copy(iface = v) }
+
+    fun updateFilter(v: String) {
+        savedState["filter"] = v
+        _uiState.value = _uiState.value.copy(filter = v) }
 
     private var job: Job? = null
     private var pid = -1

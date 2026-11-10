@@ -1,5 +1,6 @@
 package org.indra.android.ui.screens.plugins
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -33,10 +34,22 @@ data class WifiKeygenUiState(
 class WifiKeygenViewModel
     @Inject
     constructor(
+        private val savedState: SavedStateHandle,
         private val networkHelper: NetworkHelper,
     ) : ViewModel() {
-        private val _uiState = MutableStateFlow(WifiKeygenUiState())
+        private val _uiState = MutableStateFlow(restoredInputs(WifiKeygenUiState()))
         val uiState: StateFlow<WifiKeygenUiState> = _uiState.asStateFlow()
+
+        /**
+         * Input fields, so a process death does not throw away what the user typed.
+         * Results, run state and errors stay volatile on purpose: a restored screen must
+         * not claim a scan is still running.
+         */
+        private fun restoredInputs(state: WifiKeygenUiState) =
+            state.copy(
+                bssid = savedState["bssid"] ?: state.bssid,
+                essid = savedState["essid"] ?: state.essid,
+            )
 
         init {
             prefillFromConnectedAccessPoint()
@@ -62,10 +75,12 @@ class WifiKeygenViewModel
          * user types, so the typed value and the displayed value never disagree.
          */
         fun updateBssid(bssid: String) {
+            savedState["bssid"] = bssid
             _uiState.value = _uiState.value.copy(bssid = formatMac(bssid), error = null)
         }
 
         fun updateEssid(essid: String) {
+            savedState["essid"] = essid
             _uiState.value = _uiState.value.copy(essid = essid, error = null)
         }
 

@@ -1,5 +1,6 @@
 package org.indra.android.ui.screens.plugins
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -44,6 +45,7 @@ data class GobusterUiState(
 class GobusterViewModel
     @Inject
     constructor(
+        private val savedState: SavedStateHandle,
         private val toolBox: SmartToolBox,
         private val coreManager: CoreManager,
         private val networkHelper: NetworkHelper,
@@ -57,7 +59,15 @@ class GobusterViewModel
                     gobusterInstalled = false,
                     wordlist = "",
                     rootless = settings.rootlessMode,
-                ),
+                ).let { state ->
+                    // Input fields only: results and run state stay volatile, so a restored screen
+                    // does not claim a scan is still running.
+                    state.copy(
+                        url = savedState["url"] ?: state.url,
+                        wordlist = savedState["wordlist"] ?: state.wordlist,
+                        extensions = savedState["extensions"] ?: state.extensions,
+                    )
+                },
             )
         val uiState: StateFlow<GobusterUiState> = _uiState.asStateFlow()
 
@@ -84,9 +94,15 @@ class GobusterViewModel
             _uiState.value = _uiState.value.copy(suggestions = list.toList())
         }
 
-        fun updateUrl(v: String) { _uiState.value = _uiState.value.copy(url = v) }
-        fun updateWordlist(v: String) { _uiState.value = _uiState.value.copy(wordlist = v) }
-        fun updateExtensions(v: String) { _uiState.value = _uiState.value.copy(extensions = v) }
+        fun updateUrl(v: String) {
+            savedState["url"] = v
+            _uiState.value = _uiState.value.copy(url = v) }
+        fun updateWordlist(v: String) {
+            savedState["wordlist"] = v
+            _uiState.value = _uiState.value.copy(wordlist = v) }
+        fun updateExtensions(v: String) {
+            savedState["extensions"] = v
+            _uiState.value = _uiState.value.copy(extensions = v) }
         fun updateInstallUrl(v: String) { _uiState.value = _uiState.value.copy(installUrl = v) }
 
         fun install() {

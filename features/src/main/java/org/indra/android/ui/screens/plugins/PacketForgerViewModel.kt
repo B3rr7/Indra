@@ -1,6 +1,7 @@
 package org.indra.android.ui.screens.plugins
 
 import android.content.Context
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -33,13 +34,26 @@ data class PacketForgerUiState(
 class PacketForgerViewModel
     @Inject
     constructor(
+        private val savedState: SavedStateHandle,
         @ApplicationContext private val context: Context,
         private val toolBox: SmartToolBox,
         private val networkHelper: NetworkHelper,
         private val networkRepository: NetworkRepository,
     ) : ViewModel() {
-        private val _uiState = MutableStateFlow(PacketForgerUiState())
+        private val _uiState = MutableStateFlow(restoredInputs(PacketForgerUiState()))
         val uiState: StateFlow<PacketForgerUiState> = _uiState.asStateFlow()
+
+        /**
+         * Input fields, so a process death does not throw away what the user typed.
+         * Results, run state and errors stay volatile on purpose: a restored screen must
+         * not claim a scan is still running.
+         */
+        private fun restoredInputs(state: PacketForgerUiState) =
+            state.copy(
+                target = savedState["target"] ?: state.target,
+                port = savedState["port"] ?: state.port,
+                payload = savedState["payload"] ?: state.payload,
+            )
 
         init {
             refreshSuggestions()
@@ -55,6 +69,7 @@ class PacketForgerViewModel
         }
 
         fun updateTarget(target: String) {
+            savedState["target"] = target
             _uiState.value = _uiState.value.copy(target = target)
         }
 
@@ -63,10 +78,12 @@ class PacketForgerViewModel
         }
 
         fun updatePort(port: String) {
+            savedState["port"] = port
             _uiState.value = _uiState.value.copy(port = port)
         }
 
         fun updatePayload(payload: String) {
+            savedState["payload"] = payload
             _uiState.value = _uiState.value.copy(payload = payload)
         }
 

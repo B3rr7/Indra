@@ -1,5 +1,6 @@
 package org.indra.android.ui.screens.plugins
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -57,13 +58,26 @@ data class DuckyScriptUiState(
 
 @HiltViewModel
 class DuckyScriptViewModel @Inject constructor(
+    private val savedState: SavedStateHandle,
     private val hidCapability: HidCapability,
     private val toolBox: SmartToolBox
 ) : ViewModel() {
-    private val _uiState = MutableStateFlow(DuckyScriptUiState(capability = hidCapability.detect()))
+    private val _uiState = MutableStateFlow(restoredInputs(DuckyScriptUiState(capability = hidCapability.detect())))
     val uiState: StateFlow<DuckyScriptUiState> = _uiState.asStateFlow()
 
-    fun updateSource(v: String) { _uiState.value = _uiState.value.copy(source = v) }
+    /**
+     * Input fields, so a process death does not throw away what the user typed.
+     * Results, run state and errors stay volatile on purpose: a restored screen must
+     * not claim a scan is still running.
+     */
+    private fun restoredInputs(state: DuckyScriptUiState) =
+        state.copy(
+            source = savedState["source"] ?: state.source,
+        )
+
+    fun updateSource(v: String) {
+        savedState["source"] = v
+        _uiState.value = _uiState.value.copy(source = v) }
 
     fun parse() {
         val steps = DuckyScriptParser.parse(_uiState.value.source)

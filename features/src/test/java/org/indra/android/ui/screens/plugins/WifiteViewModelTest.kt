@@ -1,5 +1,6 @@
 package org.indra.android.ui.screens.plugins
 
+import androidx.lifecycle.SavedStateHandle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -61,7 +62,7 @@ class WifiteViewModelTest {
         runTest(dispatcher) {
             runner.ready = false
             runner.gate = ToolHandle.DaemonDown
-            val vm = WifiteViewModel(runner)
+            val vm = WifiteViewModel(SavedStateHandle(), runner)
 
             vm.run()
             advanceUntilIdle()
@@ -90,7 +91,7 @@ class WifiteViewModelTest {
             // The engine's own answer: only the `iw` package is missing, not the rootfs.
             runner.capabilities[Capability.IW] =
                 CapabilityState.Missing(Capability.IW, MonitorMode.MISSING_IW_MESSAGE)
-            val vm = WifiteViewModel(runner)
+            val vm = WifiteViewModel(SavedStateHandle(), runner)
 
             vm.run()
             advanceUntilIdle()
@@ -125,7 +126,7 @@ class WifiteViewModelTest {
                 )
             runner.capabilities[Capability.IW] =
                 CapabilityState.Missing(Capability.IW, MonitorMode.MISSING_IW_MESSAGE)
-            val vm = WifiteViewModel(runner)
+            val vm = WifiteViewModel(SavedStateHandle(), runner)
             vm.run()
             advanceUntilIdle()
 
@@ -159,7 +160,7 @@ class WifiteViewModelTest {
                     ),
                 )
             runner.scripts += refused
-            val vm = WifiteViewModel(runner)
+            val vm = WifiteViewModel(SavedStateHandle(), runner)
 
             vm.run()
             advanceUntilIdle()
@@ -191,7 +192,7 @@ class WifiteViewModelTest {
                         ),
                     ),
                 )
-            val vm = WifiteViewModel(runner)
+            val vm = WifiteViewModel(SavedStateHandle(), runner)
 
             vm.run()
             advanceUntilIdle()
@@ -220,7 +221,7 @@ class WifiteViewModelTest {
                         ),
                     ),
                 )
-            val vm = WifiteViewModel(runner)
+            val vm = WifiteViewModel(SavedStateHandle(), runner)
 
             vm.run()
             advanceUntilIdle()
@@ -239,7 +240,7 @@ class WifiteViewModelTest {
             runner.scripts += okMonitor
             runner.scripts += okCapture
             runner.scripts += okCrack
-            val vm = WifiteViewModel(runner)
+            val vm = WifiteViewModel(SavedStateHandle(), runner)
 
             vm.run()
             advanceUntilIdle()
@@ -256,7 +257,7 @@ class WifiteViewModelTest {
             runner.scripts += okMonitor
             runner.scripts += okCapture
             runner.scripts += okCrack
-            val vm = WifiteViewModel(runner)
+            val vm = WifiteViewModel(SavedStateHandle(), runner)
             vm.updateIface("wlan0")
             vm.updateWordlist("/sdcard/my lists/it's.txt")
 
@@ -275,7 +276,7 @@ class WifiteViewModelTest {
             runner.scripts += okMonitor
             runner.scripts += okCapture
             runner.scripts += okCrack
-            val vm = WifiteViewModel(runner)
+            val vm = WifiteViewModel(SavedStateHandle(), runner)
             vm.updateIface("   ")
 
             vm.run()
@@ -292,7 +293,7 @@ class WifiteViewModelTest {
                 listOf(
                     ToolResult(tool = "monitor mode", success = true, status = "running", pid = 77, rawOutput = ""),
                 )
-            val vm = WifiteViewModel(runner)
+            val vm = WifiteViewModel(SavedStateHandle(), runner)
 
             vm.run()
             advanceUntilIdle()
@@ -301,5 +302,34 @@ class WifiteViewModelTest {
             assertEquals(listOf(77), runner.stopped)
             assertEquals("idle", vm.uiState.value.stage)
             assertFalse(vm.uiState.value.isRunning)
+        }
+
+    @Test
+    fun `the interface and wordlist survive a process death`() =
+        runTest(dispatcher) {
+            val handle = SavedStateHandle(mapOf("iface" to "eth0", "wordlist" to "/data/w.txt"))
+
+            val vm = WifiteViewModel(handle, runner)
+            advanceUntilIdle()
+
+            assertEquals("eth0", vm.uiState.value.iface)
+            assertEquals("/data/w.txt", vm.uiState.value.wordlist)
+            // The stage is not an input: a restored screen starts idle, not mid-run.
+            assertEquals("idle", vm.uiState.value.stage)
+            assertFalse(vm.uiState.value.isRunning)
+            assertTrue(vm.uiState.value.output.isEmpty())
+        }
+
+    @Test
+    fun `an edit is written to the saved state`() =
+        runTest(dispatcher) {
+            val handle = SavedStateHandle()
+            val vm = WifiteViewModel(handle, runner)
+
+            vm.updateIface("eth0")
+            vm.updateWordlist("/data/w.txt")
+
+            assertEquals("eth0", handle.get<String>("iface"))
+            assertEquals("/data/w.txt", handle.get<String>("wordlist"))
         }
 }

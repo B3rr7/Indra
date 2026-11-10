@@ -1,5 +1,6 @@
 package org.indra.android.ui.screens.plugins
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -25,15 +26,27 @@ data class IptablesUiState(
 class IptablesViewModel
     @Inject
     constructor(
+        private val savedState: SavedStateHandle,
         private val toolBox: ToolRunner,
     ) : ViewModel() {
-        private val _uiState = MutableStateFlow(IptablesUiState())
+        private val _uiState = MutableStateFlow(restoredInputs(IptablesUiState()))
         val uiState: StateFlow<IptablesUiState> = _uiState.asStateFlow()
+
+        /**
+         * Input fields, so a process death does not throw away what the user typed.
+         * Results, run state and errors stay volatile on purpose: a restored screen must
+         * not claim a scan is still running.
+         */
+        private fun restoredInputs(state: IptablesUiState) =
+            state.copy(
+                args = savedState["args"] ?: state.args,
+            )
 
         private var job: Job? = null
         private var pid = -1
 
         fun updateArgs(v: String) {
+            savedState["args"] = v
             _uiState.value = _uiState.value.copy(args = v)
         }
 

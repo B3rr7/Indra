@@ -1,5 +1,6 @@
 package org.indra.android.ui.screens.plugins
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -41,16 +42,35 @@ data class WifiteUiState(
 class WifiteViewModel
     @Inject
     constructor(
+        private val savedState: SavedStateHandle,
         private val toolBox: ToolRunner,
     ) : ViewModel() {
-        private val _uiState = MutableStateFlow(WifiteUiState(wordlist = toolBox.defaultWordlist(), capturePath = toolBox.capturePath()))
+        private val _uiState =
+            MutableStateFlow(
+                restoredInputs(
+                    WifiteUiState(wordlist = toolBox.defaultWordlist(), capturePath = toolBox.capturePath()),
+                ),
+            )
         val uiState: StateFlow<WifiteUiState> = _uiState.asStateFlow()
 
+        /**
+         * Input fields, so a process death does not throw away what the user typed.
+         * Results, run state and errors stay volatile on purpose: a restored screen must
+         * not claim a scan is still running.
+         */
+        private fun restoredInputs(state: WifiteUiState) =
+            state.copy(
+                iface = savedState["iface"] ?: state.iface,
+                wordlist = savedState["wordlist"] ?: state.wordlist,
+            )
+
         fun updateIface(v: String) {
+            savedState["iface"] = v
             _uiState.value = _uiState.value.copy(iface = v)
         }
 
         fun updateWordlist(v: String) {
+            savedState["wordlist"] = v
             _uiState.value = _uiState.value.copy(wordlist = v)
         }
 

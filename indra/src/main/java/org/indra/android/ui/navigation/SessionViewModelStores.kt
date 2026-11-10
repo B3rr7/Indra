@@ -115,6 +115,14 @@ private class SessionStoreOwner(
             MutableCreationExtras(activity.defaultViewModelCreationExtras).apply {
                 set(ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY, activity.application)
                 set(SAVED_STATE_REGISTRY_OWNER_KEY, activity)
-                set(VIEW_MODEL_STORE_OWNER_KEY, this@SessionStoreOwner)
+                // Deliberately the Activity, not this owner. A `SavedStateHandle` is filed in the
+                // `SavedStateHandlesVM` of *this* key's owner, while the `SavedStateHandlesProvider`
+                // that writes it into the bundle and reads it back serialises the Activity's own
+                // instance. Pointing this at the destination store therefore produced a handle that
+                // was never saved (device: `handles=[]` at save, `keys=[]` at restore); the Activity
+                // lets 32 plugin ViewModels keep their typed input across process death. The
+                // ViewModel itself still lives in the destination store — this key is only consulted
+                // to find where its handle is kept.
+                set(VIEW_MODEL_STORE_OWNER_KEY, activity)
             }
 }

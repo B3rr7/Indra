@@ -1,5 +1,6 @@
 package org.indra.android.ui.screens.plugins
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -34,33 +35,53 @@ data class ArsenalUiState(
 class ArsenalViewModel
     @Inject
     constructor(
+        private val savedState: SavedStateHandle,
         private val repo: ArsenalRepository,
         private val toolBox: ToolRunner,
     ) : ViewModel() {
-        private val _uiState = MutableStateFlow(ArsenalUiState(templates = repo.getAll()))
+        private val _uiState = MutableStateFlow(restoredInputs(ArsenalUiState(templates = repo.getAll())))
         val uiState: StateFlow<ArsenalUiState> = _uiState.asStateFlow()
+
+        /**
+         * Input fields, so a process death does not throw away what the user typed.
+         * Results, run state and errors stay volatile on purpose: a restored screen must
+         * not claim a scan is still running.
+         */
+        private fun restoredInputs(state: ArsenalUiState) =
+            state.copy(
+                targetIp = savedState["targetIp"] ?: state.targetIp,
+                targetPort = savedState["targetPort"] ?: state.targetPort,
+                targetMac = savedState["targetMac"] ?: state.targetMac,
+                gateway = savedState["gateway"] ?: state.gateway,
+                mask = savedState["mask"] ?: state.mask,
+            )
 
         fun refresh() {
             _uiState.value = _uiState.value.copy(templates = repo.getAll())
         }
 
         fun updateIp(v: String) {
+            savedState["targetIp"] = v
             _uiState.value = _uiState.value.copy(targetIp = v)
         }
 
         fun updatePort(v: String) {
+            savedState["targetPort"] = v
             _uiState.value = _uiState.value.copy(targetPort = v)
         }
 
         fun updateMac(v: String) {
+            savedState["targetMac"] = v
             _uiState.value = _uiState.value.copy(targetMac = v)
         }
 
         fun updateGw(v: String) {
+            savedState["gateway"] = v
             _uiState.value = _uiState.value.copy(gateway = v)
         }
 
         fun updateMask(v: String) {
+            savedState["mask"] = v
             _uiState.value = _uiState.value.copy(mask = v)
         }
 

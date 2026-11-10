@@ -1,5 +1,6 @@
 package org.indra.android.ui.screens.plugins
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -25,13 +26,26 @@ data class HidUiState(
 
 @HiltViewModel
 class HidViewModel @Inject constructor(
+    private val savedState: SavedStateHandle,
     private val hidCapability: HidCapability,
     private val toolBox: SmartToolBox
 ) : ViewModel() {
-    private val _uiState = MutableStateFlow(HidUiState(capability = hidCapability.detect()))
+    private val _uiState = MutableStateFlow(restoredInputs(HidUiState(capability = hidCapability.detect())))
     val uiState: StateFlow<HidUiState> = _uiState.asStateFlow()
 
-    fun updateText(v: String) { _uiState.value = _uiState.value.copy(text = v) }
+    /**
+     * Input fields, so a process death does not throw away what the user typed.
+     * Results, run state and errors stay volatile on purpose: a restored screen must
+     * not claim a scan is still running.
+     */
+    private fun restoredInputs(state: HidUiState) =
+        state.copy(
+            text = savedState["text"] ?: state.text,
+        )
+
+    fun updateText(v: String) {
+        savedState["text"] = v
+        _uiState.value = _uiState.value.copy(text = v) }
 
     fun typeText() {
         val st = _uiState.value
