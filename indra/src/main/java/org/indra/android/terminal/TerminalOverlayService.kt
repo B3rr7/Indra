@@ -42,7 +42,7 @@ import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import dagger.hilt.android.AndroidEntryPoint
 import org.indra.android.MainActivity
 import org.indra.android.R
-import org.indra.android.core.system.terminal.TerminalSession
+import org.indra.android.core.system.terminal.TerminalSessions
 import org.indra.android.ui.screens.terminal.TerminalBubble
 import org.indra.android.ui.screens.terminal.TerminalBubblePanel
 import org.indra.android.ui.screens.terminal.TerminalPanelActions
@@ -72,13 +72,13 @@ private const val DEFAULT_PANEL_HEIGHT_FRACTION = 0.45f
  * the activity is gone, so this is what makes "run the shell, open Chrome, watch it" work.
  * The window is a plain `ComposeView` with hand-built owners (an overlay has no activity to
  * inherit them from) rendering the exact same panel the in-app bubble uses, and the command
- * itself lives in the [TerminalSession] singleton — this service is only a surface.
+ * itself lives in the [TerminalSessions] singleton — this service is only a surface.
  */
 @Suppress("TooManyFunctions") // window lifecycle + resize + notification + owner plumbing
 @AndroidEntryPoint
 class TerminalOverlayService : Service() {
     @Inject
-    lateinit var session: TerminalSession
+    lateinit var sessions: TerminalSessions
 
     private lateinit var windowManager: WindowManager
     private lateinit var params: WindowManager.LayoutParams
@@ -138,7 +138,7 @@ class TerminalOverlayService : Service() {
                 setContent {
                     IndraTheme {
                         OverlayContent(
-                            session = session,
+                            sessions = sessions,
                             expanded = expanded,
                             actions =
                                 OverlayActions(
@@ -146,11 +146,11 @@ class TerminalOverlayService : Service() {
                                     onMove = ::dragBy,
                                     panel =
                                         TerminalPanelActions(
-                                            onRun = session::run,
-                                            onStop = session::stop,
+                                            onRun = { command -> sessions.active.run(command) },
+                                            onStop = { sessions.active.stop() },
                                             onCollapse = { applyExpanded(false) },
                                             onClose = {
-                                                session.setPreferences(bubbleVisible = false)
+                                                sessions.setPreferences(bubbleVisible = false)
                                                 stopSelf()
                                             },
                                             onZoom = ::zoomBy,
@@ -179,7 +179,7 @@ class TerminalOverlayService : Service() {
         val metrics = resources.displayMetrics
         if (value) {
             // Pick up whatever size was last chosen (it may have been set from the in-app bubble).
-            val saved = session.state.value
+            val saved = sessions.active.state.value
             panelWidthFraction = saved.panelWidth
             panelHeightFraction = saved.panelHeight
             // Focusable so the soft keyboard can type into the panel; the platform IME only
@@ -224,7 +224,7 @@ class TerminalOverlayService : Service() {
         params.x = params.x.coerceIn(0, (metrics.widthPixels - params.width).coerceAtLeast(0))
         params.y = params.y.coerceIn(0, (usable - params.height).coerceAtLeast(0))
         view?.let { runCatching { windowManager.updateViewLayout(it, params) } }
-        session.setPreferences(panelWidth = panelWidthFraction, panelHeight = panelHeightFraction)
+        sessions.setPreferences(panelWidth = panelWidthFraction, panelHeight = panelHeightFraction)
     }
 
     /** Pinch factor (1.0 = no change) from the panel header. */
@@ -348,10 +348,12 @@ private data class OverlayActions(
 
 @Composable
 private fun OverlayContent(
-    session: TerminalSession,
+    sessions: TerminalSessions,
     expanded: Boolean,
     actions: OverlayActions,
 ) {
+    val tabs by sessions.state.collectAsStateWithLifecycle()
+    val session = tabs.activeTab.session
     val state by session.state.collectAsStateWithLifecycle()
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         if (expanded) {

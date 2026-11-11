@@ -9,7 +9,7 @@ import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
-import org.indra.android.core.system.terminal.TerminalSession
+import org.indra.android.core.system.terminal.TerminalSessions
 import org.indra.android.ui.screens.home.HomeScreen
 import org.indra.android.ui.screens.plugins.ArsenalScreen
 import org.indra.android.ui.screens.plugins.BettercapScreen
@@ -67,7 +67,7 @@ fun IndraNavHost(
     navigationState: NavigationState = rememberNavigationState(),
     navigator: Navigator = remember(navigationState) { Navigator(navigationState) },
     modifier: Modifier = Modifier,
-    terminalSession: TerminalSession? = null,
+    terminalSessions: TerminalSessions? = null,
 ) {
     val onNavigateToPlugin: (String) -> Unit = { name -> pluginDestination(name)?.let(navigator::navigate) }
 
@@ -92,7 +92,7 @@ fun IndraNavHost(
             ),
         entryProvider =
             entryProvider<NavKey> {
-                rootEntries(navigator, onNavigateToPlugin, terminalSession)
+                rootEntries(navigator, onNavigateToPlugin, terminalSessions)
                 networkEntries(navigator)
                 attackEntries(navigator)
                 webEntries(navigator)
@@ -107,7 +107,7 @@ fun IndraNavHost(
 private fun EntryProviderScope<NavKey>.rootEntries(
     navigator: Navigator,
     onNavigateToPlugin: (String) -> Unit,
-    terminalSession: TerminalSession?,
+    terminalSessions: TerminalSessions?,
 ) {
     entry<Screen.Home> {
         HomeScreen(
@@ -118,10 +118,10 @@ private fun EntryProviderScope<NavKey>.rootEntries(
     }
     entry<Screen.Tools> { ToolsScreen(onNavigateToPlugin = onNavigateToPlugin) }
     entry<Screen.Terminal> {
-        // The terminal needs a live session; without one there is nothing to draw, exactly as
-        // before (the old graph rendered an empty destination too).
-        terminalSession?.let { session ->
-            TerminalScreen(onNavigateBack = { navigator.goBack() }, session = session)
+        // The terminal needs a live tab manager; without one there is nothing to draw, exactly
+        // as before (the old graph rendered an empty destination too).
+        terminalSessions?.let { sessions ->
+            TerminalScreen(onNavigateBack = { navigator.goBack() }, sessions = sessions)
         }
     }
     entry<Screen.Settings> {

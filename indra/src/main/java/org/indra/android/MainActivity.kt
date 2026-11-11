@@ -49,7 +49,7 @@ import org.indra.android.core.system.RootAccess
 import org.indra.android.core.system.RootManager
 import org.indra.android.core.system.RuntimePermissions
 import org.indra.android.core.system.SettingsRepository
-import org.indra.android.core.system.terminal.TerminalSession
+import org.indra.android.core.system.terminal.TerminalSessions
 import org.indra.android.core.system.wallpaper.WallpaperState
 import org.indra.android.core.system.wallpaper.WallpaperStore
 import org.indra.android.terminal.TerminalBubbleHost
@@ -78,7 +78,7 @@ class MainActivity : ComponentActivity() {
     lateinit var indraSystem: IndraSystem
 
     @Inject
-    lateinit var terminalSession: TerminalSession
+    lateinit var terminalSessions: TerminalSessions
 
     @Inject
     lateinit var settings: SettingsRepository
@@ -180,7 +180,7 @@ class MainActivity : ComponentActivity() {
                         permissionPrompt = permissionPrompt,
                         onRequestPermissions = ::requestPermissionsIfNeeded,
                         onOpenAppSettings = ::openAppPermissionSettings,
-                        terminalSession = terminalSession,
+                        terminalSessions = terminalSessions,
                         rootHint = rootHint,
                         onOpenRootManager = { rootManager.openRootManager() },
                         onDismissRootHint = { rootHint = null },
@@ -334,7 +334,7 @@ fun MainScaffold(
     permissionPrompt: PermissionPrompt = PermissionPrompt(),
     onRequestPermissions: () -> Unit = {},
     onOpenAppSettings: () -> Unit = {},
-    terminalSession: TerminalSession? = null,
+    terminalSessions: TerminalSessions? = null,
     rootHint: String? = null,
     onOpenRootManager: (() -> Unit)? = null,
     onDismissRootHint: () -> Unit = {},
@@ -412,12 +412,12 @@ fun MainScaffold(
             IndraNavHost(
                 navigationState = navigationState,
                 navigator = navigator,
-                terminalSession = terminalSession,
+                terminalSessions = terminalSessions,
             )
             // The floating terminal sits above the navigation host but inside the bottom bar,
             // so it never covers the tabs it is meant to let you use.
-            if (terminalSession != null) {
-                TerminalBubbleHost(session = terminalSession)
+            if (terminalSessions != null) {
+                TerminalBubbleHost(sessions = terminalSessions)
             }
         }
     }

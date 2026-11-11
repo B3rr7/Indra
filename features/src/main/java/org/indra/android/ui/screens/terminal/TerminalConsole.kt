@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -66,6 +65,7 @@ import org.indra.android.core.system.terminal.TerminalInputMode
 import org.indra.android.core.system.terminal.TerminalKeys
 import org.indra.android.core.system.terminal.TerminalSession
 import org.indra.android.core.system.terminal.TerminalType
+import org.indra.android.ui.components.AutoFollowState
 import org.indra.android.ui.components.rememberAutoFollowState
 
 private const val PAD_NORMAL = 8
@@ -76,6 +76,19 @@ private const val KEY_FONT = 13
 private const val KEY_FONT_COMPACT = 11
 private const val DIM_ALPHA = 0.65f
 private const val SNIPPET_ALPHA = 0.35f
+
+/**
+ * The console state that has to outlive its composition.
+ *
+ * A tab is switched by taking its console out of the tree, which disposes every `remember` in it —
+ * the half-typed command, the caret and the scroll position with it. The host therefore keeps one
+ * of these per tab and hands it back on return; the floating surfaces keep one of their own.
+ */
+class TerminalConsoleState {
+    internal val editor = PromptEditor()
+    internal val listState = LazyListState()
+    internal val follow = AutoFollowState()
+}
 
 /**
  * The terminal itself: a scrolling transcript of ANSI-coloured lines with the prompt as its
@@ -92,12 +105,13 @@ fun TerminalConsole(
     modifier: Modifier = Modifier,
     compact: Boolean = false,
     showSnippets: Boolean = true,
+    console: TerminalConsoleState = remember { TerminalConsoleState() },
     onRun: (String) -> Unit,
     onStop: () -> Unit,
 ) {
-    val editor = remember { PromptEditor() }
-    val listState = rememberLazyListState()
-    val follow = rememberAutoFollowState(listState)
+    val editor = console.editor
+    val listState = console.listState
+    val follow = rememberAutoFollowState(listState, console.follow)
     // Focus requests go through a counter rather than a direct call: the prompt is an item of
     // the transcript now, so it has to be scrolled into view — and composed — before it can
     // hold the caret.

@@ -29,8 +29,10 @@ class AutoFollowState {
 }
 
 @Composable
-fun rememberAutoFollowState(listState: LazyListState): AutoFollowState {
-    val state = remember { AutoFollowState() }
+fun rememberAutoFollowState(
+    listState: LazyListState,
+    state: AutoFollowState = remember { AutoFollowState() },
+): AutoFollowState {
     LaunchedEffect(listState) {
         listState.interactionSource.interactions.collect { interaction ->
             if (interaction is DragInteraction.Start) state.following = false

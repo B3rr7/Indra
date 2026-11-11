@@ -24,6 +24,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.indra.android.core.system.terminal.TerminalSession
+import org.indra.android.core.system.terminal.TerminalSessions
 import org.indra.android.ui.screens.terminal.TerminalBubble
 import org.indra.android.ui.screens.terminal.TerminalBubblePanel
 import org.indra.android.ui.screens.terminal.TerminalPanelActions
@@ -47,9 +48,13 @@ private const val START_VERTICAL_FRACTION = 0.6f
  */
 @Composable
 fun TerminalBubbleHost(
-    session: TerminalSession,
+    sessions: TerminalSessions,
     modifier: Modifier = Modifier,
 ) {
+    // The bubble follows the active tab: switching tabs in the screen is also switching what
+    // this floating panel shows, because both render the same session.
+    val tabs by sessions.state.collectAsStateWithLifecycle()
+    val session = tabs.activeTab.session
     val state by session.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var canOverlay by remember { mutableStateOf(TerminalOverlayService.canDrawOverlays(context)) }
@@ -57,7 +62,7 @@ fun TerminalBubbleHost(
 
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         canOverlay = TerminalOverlayService.canDrawOverlays(context)
-        session.refresh()
+        sessions.refresh()
     }
 
     // The service is the only surface that survives the activity, so it is started (and
@@ -95,6 +100,7 @@ fun TerminalBubbleHost(
 
         if (expanded) {
             ExpandedFloatingPanel(
+                sessions = sessions,
                 session = session,
                 state = state,
                 containerWidth = containerW,
@@ -133,6 +139,7 @@ fun TerminalBubbleHost(
  */
 @Composable
 private fun ExpandedFloatingPanel(
+    sessions: TerminalSessions,
     session: TerminalSession,
     state: TerminalSession.State,
     containerWidth: Float,
@@ -147,19 +154,17 @@ private fun ExpandedFloatingPanel(
                 onRun = session::run,
                 onStop = session::stop,
                 onCollapse = onCollapse,
-                onClose = { session.setPreferences(bubbleVisible = false) },
+                onClose = { sessions.setPreferences(bubbleVisible = false) },
                 onZoom = { zoom ->
-                    val current = session.state.value
-                    session.setPreferences(
-                        panelWidth = (current.panelWidth * zoom).coerceIn(MIN_PANEL_FRACTION, 1f),
-                        panelHeight = (current.panelHeight * zoom).coerceIn(MIN_PANEL_FRACTION, 1f),
+                    sessions.setPreferences(
+                        panelWidth = (state.panelWidth * zoom).coerceIn(MIN_PANEL_FRACTION, 1f),
+                        panelHeight = (state.panelHeight * zoom).coerceIn(MIN_PANEL_FRACTION, 1f),
                     )
                 },
                 onResizeBy = { delta ->
-                    val current = session.state.value
-                    session.setPreferences(
-                        panelWidth = (current.panelWidth + delta.x / containerWidth).coerceIn(MIN_PANEL_FRACTION, 1f),
-                        panelHeight = (current.panelHeight + delta.y / containerHeight).coerceIn(MIN_PANEL_FRACTION, 1f),
+                    sessions.setPreferences(
+                        panelWidth = (state.panelWidth + delta.x / containerWidth).coerceIn(MIN_PANEL_FRACTION, 1f),
+                        panelHeight = (state.panelHeight + delta.y / containerHeight).coerceIn(MIN_PANEL_FRACTION, 1f),
                     )
                 },
             ),

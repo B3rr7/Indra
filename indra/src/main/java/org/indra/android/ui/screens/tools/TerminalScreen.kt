@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -35,6 +36,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -51,10 +53,13 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.indra.android.core.system.terminal.TerminalInputMode
 import org.indra.android.core.system.terminal.TerminalSession
+import org.indra.android.core.system.terminal.TerminalSessions
 import org.indra.android.core.system.terminal.TerminalType
 import org.indra.android.terminal.TerminalOverlayService
 import org.indra.android.ui.screens.terminal.TerminalConsole
+import org.indra.android.ui.screens.terminal.TerminalConsoleState
 import org.indra.android.ui.screens.terminal.TerminalPalette
+import org.indra.android.ui.screens.terminal.TerminalTabStrip
 
 /** Height of the zoom rocker; two halves of 22dp still reach the 44dp the bar has room for. */
 private const val ROCKER_HEIGHT = 44
@@ -90,19 +95,27 @@ private data class TerminalActions(
 @Composable
 fun TerminalScreen(
     onNavigateBack: () -> Unit,
-    session: TerminalSession,
+    sessions: TerminalSessions,
 ) {
+    val tabs by sessions.state.collectAsStateWithLifecycle()
+    val active = tabs.activeTab
+    val session = active.session
     val state by session.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var canOverlay by remember { mutableStateOf(Settings.canDrawOverlays(context)) }
+    // One console state per tab. A tab switch takes the console out of the tree (`key`), which
+    // disposes every `remember` inside it; this map is what brings back the half-typed command,
+    // the caret and the scroll position with the tab.
+    val consoles = remember { mutableMapOf<Int, TerminalConsoleState>() }
+    val console = consoles.getOrPut(active.id) { TerminalConsoleState() }
 
     // The user may grant "display over other apps" while we are paused; the offer to grant
     // must disappear when they come back, otherwise the screen keeps nagging after the fix.
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         canOverlay = Settings.canDrawOverlays(context)
-        session.refresh()
+        sessions.refresh()
     }
-    LaunchedEffect(Unit) { session.refresh() }
+    LaunchedEffect(Unit) { sessions.refresh() }
 
     Scaffold(
         topBar = {
@@ -112,16 +125,16 @@ fun TerminalScreen(
                 actions =
                     TerminalActions(
                         onNavigateBack = onNavigateBack,
-                        onToggleBubble = { session.setPreferences(bubbleVisible = !state.bubbleVisible) },
+                        onToggleBubble = { sessions.setPreferences(bubbleVisible = !state.bubbleVisible) },
                         onClear = session::clear,
                         onZoom = { direction ->
-                            session.setPreferences(
+                            sessions.setPreferences(
                                 fontSize = TerminalType.step(state.fontSize, direction),
                             )
                         },
                         onToggleChroot = { session.setChroot(!state.chroot) },
-                        onSelectInputMode = { mode -> session.setPreferences(mode = mode) },
-                        onToggleSymbolKeys = { session.setPreferences(symbolKeys = !state.symbolKeys) },
+                        onSelectInputMode = { mode -> sessions.setPreferences(mode = mode) },
+                        onToggleSymbolKeys = { sessions.setPreferences(symbolKeys = !state.symbolKeys) },
                         onAllowOverlay = {
                             context.startActivity(TerminalOverlayService.permissionIntent(context))
                         },
@@ -129,21 +142,46 @@ fun TerminalScreen(
             )
         },
     ) { padding ->
-        TerminalContent(
-            state = state,
-            canOverlay = canOverlay,
+        Column(
             modifier =
                 Modifier
                     .fillMaxSize()
                     .padding(padding)
+                    // The Scaffold consumed the top bar's height; consuming the same padding keeps
+                    // the IME inset the rest of the screen sees the *uncovered* part only.
+                    .consumeWindowInsets(padding)
                     // The window is edge-to-edge (enableEdgeToEdge), so the platform does not
                     // shrink it for the IME: without this the prompt line and the send button
                     // sit *under* the keyboard and the terminal cannot be typed into.
                     .imePadding(),
-            onRun = session::run,
-            onStop = session::stop,
-            onAllowOverlay = { context.startActivity(TerminalOverlayService.permissionIntent(context)) },
-        )
+        ) {
+            TerminalTabStrip(
+                tabs = tabs.tabs,
+                activeId = active.id,
+                onSelect = sessions::select,
+                onOpen = sessions::open,
+                onClose = sessions::close,
+            )
+            // Keyed by the tab: switching disposes this composition so the scroll behaviour's
+            // effects restart for the new tab, while `console` carries the state that must
+            // survive (text, caret, scroll, follow).
+            key(active.id) {
+                TerminalContent(
+                    state = state,
+                    console = console,
+                    canOverlay = canOverlay,
+                    modifier =
+                        Modifier
+                            .weight(1f)
+                            .fillMaxWidth(),
+                    onRun = session::run,
+                    onStop = session::stop,
+                    onAllowOverlay = {
+                        context.startActivity(TerminalOverlayService.permissionIntent(context))
+                    },
+                )
+            }
+        }
     }
 }
 
@@ -368,6 +406,7 @@ private fun TerminalMenu(
 @Composable
 private fun TerminalContent(
     state: TerminalSession.State,
+    console: TerminalConsoleState,
     canOverlay: Boolean,
     modifier: Modifier = Modifier,
     onRun: (String) -> Unit,
@@ -398,6 +437,7 @@ private fun TerminalContent(
         TerminalConsole(
             state = state,
             modifier = Modifier.weight(1f),
+            console = console,
             onRun = onRun,
             onStop = onStop,
         )
