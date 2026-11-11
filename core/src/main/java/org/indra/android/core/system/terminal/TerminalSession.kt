@@ -71,6 +71,8 @@ class TerminalSession
             val inputMode: TerminalInputMode = TerminalInputMode.DEFAULT,
             /** Whether the Termux-style symbol row is shown. */
             val symbolKeys: Boolean = true,
+            /** Transcript font size in sp, adjustable from the terminal's top bar. */
+            val fontSize: Int = TerminalType.DEFAULT,
             /** Floating bubble requested (it renders in-app, or over other apps with the
              *  overlay permission). */
             val bubbleVisible: Boolean = false,
@@ -121,6 +123,7 @@ class TerminalSession
                 val rootless = settings.rootlessMode
                 val mode = TerminalInputMode.fromStored(settings.terminalInputMode)
                 val symbols = settings.terminalSymbolKeys
+                val fontSize = settings.terminalFontSize
                 val panelWidth = settings.terminalPanelWidth
                 val panelHeight = settings.terminalPanelHeight
                 _state.update {
@@ -130,6 +133,7 @@ class TerminalSession
                         rootless = rootless,
                         inputMode = mode,
                         symbolKeys = symbols,
+                        fontSize = fontSize,
                         panelWidth = panelWidth,
                         panelHeight = panelHeight,
                         // Rootless mode cannot enter the guest, so a chroot left on from a rooted
@@ -151,12 +155,14 @@ class TerminalSession
         fun setPreferences(
             mode: TerminalInputMode? = null,
             symbolKeys: Boolean? = null,
+            fontSize: Int? = null,
             bubbleVisible: Boolean? = null,
             panelWidth: Float? = null,
             panelHeight: Float? = null,
         ) {
             mode?.let { settings.terminalInputMode = it.name }
             symbolKeys?.let { settings.terminalSymbolKeys = it }
+            fontSize?.let { settings.terminalFontSize = TerminalType.normalize(it) }
             bubbleVisible?.let { settings.terminalBubbleEnabled = it }
             panelWidth?.let { settings.terminalPanelWidth = it }
             panelHeight?.let { settings.terminalPanelHeight = it }
@@ -164,6 +170,7 @@ class TerminalSession
                 it.copy(
                     inputMode = mode ?: it.inputMode,
                     symbolKeys = symbolKeys ?: it.symbolKeys,
+                    fontSize = fontSize?.let(TerminalType::normalize) ?: it.fontSize,
                     bubbleVisible = bubbleVisible ?: it.bubbleVisible,
                     panelWidth = panelWidth ?: it.panelWidth,
                     panelHeight = panelHeight ?: it.panelHeight,

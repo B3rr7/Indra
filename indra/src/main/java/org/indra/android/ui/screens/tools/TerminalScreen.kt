@@ -1,15 +1,23 @@
 package org.indra.android.ui.screens.tools
 
 import android.provider.Settings
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material3.DropdownMenu
@@ -20,6 +28,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -31,6 +40,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
@@ -41,9 +51,16 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.indra.android.core.system.terminal.TerminalInputMode
 import org.indra.android.core.system.terminal.TerminalSession
+import org.indra.android.core.system.terminal.TerminalType
 import org.indra.android.terminal.TerminalOverlayService
 import org.indra.android.ui.screens.terminal.TerminalConsole
 import org.indra.android.ui.screens.terminal.TerminalPalette
+
+/** Height of the zoom rocker; two halves of 22dp still reach the 44dp the bar has room for. */
+private const val ROCKER_HEIGHT = 44
+private const val ICON_GLYPH = 18
+private const val DISABLED_ALPHA = 0.3f
+private const val ROCKER_ALPHA = 0.45f
 
 /**
  * The full-screen terminal.
@@ -62,6 +79,7 @@ private data class TerminalActions(
     val onNavigateBack: () -> Unit,
     val onToggleBubble: () -> Unit,
     val onClear: () -> Unit,
+    val onZoom: (Int) -> Unit,
     val onToggleChroot: () -> Unit,
     val onSelectInputMode: (TerminalInputMode) -> Unit,
     val onToggleSymbolKeys: () -> Unit,
@@ -96,6 +114,11 @@ fun TerminalScreen(
                         onNavigateBack = onNavigateBack,
                         onToggleBubble = { session.setPreferences(bubbleVisible = !state.bubbleVisible) },
                         onClear = session::clear,
+                        onZoom = { direction ->
+                            session.setPreferences(
+                                fontSize = TerminalType.step(state.fontSize, direction),
+                            )
+                        },
                         onToggleChroot = { session.setChroot(!state.chroot) },
                         onSelectInputMode = { mode -> session.setPreferences(mode = mode) },
                         onToggleSymbolKeys = { session.setPreferences(symbolKeys = !state.symbolKeys) },
@@ -151,6 +174,7 @@ private fun TerminalTopBar(
             }
         },
         actions = {
+            ZoomRocker(fontSize = state.fontSize, onZoom = actions.onZoom)
             IconButton(onClick = actions.onToggleBubble) {
                 Icon(
                     Icons.Outlined.Terminal,
@@ -178,6 +202,83 @@ private fun TerminalTopBar(
             )
         },
     )
+}
+
+/**
+ * The zoom rocker: two chevrons in one pill, up for bigger text, down for smaller.
+ *
+ * A rocker rather than a menu entry because the transcript's size is the one terminal setting
+ * changed *while reading* — the control belongs next to the output it scales, not two taps deep in
+ * a menu. Each half is a plain clickable box instead of an [IconButton]: two 48dp buttons stacked
+ * in the bar would be taller than the bar itself.
+ */
+@Composable
+private fun ZoomRocker(
+    fontSize: Int,
+    onZoom: (Int) -> Unit,
+) {
+    Surface(
+        shape = RoundedCornerShape(10.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = ROCKER_ALPHA),
+        modifier =
+            Modifier
+                .padding(end = 4.dp)
+                .width(28.dp)
+                .height(ROCKER_HEIGHT.dp),
+    ) {
+        Column {
+            ZoomKey(
+                icon = Icons.Default.KeyboardArrowUp,
+                description = "Zoom in",
+                enabled = TerminalType.canZoomIn(fontSize),
+                modifier = Modifier.weight(1f),
+                onClick = { onZoom(1) },
+            )
+            ZoomKey(
+                icon = Icons.Default.KeyboardArrowDown,
+                description = "Zoom out",
+                enabled = TerminalType.canZoomOut(fontSize),
+                modifier = Modifier.weight(1f),
+                onClick = { onZoom(-1) },
+            )
+        }
+    }
+}
+
+/**
+ * One half of the rocker.
+ *
+ * The tint is computed rather than passed whole: an explicit `tint =` ignores `enabled`, which is
+ * how the history arrows ended up looking live while disabled.
+ */
+@Composable
+private fun ZoomKey(
+    icon: ImageVector,
+    description: String,
+    enabled: Boolean,
+    modifier: Modifier,
+    onClick: () -> Unit,
+) {
+    val tint =
+        if (enabled) {
+            MaterialTheme.colorScheme.onSurface
+        } else {
+            MaterialTheme.colorScheme.onSurface.copy(alpha = DISABLED_ALPHA)
+        }
+    Box(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .clickable(enabled = enabled, onClickLabel = description) { onClick() },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = description,
+            tint = tint,
+            modifier = Modifier.size(ICON_GLYPH.dp),
+        )
+    }
 }
 
 /**

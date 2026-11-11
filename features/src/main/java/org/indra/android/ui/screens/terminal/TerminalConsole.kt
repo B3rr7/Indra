@@ -63,12 +63,9 @@ import org.indra.android.core.system.terminal.AnsiStyle
 import org.indra.android.core.system.terminal.TerminalInputMode
 import org.indra.android.core.system.terminal.TerminalKeys
 import org.indra.android.core.system.terminal.TerminalSession
+import org.indra.android.core.system.terminal.TerminalType
 import org.indra.android.ui.components.rememberAutoFollowState
 
-private const val FONT_NORMAL = 12
-private const val FONT_COMPACT = 10
-private const val LINE_NORMAL = 17
-private const val LINE_COMPACT = 14
 private const val PAD_NORMAL = 8
 private const val PAD_COMPACT = 6
 private const val ICON_NORMAL = 22
@@ -188,6 +185,10 @@ private fun Transcript(
 ) {
     val padding = if (compact) PAD_COMPACT else PAD_NORMAL
     val empty = state.lines.isEmpty()
+    // The user's zoom choice, resolved for this surface: the floating panel is a couple of points
+    // smaller, and the leading follows the font so a zoomed line still reads as one line.
+    val font = TerminalType.fontFor(state.fontSize, compact)
+    val lineHeight = TerminalType.lineHeight(font)
     LazyColumn(
         state = listState,
         modifier = modifier.fillMaxWidth(),
@@ -205,7 +206,7 @@ private fun Transcript(
                             "▲ ▼ walk the history; \"clear\" wipes the screen.",
                     color = TerminalPalette.info,
                     fontFamily = FontFamily.Monospace,
-                    fontSize = (if (compact) FONT_COMPACT else FONT_NORMAL).sp,
+                    fontSize = font.sp,
                 )
             }
         }
@@ -214,7 +215,7 @@ private fun Transcript(
             key = { it.id },
             contentType = { "terminal-line" },
         ) { line ->
-            LineRow(line, compact)
+            LineRow(line, font, lineHeight)
         }
         if (state.running) {
             item(key = "cursor") {
@@ -222,7 +223,7 @@ private fun Transcript(
                     text = "▌",
                     color = TerminalPalette.accent,
                     fontFamily = FontFamily.Monospace,
-                    fontSize = (if (compact) FONT_COMPACT else FONT_NORMAL).sp,
+                    fontSize = font.sp,
                 )
             }
         }
@@ -234,13 +235,14 @@ private fun Transcript(
 @Composable
 private fun LineRow(
     line: TerminalSession.Line,
-    compact: Boolean,
+    font: Int,
+    lineHeight: Int,
 ) {
     Text(
         text = line.annotated(),
         fontFamily = FontFamily.Monospace,
-        fontSize = (if (compact) FONT_COMPACT else FONT_NORMAL).sp,
-        lineHeight = (if (compact) LINE_COMPACT else LINE_NORMAL).sp,
+        fontSize = font.sp,
+        lineHeight = lineHeight.sp,
     )
 }
 
@@ -262,7 +264,7 @@ private fun InputRow(
     focusRequester: FocusRequester,
     onStop: () -> Unit,
 ) {
-    val font = (if (compact) FONT_COMPACT else FONT_NORMAL).sp
+    val font = TerminalType.fontFor(state.fontSize, compact).sp
     val iconSize = (if (compact) ICON_COMPACT else ICON_NORMAL).dp
     val input = field.text
     // The field owns its selection so a tap-to-place-cursor works, but every change is reported

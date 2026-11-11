@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import dagger.hilt.android.qualifiers.ApplicationContext
 import org.indra.android.core.data.bundle.BundleManifest
+import org.indra.android.core.system.terminal.TerminalType
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -173,6 +174,17 @@ class SettingsRepository
         var terminalPanelHeight: Float
             get() = prefs.getFloat("TERMINAL_PANEL_HEIGHT", DEFAULT_TERMINAL_PANEL_HEIGHT)
             set(value) = prefs.edit().putFloat("TERMINAL_PANEL_HEIGHT", value).apply()
+
+        /**
+         * The transcript's font size, in sp (clamped by `TerminalType`).
+         *
+         * Persisted because a zoom the user chose is a statement about their eyesight, not about
+         * this session — reopening the terminal at the default size would undo the one setting
+         * they are most likely to need.
+         */
+        var terminalFontSize: Int
+            get() = prefs.getInt("TERMINAL_FONT_SIZE", TerminalType.DEFAULT)
+            set(value) = prefs.edit().putInt("TERMINAL_FONT_SIZE", TerminalType.normalize(value)).apply()
 
         /**
          * How heavily the app background image is dimmed (see `WallpaperDim`).
