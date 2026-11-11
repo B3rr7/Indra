@@ -13,6 +13,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
@@ -395,20 +396,28 @@ fun MainScaffold(
         // bar belongs to the screens.
         contentWindowInsets = WindowInsets.navigationBars,
     ) { paddingValues ->
-        Box(modifier = Modifier.fillMaxSize()) {
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    // The bottom bar's height is applied here, so a child that adds its own
+                    // `imePadding()` must not add it a second time. Consuming what we consumed
+                    // makes the IME inset the child sees the *uncovered* part only; without it
+                    // the terminal stacked 840px of keyboard on top of the 188px bar and left a
+                    // 188px dead band between its key row and the keyboard (measured on device:
+                    // content ended at y=1432 while the IME began at 1620).
+                    .consumeWindowInsets(paddingValues),
+        ) {
             IndraNavHost(
                 navigationState = navigationState,
                 navigator = navigator,
-                modifier = Modifier.padding(paddingValues),
                 terminalSession = terminalSession,
             )
             // The floating terminal sits above the navigation host but inside the bottom bar,
             // so it never covers the tabs it is meant to let you use.
             if (terminalSession != null) {
-                TerminalBubbleHost(
-                    session = terminalSession,
-                    modifier = Modifier.padding(paddingValues),
-                )
+                TerminalBubbleHost(session = terminalSession)
             }
         }
     }
