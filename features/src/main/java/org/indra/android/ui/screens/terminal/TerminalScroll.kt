@@ -25,6 +25,7 @@ internal fun TerminalScrollBehaviour(
     state: TerminalSession.State,
     listState: LazyListState,
     follow: AutoFollowState,
+    promptEdits: Int,
     focusRequest: Int,
     focusRequester: FocusRequester,
 ) {
@@ -40,6 +41,16 @@ internal fun TerminalScrollBehaviour(
     AutoFollowScrollEffect(listState, state.appendCount.toInt(), { promptIndex }, follow, headTrimmed)
     LaunchedEffect(state.running) {
         if (state.running) follow.resumeFollowing()
+    }
+    // Typing while scrolled back used to be typing blind. The prompt is the transcript's last row,
+    // so the moment the user scrolls up to read an older command the caret is off screen, and the
+    // keyboard types into a line that cannot be seen. Any edit means the user is *writing*, not
+    // reading, so the transcript returns to the end first — the same rule Return already follows.
+    // Keyed on the edit count, not on the text: `-`, backspace, `-` is two edits and one string.
+    LaunchedEffect(promptEdits) {
+        if (promptEdits == 0) return@LaunchedEffect
+        follow.resumeFollowing()
+        revealPrompt(listState, promptIndex)
     }
     // Back dismisses the keyboard but leaves the field focused, so a second `requestFocus()` is
     // a no-op and the caret stays invisible — the IME has to be asked for on its own.

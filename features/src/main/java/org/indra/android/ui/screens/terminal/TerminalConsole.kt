@@ -109,6 +109,7 @@ fun TerminalConsole(
         state = state,
         listState = listState,
         follow = follow,
+        promptEdits = editor.edits,
         focusRequest = focusRequest,
         focusRequester = focusRequester,
     )

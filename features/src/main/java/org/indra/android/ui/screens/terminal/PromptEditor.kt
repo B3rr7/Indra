@@ -21,6 +21,17 @@ internal class PromptEditor {
         private set
     var cursor by mutableIntStateOf(0)
         private set
+
+    /**
+     * How many edits this line has seen.
+     *
+     * A counter rather than the text, because the console has to react to *the act of writing*
+     * and two different edits can produce the same string (`-`, backspace, `-` again). It is what
+     * brings the transcript back to the prompt when the user starts typing while scrolled back.
+     */
+    var edits by mutableIntStateOf(0)
+        private set
+
     private var historyIndex by mutableIntStateOf(NO_HISTORY)
 
     /** A keystroke in the field: the text and the caret the field now holds. */
@@ -31,6 +42,7 @@ internal class PromptEditor {
         this.text = text
         this.cursor = cursor
         historyIndex = NO_HISTORY
+        edits++
     }
 
     /** ▲ ▼: step through the history, clearing the line when stepping past the newest entry. */
@@ -42,6 +54,7 @@ internal class PromptEditor {
         historyIndex = index
         text = line
         cursor = line.length
+        edits++
     }
 
     /** Replaces the whole line — picking a snippet chip. */
@@ -49,6 +62,7 @@ internal class PromptEditor {
         text = command
         cursor = command.length
         historyIndex = NO_HISTORY
+        edits++
     }
 
     /** A symbol key: inserted at the caret, which ends up after the insert. */
@@ -58,6 +72,7 @@ internal class PromptEditor {
 
     fun moveCursor(delta: Int) {
         cursor = TerminalKeys.moveCursor(text, cursor, delta)
+        edits++
     }
 
     /** Deletes the character *before* the caret — with a caret mid-line that is not the last one. */
@@ -80,12 +95,14 @@ internal class PromptEditor {
         text = ""
         cursor = 0
         historyIndex = NO_HISTORY
+        edits++
     }
 
     private fun applyEdit(edit: TerminalKeys.Edit) {
         text = edit.text
         cursor = edit.cursor
         historyIndex = NO_HISTORY
+        edits++
     }
 }
 
