@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
@@ -34,6 +35,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -77,6 +79,9 @@ private const val KEY_FONT = 13
 private const val KEY_FONT_COMPACT = 11
 private const val DIM_ALPHA = 0.65f
 private const val SNIPPET_ALPHA = 0.35f
+private const val SYMBOLS_COLLAPSED_COUNT = 4
+private const val KNOB_NORMAL = 30
+private const val KNOB_COMPACT = 26
 
 /**
  * The terminal itself: a scrolling transcript of ANSI-coloured lines with the prompt as its
@@ -422,10 +427,10 @@ private fun InputActions(
 /**
  * The Termux-style key row: the punctuation a shell needs, plus cursor movement and backspace.
  *
- * Termux leads with CTRL, ALT, ESC and TAB. Those are deliberately not here — see
- * [TerminalKeys] for why they would be lies in this app (no pty, no stdin, nothing to send a
- * control byte to). What is here is the part that genuinely helps on a phone: the symbols that
- * are two taps deep on an IME, and a way to move the caret without tapping a 12sp target.
+ * Collapsed by default — the 4 symbols a shell needs most, then a knob that zooms the row out to
+ * the full [TerminalKeys.SYMBOLS] set. The knob is pinned to the leading edge rather than living in
+ * its own row: a second row would cost exactly the height this compact mode is meant to save, and
+ * a knob at the end of a scrollable row is a knob that scrolls out of reach.
  *
  * Always live, even while a command runs: these keys only edit the prompt's text, so there is
  * nothing to protect — and a key row that greys out for the length of a scan is a key row the
@@ -438,26 +443,83 @@ private fun SymbolKeyRow(
     onMove: (Int) -> Unit,
     onBackspace: () -> Unit,
 ) {
+    var expanded by remember { mutableStateOf(false) }
+    val visibleSymbols =
+        remember(expanded) {
+            if (expanded) TerminalKeys.SYMBOLS else TerminalKeys.SYMBOLS.take(SYMBOLS_COLLAPSED_COUNT)
+        }
+
     Row(
         modifier =
             Modifier
                 .fillMaxWidth()
-                // Scrolls instead of clipping: 31 symbols never fit a phone, and a clipped key is
-                // a key the user cannot press.
-                .horizontalScroll(rememberScrollState())
                 .padding(horizontal = if (compact) 4.dp else 8.dp, vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        KeyChip(label = "←", compact = compact) { onMove(-1) }
-        KeyChip(label = "→", compact = compact) { onMove(1) }
-        KeyChip(label = "⌫", compact = compact) { onBackspace() }
-        TerminalKeys.SYMBOLS.forEach { symbol ->
-            KeyChip(label = symbol.label, compact = compact) { onKey(symbol) }
+        ZoomKnob(
+            expanded = expanded,
+            onToggle = { expanded = !expanded },
+            compact = compact,
+        )
+        Row(
+            modifier =
+                Modifier
+                    .weight(1f)
+                    // Scrolls instead of clipping: the expanded row never fits a phone, and a
+                    // clipped key is a key the user cannot press.
+                    .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            KeyChip(label = "←", compact = compact) { onMove(-1) }
+            KeyChip(label = "→", compact = compact) { onMove(1) }
+            KeyChip(label = "⌫", compact = compact) { onBackspace() }
+            visibleSymbols.forEach { symbol ->
+                KeyChip(label = symbol.label, compact = compact) { onKey(symbol) }
+            }
         }
     }
 }
 
-/** One key. A `Surface` rather than a Material button: 31 buttons would each carry their own
+/**
+ * The zoom knob: one round key that flips the symbol row between collapsed and full.
+ *
+ * Its own background rather than an [IconButton] tint because the row's keys are bare chips — the
+ * knob has to read as a control, not as a symbol that inserts text.
+ */
+@Composable
+private fun ZoomKnob(
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    compact: Boolean,
+) {
+    val knobSize = (if (compact) KNOB_COMPACT else KNOB_NORMAL).dp
+    IconButton(
+        onClick = onToggle,
+        modifier = Modifier.size(knobSize),
+    ) {
+        Icon(
+            imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+            contentDescription =
+                if (expanded) {
+                    "Collapse symbols"
+                } else {
+                    "Expand symbols, ${TerminalKeys.SYMBOLS.size} available"
+                },
+            tint = TerminalPalette.accent,
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .background(
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = SNIPPET_ALPHA),
+                        CircleShape,
+                    )
+                    .padding(if (compact) 3.dp else 4.dp),
+        )
+    }
+}
+
+/** One key. A bare chip rather than a Material button: 31 buttons would each carry their own
  *  minimum touch target and the row would be taller than the transcript. */
 @Composable
 private fun KeyChip(
