@@ -34,6 +34,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -41,6 +42,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.AnnotatedString
@@ -104,12 +106,18 @@ fun TerminalConsole(
     // one line at the end of a phone screen is easy to miss, and a terminal is a thing you tap
     // to type into.
     val focusRequester = remember { FocusRequester() }
+    // Whether the prompt holds the caret. Only used to suppress the transcript's own running
+    // cursor: a terminal has **one** caret, and with the prompt inside the transcript the field's
+    // own caret already marks where typing goes. Two blinking bars a line apart read as a bug.
+    var promptFocused by remember { mutableStateOf(false) }
+    val runningCursor = state.running && !promptFocused
 
     TerminalScrollBehaviour(
         state = state,
         listState = listState,
         follow = follow,
         promptEdits = editor.edits,
+        runningCursor = runningCursor,
         focusRequest = focusRequest,
         focusRequester = focusRequester,
     )
@@ -143,7 +151,9 @@ fun TerminalConsole(
                         InputState(
                             text = editor.text,
                             cursor = editor.cursor,
+                            focused = promptFocused,
                             onTextChange = editor::type,
+                            onFocusChange = { promptFocused = it },
                             onRecall = { step -> editor.recall(state.history, step) },
                             onSubmit = { editor.submit(state.running, onRun) },
                         ),
@@ -153,6 +163,7 @@ fun TerminalConsole(
                     onStop = onStop,
                 )
             },
+            runningCursor = runningCursor,
         )
         // Snippets and symbols stay *below* the transcript — next to the keyboard, where the
         // thumb already is — and never scroll away with the output above them.
@@ -183,6 +194,7 @@ private fun Transcript(
     compact: Boolean,
     modifier: Modifier = Modifier,
     prompt: @Composable () -> Unit,
+    runningCursor: Boolean,
 ) {
     val padding = if (compact) PAD_COMPACT else PAD_NORMAL
     val empty = state.lines.isEmpty()
@@ -218,7 +230,7 @@ private fun Transcript(
         ) { line ->
             LineRow(line, font, lineHeight)
         }
-        if (state.running) {
+        if (runningCursor) {
             item(key = "cursor") {
                 Text(
                     text = "▌",
@@ -251,7 +263,9 @@ private fun LineRow(
 private data class InputState(
     val text: String,
     val cursor: Int,
+    val focused: Boolean,
     val onTextChange: (String, Int) -> Unit,
+    val onFocusChange: (Boolean) -> Unit,
     val onRecall: (Int) -> Unit,
     val onSubmit: () -> Unit,
 )
@@ -302,6 +316,7 @@ private fun InputRow(
             modifier =
                 Modifier
                     .weight(1f)
+                    .onFocusChanged { field.onFocusChange(it.isFocused) }
                     .focusRequester(focusRequester),
             singleLine = state.inputMode != TerminalInputMode.PLAIN,
             // Deliberately **not** `enabled = !state.running`: disabling the field while a
@@ -345,17 +360,26 @@ private fun InputRow(
 /**
  * The IME contract for a shell.
  *
- * `SHELL` turns off autocorrect, suggestions and capitalisation and maps Return to Send. That is
- * the whole point: a phone IME will otherwise rewrite `-la` into a dictionary word and capitalise
- * `ls`, and a shell is case-sensitive. `PLAIN` keeps the keyboard quiet but lets Return insert a
- * newline, for a multi-line script typed by hand. `SYSTEM` hands control back to the IME.
+ * `SHELL` turns off autocorrect and capitalisation and maps Return to Send. That is the whole
+ * point: a phone IME will otherwise rewrite `-la` into a dictionary word and capitalise `ls`, and
+ * a shell is case-sensitive. `PLAIN` keeps the keyboard quiet but lets Return insert a newline, for
+ * a multi-line script typed by hand. `SYSTEM` hands control back to the IME.
+ *
+ * The suggestion strip cannot be turned off from a text field: Android only exposes "no
+ * auto-correct", and every input type that hides the strip also degrades the keyboard (a pill-
+ * sized space bar for URI/email, an autofill chip for password). It stays, and the mode copy says
+ * auto-correct rather than promising something the platform does not offer.
  */
 private fun TerminalInputMode.keyboardOptions(): KeyboardOptions =
     KeyboardOptions(
-        // Compose 1.6 (BOM 2024.02.02) names this `autoCorrect`; it becomes `autoCorrectEnabled`
-        // in 1.7. Rename it when the BOM moves.
-        autoCorrect = autoCorrect,
+        // `autoCorrectEnabled` is the current name (the older `autoCorrect` is deprecated); null
+        // would leave the IME's own default in place, which is the opposite of what a shell wants.
+        autoCorrectEnabled = autoCorrect,
         capitalization = if (autoCorrect) KeyboardCapitalization.Sentences else KeyboardCapitalization.None,
+        // `Ascii` and not a variation that would suppress the suggestion strip: the URI and email
+        // layouts shrink the space bar to a pill and the password one adds an autofill chip over
+        // the keys — all three are worse for a command line than the strip they remove. On Gboard
+        // the strip is the price of a full-width space bar, and spaces are what commands are made of.
         keyboardType = KeyboardType.Ascii,
         imeAction = if (returnSubmits) ImeAction.Send else ImeAction.Default,
     )

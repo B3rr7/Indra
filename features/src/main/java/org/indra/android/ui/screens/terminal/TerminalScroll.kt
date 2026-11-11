@@ -26,6 +26,7 @@ internal fun TerminalScrollBehaviour(
     listState: LazyListState,
     follow: AutoFollowState,
     promptEdits: Int,
+    runningCursor: Boolean,
     focusRequest: Int,
     focusRequester: FocusRequester,
 ) {
@@ -34,9 +35,11 @@ internal fun TerminalScrollBehaviour(
     val headTrimmed = state.lines.firstOrNull()?.id?.toInt() ?: 0
     // The prompt is the transcript's last item, so its index is also the auto-follow target: the
     // prompt stays attached to the end of the output instead of being pinned to the screen. The
-    // hint only exists on an empty transcript; the running cursor sits above the prompt.
+    // hint only exists on an empty transcript; the running cursor sits above the prompt — but only
+    // while the prompt itself is not showing a caret, which is why it is passed in rather than
+    // read from `state.running`.
     val promptIndex =
-        state.lines.size + (if (state.lines.isEmpty()) 1 else 0) + (if (state.running) 1 else 0)
+        state.lines.size + (if (state.lines.isEmpty()) 1 else 0) + (if (runningCursor) 1 else 0)
 
     AutoFollowScrollEffect(listState, state.appendCount.toInt(), { promptIndex }, follow, headTrimmed)
     LaunchedEffect(state.running) {

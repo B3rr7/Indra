@@ -128,7 +128,7 @@ enum class TerminalInputMode(
 ) {
     SHELL(
         label = "Shell",
-        description = "No autocorrect or suggestions — Return runs the command",
+        description = "No autocorrect — Return runs the command",
     ),
     PLAIN(
         label = "Plain",
@@ -140,7 +140,7 @@ enum class TerminalInputMode(
     ),
     ;
 
-    /** Whether the IME should offer autocorrect, suggestions and capitalisation. */
+    /** Whether the IME should offer autocorrect and capitalisation. */
     val autoCorrect: Boolean get() = this == SYSTEM
 
     /** Whether the IME's Return key submits the command. */
