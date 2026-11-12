@@ -9,23 +9,46 @@ import java.io.File
 import kotlin.io.path.createTempDirectory
 
 class NucleiOutputTest {
+    /**
+     * Real v3 output: the severity is the *third* leading bracket, after the template id, and
+     * `-stats` interleaves `[mm:ss]` progress lines. The first version of this parser only read
+     * the first bracket and therefore recognised nothing a device run printed.
+     */
     private val transcript =
         """
-        [INF] Templates loaded for current scan: 4
-        [critical] [http] [https://10.0.0.1/admin] [CVE-2021-44228] [log4j-rce]
-        [high] [http] [http://10.0.0.1/login.php] [tech-detect] [php]
+        [INF] Templates loaded for current scan: 11265
+        [0:03:20] | Templates: 11265 | Hosts: 1 | RPS: 164 | Matched: 0 | Errors: 372
+        [http-missing-security-headers:strict-transport-security] [http] [info] http://10.0.0.1:8080
+        [tech-detect:python] [http] [info] http://10.0.0.1:8080
+        [CVE-2021-44228] [http] [critical] https://10.0.0.1/admin
         [WRN] Could not connect to host
-        [info] [tcp] [10.0.0.1:22] [ssh-auth-methods] [ssh]
+        [ssh-auth-methods] [tcp] [low] 10.0.0.1:22
         """.trimIndent()
 
     @Test
-    fun `parses finding lines and skips banner lines`() {
+    fun `parses finding lines and skips banner and stats lines`() {
         val findings = Nuclei.parseFindings(transcript)
-        assertEquals(3, findings.size)
-        assertEquals(NucleiSeverity.CRITICAL, findings[0].severity)
-        assertEquals(NucleiSeverity.HIGH, findings[1].severity)
-        assertEquals(NucleiSeverity.INFO, findings[2].severity)
-        assertTrue(findings[0].line.startsWith("[critical]"))
+        assertEquals(4, findings.size)
+        assertEquals(NucleiSeverity.INFO, findings[0].severity)
+        assertEquals(NucleiSeverity.INFO, findings[1].severity)
+        assertEquals(NucleiSeverity.CRITICAL, findings[2].severity)
+        assertEquals(NucleiSeverity.LOW, findings[3].severity)
+        assertTrue(findings[2].line.startsWith("[CVE-2021-44228]"))
+    }
+
+    @Test
+    fun `the severity tag is found wherever the format puts it`() {
+        // v3: template id first. Older/other output: severity first. Both must parse.
+        assertEquals(
+            NucleiSeverity.HIGH,
+            Nuclei.parseFindings("[high] [http] http://h [t] [m]").single().severity,
+        )
+        assertEquals(
+            NucleiSeverity.MEDIUM,
+            Nuclei.parseFindings("[cve-2020-1] [http] [medium] http://h").single().severity,
+        )
+        // A template id that merely contains a severity word is not a finding on its own.
+        assertTrue(Nuclei.parseFindings("[info-disclosure] [http] something").isEmpty())
     }
 
     @Test
@@ -34,13 +57,14 @@ class NucleiOutputTest {
         assertNull(NucleiSeverity.fromTag("Critical"))
         assertEquals(NucleiSeverity.CRITICAL, NucleiSeverity.fromTag("critical"))
         assertTrue(Nuclei.parseFindings("[INF] banner only").isEmpty())
+        assertTrue(Nuclei.parseFindings("[0:05:01] | Matched: 12").isEmpty())
         assertTrue(Nuclei.parseFindings("").isEmpty())
         assertTrue(Nuclei.parseFindings("[oops").isEmpty())
     }
 
     @Test
     fun `findings are capped`() {
-        val many = (1..Nuclei.MAX_FINDINGS + 50).joinToString("\n") { "[low] [http] https://h/$it [t] [m]" }
+        val many = (1..Nuclei.MAX_FINDINGS + 50).joinToString("\n") { "[t-$it] [http] [low] https://h/$it" }
         assertEquals(Nuclei.MAX_FINDINGS, Nuclei.parseFindings(many).size)
     }
 
@@ -56,7 +80,16 @@ class NucleiOutputTest {
     fun `exit code 1 with findings is a success because nuclei reports findings that way`() {
         val run = Nuclei.interpret(completed(exitValue = 1, output = transcript))
         assertTrue(run.success)
-        assertEquals(3, run.findings.size)
+        assertEquals(4, run.findings.size)
+        assertNull(run.error)
+    }
+
+    @Test
+    fun `exit code 0 with findings is also a success — a completed scan exits 0`() {
+        // Device evidence: a full run printed 12 matches and exited 0.
+        val run = Nuclei.interpret(completed(exitValue = 0, output = transcript))
+        assertTrue(run.success)
+        assertEquals(4, run.findings.size)
         assertNull(run.error)
     }
 
@@ -91,7 +124,7 @@ class NucleiOutputTest {
             )
         val run = Nuclei.interpret(result)
         assertFalse(run.success)
-        assertEquals(3, run.findings.size)
+        assertEquals(4, run.findings.size)
         assertEquals("nuclei timed out or stopped", run.error)
     }
 
@@ -114,7 +147,7 @@ class NucleiOutputTest {
     fun `summary counts each severity and is null for an empty list`() {
         assertNull(Nuclei.summary(emptyList()))
         val findings = Nuclei.parseFindings(transcript)
-        assertEquals("3 findings · 1 critical · 1 high · 1 info", Nuclei.summary(findings))
+        assertEquals("4 findings · 1 critical · 1 low · 2 info", Nuclei.summary(findings))
         assertEquals("1 finding · 1 high", Nuclei.summary(Nuclei.parseFindings("[high] [http] http://h [t] [m]")))
     }
 

@@ -1,6 +1,7 @@
 package org.indra.android.core.system
 
 import android.content.Context
+import android.os.Process
 import com.google.gson.Gson
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineStart
@@ -539,6 +540,14 @@ class SmartToolBox
                         execInChroot(
                             chrootEngine.wrap(
                                 "$binary -nc -stats -si 10 -t ${shellQuote(inside)} -u ${shellQuote(target)} $templates",
+                                // Same split as the refresh: the template set lives at the core
+                                // mount, the run's own config stays in the rootfs (see
+                                // [Nuclei.HOST_CONFIG_DIR]).
+                                mapOf(
+                                    "HOME" to ChrootScript.CORE_MOUNT,
+                                    "XDG_CONFIG_HOME" to "/root/.config",
+                                    "XDG_CACHE_HOME" to "/root/.cache",
+                                ),
                             ),
                             label = "nuclei",
                             timeoutMs = SCAN_TIMEOUT_MS,
@@ -683,20 +692,67 @@ class SmartToolBox
          * `HOME` is the core dir) and reads the same directory there. With `HOME=/root` the
          * download landed in `/root/nuclei-templates` — inside the rootfs, invisible to every
          * scan — so a refresh could succeed and the next scan still say "no templates provided".
-         * `XDG_CACHE_HOME` stays in the rootfs because the download cache is transient and a core
-         * install replaces the core dir.
+         * `XDG_CACHE_HOME` and `XDG_CONFIG_HOME` stay in the rootfs because they are transient:
+         * with `HOME` pointing at the core mount, nuclei would otherwise write
+         * `/indra/.config/nuclei/.templates-config.json`, and the **host** run reads that very
+         * file (same disk) and then trusts its `/indra/nuclei-templates` record — a path that does
+         * not exist outside the chroot. Device evidence: a scan with the full set on disk stopped
+         * at `nuclei-templates are not installed, installing...` and tried to re-download it.
+         * [Nuclei.HOST_CONFIG_DIR] gives the host run its own config home so neither can poison
+         * the other.
+         *
+         * Two further device findings are folded in here:
+         *
+         * 1. `-update-templates` **exits 0 when the download failed** (a timed-out body write is
+         *    reported as a `WRN`, which nuclei only prints with `-v`). So `-v` is passed, and the
+         *    directory is checked afterwards: an exit 0 that left nothing behind is reported as a
+         *    failure naming the reason in the console, never as "templates updated".
+         * 2. The guest is root with the daemon's `077` umask, so the tree landed root-owned `700`
+         *    — unreadable by the app, which makes `Nuclei.templatesDir` (and so the
+         *    `NUCLEI_TEMPLATES` capability and the host scan's `-t`) disagree with reality. The
+         *    same script hands the directory back to this app's uid.
          */
         suspend fun nucleiUpdateTemplates(): Flow<ToolResult> {
             ensureChroot()?.let { return failure("nuclei", it) }
             val binary = "/" + ChrootScript.CORE_MOUNT.trimStart('/') + "/tools/nuclei/nuclei"
-            return execInChroot(
-                chrootEngine.wrap(
-                    "$binary -update-templates",
-                    mapOf("HOME" to ChrootScript.CORE_MOUNT, "XDG_CACHE_HOME" to "/root/.cache"),
-                ),
-                label = "nuclei update-templates",
-                timeoutMs = SCAN_TIMEOUT_MS,
-            )
+            val dir = ChrootScript.CORE_MOUNT + "/" + Nuclei.TEMPLATES_DIR
+            val script =
+                "$binary -update-templates -v; rc=\$?; " +
+                    "if [ -d ${shellQuote(dir)} ]; then chmod -R a+rX ${shellQuote(dir)}; " +
+                    "chown -R ${Process.myUid()}:${Process.myUid()} ${shellQuote(dir)}; fi; exit \$rc"
+            return flow {
+                var terminal: ToolResult? = null
+                execInChroot(
+                    chrootEngine.wrap(
+                        script,
+                        mapOf(
+                            "HOME" to ChrootScript.CORE_MOUNT,
+                            "XDG_CONFIG_HOME" to "/root/.config",
+                            "XDG_CACHE_HOME" to "/root/.cache",
+                        ),
+                    ),
+                    label = "nuclei update-templates",
+                    timeoutMs = SCAN_TIMEOUT_MS,
+                ).collect { r ->
+                    if (r.isStreaming) emit(r) else terminal = r
+                }
+                val done = terminal ?: return@flow
+                val installed =
+                    withContext(Dispatchers.IO) {
+                        Nuclei.templatesDir(coreManager.coreDir, coreManager.alpinePath()) != null
+                    }
+                emit(
+                    if (done.success && !installed) {
+                        done.copy(
+                            success = false,
+                            status = STATUS_FAILED,
+                            error = Nuclei.NO_TEMPLATES_DOWNLOADED,
+                        )
+                    } else {
+                        done
+                    },
+                )
+            }
         }
 
         suspend fun gobuster(args: String): Flow<ToolResult> {
@@ -1184,6 +1240,11 @@ class SmartToolBox
          * that directory outright instead of relying on nuclei's `$HOME/nuclei-templates`
          * default, because a run that quietly finds no templates reports the same "no templates
          * provided" line as a broken install.
+         *
+         * `XDG_CONFIG_HOME` keeps this run's config out of the one the chroot refresh may write:
+         * nuclei trusts its recorded template directory over `-t`, and the guest's record names
+         * `/indra/...`, a path that does not exist here. Sharing it made a scan with 11k templates
+         * on disk stop and try to download them (see [Nuclei.HOST_CONFIG_DIR]).
          */
         suspend fun nucleiDirect(
             target: String,
@@ -1191,8 +1252,10 @@ class SmartToolBox
         ): Flow<ToolResult> {
             val dir = Nuclei.templatesDir(coreManager.coreDir, coreManager.alpinePath())
                 ?: return failure("nuclei", Nuclei.NO_TEMPLATES_FIX)
+            val home = shellQuote(context.filesDir.absolutePath)
+            val configHome = shellQuote(File(context.filesDir, Nuclei.HOST_CONFIG_DIR).absolutePath)
             return shellDirect(
-                "HOME=${shellQuote(context.filesDir.absolutePath)} nuclei -nc -stats -si 10 " +
+                "HOME=$home XDG_CONFIG_HOME=$configHome nuclei -nc -stats -si 10 " +
                     "-t ${shellQuote(dir.absolutePath)} -u ${shellQuote(target)} $templates",
                 label = "nuclei",
                 timeoutMs = SCAN_TIMEOUT_MS,

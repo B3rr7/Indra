@@ -5,10 +5,12 @@ import java.io.File
 /**
  * Severity tag on a nuclei finding line.
  *
- * nuclei's stdout is one line per finding — `[severity] [protocol] target [template-id]` — while
- * its banner and diagnostics use *uppercase* tags (`[INF]`, `[WRN]`, `[ERR]`, `[DBG]`). The tag is
- * therefore matched case-sensitively, so a template-loading message never lands in the findings
- * list.
+ * nuclei's stdout is one line per finding, and the severity is one of the leading brackets:
+ * `[template-id:matcher] [protocol] [severity] target` (v3's real shape, e.g.
+ * `[tech-detect:simplehttp] [http] [info] http://10.0.0.1:8080`). Its banner and diagnostics use
+ * *uppercase* tags (`[INF]`, `[WRN]`, `[ERR]`, `[DBG]`), and its `-stats` progress lines start with
+ * a `[mm:ss]` clock, so matching the tag case-sensitively is what keeps a template-loading message
+ * or a progress tick from landing in the findings list.
  */
 enum class NucleiSeverity(
     val tag: String,
@@ -47,7 +49,7 @@ data class NucleiRun(
 )
 
 /**
- * Parsing and outcome policy for nuclei (`[critical] [http] https://… [template-id]`).
+ * Parsing and outcome policy for nuclei (`[template-id:matcher] [protocol] [severity] host`).
  *
  * These are pure functions on purpose: the severity parser and the exit-status policy are the two
  * places where this screen used to be dishonest, so they are unit-tested rather than trusted.
@@ -58,9 +60,32 @@ object Nuclei {
     /** Directory nuclei uses inside its `HOME` for the installed template set. */
     const val TEMPLATES_DIR = "nuclei-templates"
 
+    /**
+     * An XDG config home for the **host** nuclei runs, inside the core dir.
+     *
+     * nuclei records the template directory it used in `$XDG_CONFIG_HOME/nuclei/.templates-config.json`
+     * and reads it back on the next run; a `-t` argument does not override that record, so a config
+     * written by the chroot run (where the same files are mounted at `/indra`) made the host run
+     * believe no templates were installed and download them into a path with no parent. Device
+     * evidence: a scan sat for minutes on `nuclei-templates are not installed, installing...` with
+     * the whole set already on disk. Giving each world its own config dir is the fix, and it also
+     * keeps the guest's transient caches out of the core dir.
+     */
+    const val HOST_CONFIG_DIR = ".nuclei-host"
+
     /** The one sentence a run gets when no template set is installed, wherever it is asked from. */
     const val NO_TEMPLATES_FIX =
         "No nuclei templates are installed — open Vulnerability Scanner and press Refresh templates."
+
+    /**
+     * What the refresh reports when nuclei exited 0 but wrote nothing.
+     *
+     * `-update-templates` treats a failed download as a warning, so its exit status cannot be
+     * trusted; the directory is what the scan reads, and it is the only honest verdict.
+     */
+    const val NO_TEMPLATES_DOWNLOADED =
+        "No templates were downloaded — nuclei's own reason is in the output above. " +
+            "The set is ~20 MB; a slow or captive link times out, so retry on a stable connection."
 
     /** nuclei's documented "at least one template matched" exit status. */
     private const val FINDINGS_EXIT_CODE = 1
@@ -136,13 +161,28 @@ object Nuclei {
 
     private fun parseLine(line: String): NucleiFinding? {
         val trimmed = line.trim()
-        val tagEnd = trimmed.indexOf(']')
-        val severity =
-            if (trimmed.startsWith("[") && tagEnd > 1) {
-                NucleiSeverity.fromTag(trimmed.substring(1, tagEnd))
-            } else {
-                null
-            }
+        val severity = leadingTags(trimmed).firstNotNullOfOrNull(NucleiSeverity::fromTag)
         return severity?.let { NucleiFinding(it, trimmed) }
+    }
+
+    /**
+     * The `[...]` groups a finding line starts with, in order.
+     *
+     * The severity is one of them but not necessarily the first: v3 prints the template id there,
+     * older output printed the severity first. Reading every leading group covers both without a
+     * second format switch, and a non-finding line (a `[mm:ss]` stats tick, an `[INF]` banner)
+     * simply yields no severity.
+     */
+    private fun leadingTags(line: String): List<String> {
+        val tags = mutableListOf<String>()
+        var i = 0
+        while (i < line.length && line[i] == '[') {
+            val end = line.indexOf(']', i)
+            if (end == -1) break
+            tags += line.substring(i + 1, end)
+            i = end + 1
+            while (i < line.length && line[i] == ' ') i++
+        }
+        return tags
     }
 }
