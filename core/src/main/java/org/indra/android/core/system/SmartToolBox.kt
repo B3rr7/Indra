@@ -1535,28 +1535,17 @@ class SmartToolBox
 
         /**
          * Best-effort version string for a tool binary. Tries a handful of common
-         * version flags and returns the first non-blank line of the first one that
-         * produces output, or null when nothing responds. Used by the Tools screen
-         * to annotate each card.
+         * version flags and returns the first non-blank, escape-free line that looks
+         * like a version, or null when nothing responds. Used by the Tools screen to
+         * annotate each card — see [ToolVersion] for the two ways the obvious version
+         * of this went wrong (ANSI escapes in the card, the command echo winning).
          */
         suspend fun versionOf(binary: String): String? {
-            val versionRegex = Regex("\\d+\\.\\d+")
             for (flag in listOf("--version", "-V", "-v", "-version", "--help", "-h")) {
                 try {
                     val result =
                         rawProbe("version", "${binary(binary)} $flag", 10_000L).last()
-                    if (result.success) {
-                        val line =
-                            result.rawOutput.lineSequence()
-                                .firstOrNull { versionRegex.containsMatchIn(it) }
-                                ?.trim()
-                        if (!line.isNullOrBlank()) return line
-                    }
-                    val line =
-                        result.rawOutput.lineSequence()
-                            .firstOrNull { versionRegex.containsMatchIn(it) }
-                            ?.trim()
-                    if (!line.isNullOrBlank()) return line
+                    ToolVersion.parse(result.rawOutput)?.let { return it }
                 } catch (e: Exception) {
                     Logger.w("versionOf($binary, $flag) failed: ${e.message}")
                 }
