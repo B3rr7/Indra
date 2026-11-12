@@ -716,8 +716,12 @@ class SmartToolBox
             ensureChroot()?.let { return failure("nuclei", it) }
             val binary = "/" + ChrootScript.CORE_MOUNT.trimStart('/') + "/tools/nuclei/nuclei"
             val dir = ChrootScript.CORE_MOUNT + "/" + Nuclei.TEMPLATES_DIR
+            // `XDG_CONFIG_HOME` is a fresh rootfs dir, so nuclei's optional ignore list is
+            // missing and it prints two `[ERR]` lines before doing any work.
+            val ignore = shellQuote("/root/.config/nuclei/" + Nuclei.IGNORE_FILE)
             val script =
-                "$binary -update-templates -v; rc=\$?; " +
+                "mkdir -p /root/.config/nuclei; [ -s $ignore ] || echo '{}' > $ignore; " +
+                    "$binary -update-templates -v; rc=\$?; " +
                     "if [ -d ${shellQuote(dir)} ]; then chmod -R a+rX ${shellQuote(dir)}; " +
                     "chown -R ${Process.myUid()}:${Process.myUid()} ${shellQuote(dir)}; fi; exit \$rc"
             return flow {
@@ -1254,8 +1258,22 @@ class SmartToolBox
                 ?: return failure("nuclei", Nuclei.NO_TEMPLATES_FIX)
             val home = shellQuote(context.filesDir.absolutePath)
             val configHome = shellQuote(File(context.filesDir, Nuclei.HOST_CONFIG_DIR).absolutePath)
+            // nuclei opens `<config home>/nuclei/.nuclei-ignore` on every run and prints two
+            // `[ERR]` lines when it is unusable — device-verified at the top of every scan:
+            // "Could not read nuclei-ignore file" when absent, then "Could not parse …: EOF"
+            // for a blank file, because the format is a YAML mapping (`{}` is valid). The file
+            // is created here rather than by the app because the first run (and the guest
+            // refresh) leave the config dir root-owned: the app cannot write into it, and
+            // `createNewFile` there failed with "Permission denied" **before the scan started**.
+            val configNuclei = shellQuote(File(context.filesDir, "${Nuclei.HOST_CONFIG_DIR}/nuclei").absolutePath)
+            val ignore = shellQuote(File(context.filesDir, "${Nuclei.HOST_CONFIG_DIR}/nuclei/${Nuclei.IGNORE_FILE}").absolutePath)
             return shellDirect(
-                "HOME=$home XDG_CONFIG_HOME=$configHome nuclei -nc -stats -si 10 " +
+                // Absolute paths: `runDirect` gives the script only the tool dirs on PATH, so a
+                // bare `mkdir`/`touch` is not found (device-verified: "inaccessible or not found").
+                // `{}` and not an empty file: the list is decoded as YAML into a struct, so a blank
+                // file is `Could not parse nuclei-ignore file: EOF` twice (also device-verified).
+                "/system/bin/mkdir -p $configNuclei; [ -s $ignore ] || echo '{}' > $ignore; " +
+                    "HOME=$home XDG_CONFIG_HOME=$configHome nuclei -nc -stats -si 10 " +
                     "-t ${shellQuote(dir.absolutePath)} -u ${shellQuote(target)} $templates",
                 label = "nuclei",
                 timeoutMs = SCAN_TIMEOUT_MS,

@@ -73,6 +73,9 @@ object Nuclei {
      */
     const val HOST_CONFIG_DIR = ".nuclei-host"
 
+    /** The ignore list nuclei reads from `<config home>/nuclei/`. */
+    const val IGNORE_FILE = ".nuclei-ignore"
+
     /** The one sentence a run gets when no template set is installed, wherever it is asked from. */
     const val NO_TEMPLATES_FIX =
         "No nuclei templates are installed — open Vulnerability Scanner and press Refresh templates."
