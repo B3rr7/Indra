@@ -124,10 +124,10 @@ class PluginAvailabilityTest {
     fun onlyThePhaseThreeToolsAreDirect() {
         // A plugin whose `requires` key is a direct-handler spec is gated on root by
         // directStatus; every other plugin must still go through the daemon probe.
-        listOf("masscan", "hydra", "hping3", "aircrack-ng", "reaver", "arpspoof", "tcpdump", "nuclei", "bettercap").forEach {
+        listOf("masscan", "hydra", "hping3", "aircrack-ng", "reaver", "arpspoof", "tcpdump", "nuclei", "bettercap", "gobuster").forEach {
             assertTrue("$it should be a direct tool", SmartToolBox.isDirectTool(it))
         }
-        listOf("nmap", "raw", "shell", "ettercap", "gobuster", "network-radar", "msfrpcd", "fusemounts").forEach {
+        listOf("nmap", "raw", "shell", "ettercap", "network-radar", "msfrpcd", "fusemounts").forEach {
             assertFalse("$it should not be a direct tool", SmartToolBox.isDirectTool(it))
         }
     }

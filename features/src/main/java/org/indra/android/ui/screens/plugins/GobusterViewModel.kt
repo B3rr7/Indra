@@ -14,6 +14,7 @@ import kotlinx.coroutines.withContext
 import org.indra.android.core.system.CoreManager
 import org.indra.android.core.system.DirBrute
 import org.indra.android.core.system.DirBruteRunner
+import org.indra.android.core.system.HostRewrite
 import org.indra.android.core.system.NetworkHelper
 import org.indra.android.core.system.SettingsRepository
 import org.indra.android.core.system.SmartToolBox
@@ -23,6 +24,9 @@ import org.indra.android.core.system.streamedLine
 import org.indra.android.data.repository.NetworkRepository
 import java.io.File
 import java.io.IOException
+import java.net.Inet4Address
+import java.net.InetAddress
+import java.net.URI
 import javax.inject.Inject
 
 data class GobusterUiState(
@@ -146,28 +150,69 @@ class GobusterViewModel
             // to exist (in rootless mode it cannot be executed at all).
             scanJob =
                 viewModelScope.launch {
-                    if (settings.rootlessMode) scanRootless() else scanWithDaemon()
+                    if (settings.rootlessMode) scanRootless() else scanBundled()
                 }
         }
 
-        private suspend fun scanWithDaemon() {
+        /**
+         * Runs the bundled binary through a direct `su -c` (not the daemon, not the chroot: it is
+         * a static Go binary with Android's ELF interpreter, so inside the musl rootfs the kernel
+         * answers `not found`).
+         *
+         * Go's pure resolver also cannot resolve here — Android has no `/etc/resolv.conf`, so it
+         * queries `127.0.0.1:53` and fails with `connection refused`, and gobuster has no
+         * resolver-file flag the way nuclei's `-r` does. So the name is resolved by this app
+         * through Android's own resolver and the tool is handed the address, with the original
+         * name kept in a `Host:` header (and `-k` for https, whose certificate names the name).
+         */
+        @Suppress("ReturnCount")
+        private suspend fun scanBundled() {
             val st = _uiState.value
             if (!coreManager.isGobusterInstalled()) {
                 _uiState.value = st.copy(error = "Gobuster is not installed. Provide a binary URL and tap Install.")
                 return
             }
-            val gate = toolBox.requireTool("gobuster")
+            val gate = toolBox.requireDirectTool("gobuster")
             if (gate !is ToolHandle.Ready) {
                 _uiState.value = _uiState.value.copy(error = gate.message)
                 return
             }
+            val target = resolveTarget(st.url.trim())
+            if (target is GobusterTarget.Unresolved) {
+                _uiState.value =
+                    st.copy(
+                        error =
+                            "Could not resolve ${target.host}. The bundled gobuster has no resolver of " +
+                                "its own on Android — enter an IP address, or check this device's DNS.",
+                    )
+                return
+            }
             _uiState.value = _uiState.value.copy(isLoading = true, error = null, output = emptyList())
+            if (target is GobusterTarget.Rewritten) {
+                _uiState.value =
+                    _uiState.value.appended(
+                        "Resolved ${target.host} to ${target.address} — the name is kept in a Host: header",
+                    )
+            }
             val wl = st.wordlist.trim().ifBlank { toolBox.defaultDirWordlist() }
             val ext = st.extensions.trim()
             val args = buildString {
-                append("dir -u ").append(SmartToolBox.shellQuote(st.url.trim()))
+                append("dir")
+                when (target) {
+                    is GobusterTarget.AsTyped -> append(" -u ").append(SmartToolBox.shellQuote(target.url))
+                    is GobusterTarget.Rewritten -> {
+                        append(" -u ").append(SmartToolBox.shellQuote(target.url))
+                        append(" -H ").append(SmartToolBox.shellQuote("Host: ${target.hostHeader}"))
+                        if (target.insecureTls) append(" -k")
+                    }
+                    // Handled above; kept exhaustive so a new state cannot silently run the tool.
+                    is GobusterTarget.Unresolved -> Unit
+                }
                 append(" -w ").append(SmartToolBox.shellQuote(wl))
                 if (ext.isNotBlank()) append(" -x ").append(SmartToolBox.shellQuote(ext))
+                // Without it gobuster redraws a progress line per request, and the console's
+                // line reader turns every redraw into another transcript row.
+                append(" --no-progress")
             }
             toolBox.gobuster(args).collect { result ->
                 result.streamedLine?.let { line ->
@@ -250,3 +295,55 @@ class GobusterViewModel
 
 /** One console line appended to the transcript. */
 private fun GobusterUiState.appended(line: String): GobusterUiState = copy(output = output + line)
+
+/** How the sweep should address its target once the optional name has been resolved. */
+private sealed interface GobusterTarget {
+    /** Use the URL as typed: an IP literal, or something gobuster can explain better than we can. */
+    data class AsTyped(val url: String) : GobusterTarget
+
+    /** A name replaced by [address]; [hostHeader] keeps a name-based vhost answering. */
+    data class Rewritten(
+        val url: String,
+        val host: String,
+        val address: String,
+        val hostHeader: String,
+        val insecureTls: Boolean,
+    ) : GobusterTarget
+
+    /** The name does not resolve, and the tool cannot resolve it either. */
+    data class Unresolved(val host: String) : GobusterTarget
+}
+
+/**
+ * Resolves a URL's host through Android, preferring IPv4.
+ *
+ * IPv4 wins because the device's IPv6 path here is NAT64 (`64:ff9b::/96`), which only the
+ * carrier's own DNS answers for; an IPv4 answer is what a LAN target actually listens on.
+ * A failure is reported, never papered over: gobuster would print its own misleading
+ * `lookup … on [::1]:53` error, which reads like a broken target rather than a missing resolver.
+ */
+@Suppress("ReturnCount") // guard clauses over a small state machine; each return is a distinct outcome
+private suspend fun resolveTarget(url: String): GobusterTarget {
+    val host = runCatching { URI(url).host }.getOrNull()
+    if (host.isNullOrBlank() || HostRewrite.isIpLiteral(host)) return GobusterTarget.AsTyped(url)
+    val address =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                InetAddress
+                    .getAllByName(host)
+                    .sortedBy { it !is Inet4Address }
+                    .firstOrNull()
+                    ?.hostAddress
+            }.getOrNull()
+        }
+    if (address.isNullOrBlank()) return GobusterTarget.Unresolved(host)
+    val rewritten = HostRewrite.rewrite(url, address)
+    val header = rewritten.hostHeader ?: return GobusterTarget.AsTyped(url)
+    return GobusterTarget.Rewritten(
+        url = rewritten.url,
+        host = host,
+        address = address,
+        hostHeader = header,
+        insecureTls = rewritten.insecureTls,
+    )
+}

@@ -183,7 +183,7 @@ class SmartToolBox
                     ToolSpec("reaver", "direct", "WPS PIN cracker", "reaver"),
                     ToolSpec("hping3", "direct", "Packet crafter", "hping3"),
                     ToolSpec("nuclei", "direct", "Vulnerability scanner", "nuclei"),
-                    ToolSpec("gobuster", "raw", "Directory/file brute-forcer", "gobuster"),
+                    ToolSpec("gobuster", "direct", "Directory/file brute-forcer", "gobuster"),
                     ToolSpec("bettercap", "direct", "Network attack framework", "bettercap"),
                     ToolSpec("arpspoof", "direct", "ARP spoofer", "arpspoof"),
                     ToolSpec("tcpdump", "direct", "Packet capture", "tcpdump"),
@@ -759,22 +759,21 @@ class SmartToolBox
             }
         }
 
-        suspend fun gobuster(args: String): Flow<ToolResult> {
-            ensureChroot()?.let { return failure("gobuster", it) }
-            // The VM passes absolute host paths (wordlists, output files); inside the chroot the
-            // core directory has a different path, so translate them rather than passing a path
-            // that cannot exist there.
-            val translated =
-                args
-                    .replace(coreManager.coreDir.absolutePath, ChrootScript.CORE_MOUNT)
-                    .replace(context.cacheDir.absolutePath, "/data/user/0/${context.packageName}/cache")
-            val binary = "/" + ChrootScript.CORE_MOUNT.trimStart('/') + "/tools/gobuster/gobuster"
-            return execInChroot(
-                chrootEngine.wrap("$binary $translated"),
-                label = "gobuster",
-                timeoutMs = LONG_RUNNING_TIMEOUT_MS,
-            )
-        }
+        /**
+         * Runs gobuster through a direct `su -c`, not the Alpine chroot.
+         *
+         * It cannot run in the chroot at all: the artifact is a Go binary built for Android, so
+         * its ELF interpreter is `/system/bin/linker64` → `/apex/com.android.runtime/bin/linker64`,
+         * and inside the musl rootfs the kernel answers `not found` (device-verified — a run that
+         * used to be reported as a resolver failure was really the binary never starting).
+         *
+         * Running it on the host means it has no resolver (see [GoResolvers]), so the screen
+         * resolves the target itself and passes an address plus a `Host:` header
+         * ([HostRewrite]). Absolute paths from the VM (`<core>/wordlists/…`) are already valid
+         * here, so nothing is translated.
+         */
+        suspend fun gobuster(args: String): Flow<ToolResult> =
+            runDirect("gobuster", "gobuster $args", timeoutMs = LONG_RUNNING_TIMEOUT_MS)
 
         fun hping3(
             target: String,
@@ -1258,6 +1257,20 @@ class SmartToolBox
                 ?: return failure("nuclei", Nuclei.NO_TEMPLATES_FIX)
             val home = shellQuote(context.filesDir.absolutePath)
             val configHome = shellQuote(File(context.filesDir, Nuclei.HOST_CONFIG_DIR).absolutePath)
+            // A hostname only the device's own resolver knows used to fail with "no such host":
+            // a static Go binary has no `/etc/resolv.conf` here and falls back to 127.0.0.1:53.
+            // `-r` is nuclei's own way in, so the file the network's servers are written to is
+            // passed only when there are any (see [GoResolvers]).
+            val resolvers =
+                withContext(Dispatchers.IO) {
+                    GoResolvers.text(networkHelper.getDnsServers())
+                        .takeIf { it.isNotEmpty() }
+                        ?.let { text ->
+                            val file = File(context.filesDir, GoResolvers.FILE_NAME)
+                            runCatching { file.writeText(text) }.getOrNull()?.let { file.absolutePath }
+                        }
+                }
+            val resolverFlag = resolvers?.let { " -r ${shellQuote(it)}" }.orEmpty()
             // nuclei opens `<config home>/nuclei/.nuclei-ignore` on every run and prints two
             // `[ERR]` lines when it is unusable — device-verified at the top of every scan:
             // "Could not read nuclei-ignore file" when absent, then "Could not parse …: EOF"
@@ -1273,7 +1286,7 @@ class SmartToolBox
                 // `{}` and not an empty file: the list is decoded as YAML into a struct, so a blank
                 // file is `Could not parse nuclei-ignore file: EOF` twice (also device-verified).
                 "/system/bin/mkdir -p $configNuclei; [ -s $ignore ] || echo '{}' > $ignore; " +
-                    "HOME=$home XDG_CONFIG_HOME=$configHome nuclei -nc -stats -si 10 " +
+                    "HOME=$home XDG_CONFIG_HOME=$configHome nuclei -nc -stats -si 10$resolverFlag " +
                     "-t ${shellQuote(dir.absolutePath)} -u ${shellQuote(target)} $templates",
                 label = "nuclei",
                 timeoutMs = SCAN_TIMEOUT_MS,
