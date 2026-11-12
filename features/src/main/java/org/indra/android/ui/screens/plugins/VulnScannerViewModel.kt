@@ -12,6 +12,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.indra.android.core.engine.Capability
+import org.indra.android.core.engine.CapabilityFix
+import org.indra.android.core.engine.EngineInstallState
 import org.indra.android.core.system.CoreManager
 import org.indra.android.core.system.NetworkHelper
 import org.indra.android.core.system.Nuclei
@@ -61,6 +64,17 @@ class VulnScannerViewModel
                 _uiState.value = _uiState.value.copy(nucleiInstalled = installed)
             }
             viewModelScope.launch { networkRepository.discoveredHosts.collect { refreshSuggestions() } }
+            // One install for the whole app: show whatever another screen started, and clear the
+            // gate once it finished (pressing Refresh templates again is the retry — nothing is
+            // restarted behind the user's back).
+            viewModelScope.launch {
+                toolBox.engineInstall.collect { state ->
+                    _uiState.value = _uiState.value.copy(install = state)
+                    if (state is EngineInstallState.Done) {
+                        _uiState.value = _uiState.value.copy(gate = null)
+                    }
+                }
+            }
         }
 
         private fun refreshSuggestions() {
@@ -171,15 +185,29 @@ class VulnScannerViewModel
          * spends minutes with nothing to show, and a chroot whose resolver is broken would fail
          * there with `no templates provided for scan`. Doing it here keeps the fix inside the
          * screen that needs it.
+         *
+         * This is the one part of the screen that needs the Alpine engine — the scan itself runs on
+         * the host — so a missing rootfs becomes a fix card instead of a run whose console says
+         * `chroot: not found`. Installing nuclei is not enough, which is exactly what the copy on
+         * the install card implied before.
          */
         fun refreshTemplates() {
             if (job?.isActive == true) return
             job =
                 viewModelScope.launch {
+                    val fix = CapabilityFix.of(toolBox.capability(Capability.GNU_TOOLS))
+                    if (fix != null) {
+                        // A fresh gate gets a fresh card: the shared state still says "Installed."
+                        // from the install that just finished.
+                        toolBox.resetEngineInstall()
+                        _uiState.value = _uiState.value.copy(isUpdatingTemplates = false, error = null, gate = fix)
+                        return@launch
+                    }
                     _uiState.value =
                         _uiState.value.copy(
                             isUpdatingTemplates = true,
                             error = null,
+                            gate = null,
                             finished = false,
                             lines = emptyList(),
                             lineCount = 0,
@@ -208,6 +236,11 @@ class VulnScannerViewModel
                         _uiState.value = _uiState.value.copy(isUpdatingTemplates = false, error = e.message)
                     }
                 }
+        }
+
+        /** The fix card's button — starts a single-flight install shared with every screen. */
+        fun installFix() {
+            _uiState.value.gate?.let { toolBox.installEngineFix(it) }
         }
 
         private fun collectLine(result: ToolResult) {

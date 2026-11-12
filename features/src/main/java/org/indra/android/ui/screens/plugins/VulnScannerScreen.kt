@@ -8,9 +8,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import org.indra.android.core.engine.CapabilityFix
+import org.indra.android.core.engine.EngineInstallState
 import org.indra.android.core.system.Nuclei
 import org.indra.android.core.system.NucleiFinding
 import org.indra.android.core.system.NucleiSeverity
+import org.indra.android.ui.components.EngineFixCard
 import org.indra.android.ui.components.FormError
 import org.indra.android.ui.components.HostSuggestions
 import org.indra.android.ui.components.LiveOutputCard
@@ -59,6 +62,12 @@ fun VulnScannerScreen(
                     uiState = uiState,
                     onInstall = { viewModel.installNuclei() },
                 )
+            }
+
+            // The template refresh runs inside the Alpine chroot, so a missing rootfs is a fix —
+            // and one this screen can perform, unlike the Settings pointer it used to imply.
+            uiState.gate?.let { gate ->
+                EngineFixCard(gate, uiState.install, viewModel::installFix)
             }
 
             FindingsHeader(uiState)
@@ -203,5 +212,9 @@ data class VulnScannerUiState(
     val installProgress: Float = 0f,
     /** True while `nuclei -update-templates` runs, so the console says what is happening. */
     val isUpdatingTemplates: Boolean = false,
+    /** Set when the refresh needs an engine that is not installed: the fix, not a failure. */
+    val gate: CapabilityFix? = null,
+    /** The shared engine-install state (another screen may have started the same install). */
+    val install: EngineInstallState = EngineInstallState.Idle,
     val suggestions: List<String> = emptyList(),
 )
