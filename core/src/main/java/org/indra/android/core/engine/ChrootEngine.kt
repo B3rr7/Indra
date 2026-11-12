@@ -4,6 +4,7 @@ import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
 import org.indra.android.core.system.CoreManager
 import org.indra.android.core.system.NetworkHelper
+import org.indra.android.core.system.Nuclei
 import org.indra.android.core.system.ResolvConf
 import java.io.File
 import javax.inject.Inject
@@ -200,12 +201,7 @@ class ChrootEngine
         private fun hasIp(): Boolean =
             listOf("sbin/ip", "usr/sbin/ip", "bin/ip", "usr/bin/ip").any { executable(it) }
 
-        private fun hasNucleiTemplates(): Boolean {
-            val dirs = listOf(File(coreManager.coreDir, TEMPLATES_DIR), File(root, "root/nuclei-templates"))
-            return dirs.any { dir ->
-                dir.isDirectory && dir.listFiles()?.isNotEmpty() == true
-            }
-        }
+        private fun hasNucleiTemplates(): Boolean = Nuclei.templatesDir(coreManager.coreDir, root) != null
 
         private fun fixFor(capability: Capability): String =
             when (capability) {
@@ -239,7 +235,7 @@ class ChrootEngine
             const val ALPINE_ASSET = "alpine.json"
 
             /** Where the app unpacks nuclei templates, visible inside as `/indra/nuclei-templates`. */
-            const val TEMPLATES_DIR = "nuclei-templates"
+            const val TEMPLATES_DIR = Nuclei.TEMPLATES_DIR
 
             /**
              * The sentence every `EngineNotInstalled` carries.

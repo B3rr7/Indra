@@ -1,5 +1,7 @@
 package org.indra.android.core.system
 
+import java.io.File
+
 /**
  * Severity tag on a nuclei finding line.
  *
@@ -53,6 +55,13 @@ data class NucleiRun(
 object Nuclei {
     const val MAX_FINDINGS = 500
 
+    /** Directory nuclei uses inside its `HOME` for the installed template set. */
+    const val TEMPLATES_DIR = "nuclei-templates"
+
+    /** The one sentence a run gets when no template set is installed, wherever it is asked from. */
+    const val NO_TEMPLATES_FIX =
+        "No nuclei templates are installed — open Vulnerability Scanner and press Refresh templates."
+
     /** nuclei's documented "at least one template matched" exit status. */
     private const val FINDINGS_EXIT_CODE = 1
 
@@ -105,6 +114,25 @@ object Nuclei {
         val head = "${findings.size} " + if (findings.size == 1) "finding" else "findings"
         return (listOf(head) + breakdown).joinToString(" · ")
     }
+
+    /**
+     * The installed template set on the **host** filesystem, or null when there is none.
+     *
+     * The refresh has to run in the chroot — that is the only place a Go resolver gets DNS on
+     * Android — while the scan runs on the host, so both must name the same directory on the
+     * host's disk: the core dir, which the chroot bind-mounts at `/indra` and which the direct run
+     * uses as `HOME`. The second candidate is where the pre-fix refresh wrote
+     * (`/root/nuclei-templates` inside the rootfs); it is still honoured so an install that
+     * already has templates there is not reported as empty.
+     */
+    fun templatesDir(
+        core: File,
+        alpineRoot: File?,
+    ): File? =
+        listOfNotNull(
+            File(core, TEMPLATES_DIR),
+            alpineRoot?.let { File(it, "root/$TEMPLATES_DIR") },
+        ).firstOrNull { it.isDirectory && it.listFiles()?.isNotEmpty() == true }
 
     private fun parseLine(line: String): NucleiFinding? {
         val trimmed = line.trim()

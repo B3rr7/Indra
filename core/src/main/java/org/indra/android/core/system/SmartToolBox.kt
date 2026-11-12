@@ -521,20 +521,31 @@ class SmartToolBox
         suspend fun nuclei(
             target: String,
             templates: String = "",
-        ): Flow<ToolResult> {
-            ensureChroot()?.let { return failure("nuclei", it) }
-            val binary = "/" + ChrootScript.CORE_MOUNT.trimStart('/') + "/tools/nuclei/nuclei"
-            // `-silent` swallowed *everything* but findings, and a full template set takes minutes
-            // on a phone — the console sat on "Waiting for output…" for five of them, which reads
-            // exactly like a hang. `-stats` prints nuclei's own progress on stderr (which the raw
-            // handler forwards) and `parseFindings` matches `[severity]` case-sensitively, so the
-            // `[INF]` banner/stats lines never become findings.
-            return execInChroot(
-                chrootEngine.wrap("$binary -nc -stats -si 10 -u ${shellQuote(target)} $templates"),
-                label = "nuclei",
-                timeoutMs = SCAN_TIMEOUT_MS,
-            )
-        }
+        ): Flow<ToolResult> =
+            when (val chroot = ensureChroot()) {
+                null ->
+                    Nuclei.templatesDir(coreManager.coreDir, coreManager.alpinePath())?.let { dir ->
+                        // The chroot sees the core dir at its own mount point, so the same
+                        // directory has a different path here. Both runners resolve it through
+                        // `Nuclei.templatesDir`, so a refresh is visible to whichever one runs.
+                        val inside = ChrootScript.CORE_MOUNT + dir.absolutePath.removePrefix(coreManager.coreDir.absolutePath)
+                        val binary = "/" + ChrootScript.CORE_MOUNT.trimStart('/') + "/tools/nuclei/nuclei"
+                        // `-silent` swallowed *everything* but findings, and a full template set
+                        // takes minutes on a phone — the console sat on "Waiting for output…" for
+                        // five of them, which reads exactly like a hang. `-stats` prints nuclei's
+                        // own progress on stderr (which the raw handler forwards) and
+                        // `parseFindings` matches `[severity]` case-sensitively, so the `[INF]`
+                        // banner/stats lines never become findings.
+                        execInChroot(
+                            chrootEngine.wrap(
+                                "$binary -nc -stats -si 10 -t ${shellQuote(inside)} -u ${shellQuote(target)} $templates",
+                            ),
+                            label = "nuclei",
+                            timeoutMs = SCAN_TIMEOUT_MS,
+                        )
+                    } ?: failure("nuclei", Nuclei.NO_TEMPLATES_FIX)
+                else -> failure("nuclei", chroot)
+            }
 
         fun aircrack(args: String): Flow<ToolResult> =
             rawCommand("aircrack", "${binary("aircrack-ng")} $args", timeoutMs = LONG_RUNNING_TIMEOUT_MS)
@@ -665,14 +676,24 @@ class SmartToolBox
          *
          * The daemon cannot resolve DNS (no `/etc/resolv.conf` on Android), so this used to be
          * impossible; the engine now writes one from `ConnectivityManager`, so the Go resolver
-         * works and `-update-templates` can reach GitHub. Templates land in `/root/nuclei-templates`
-         * (HOME=/root), which `ChrootEngine` already checks for the `NUCLEI_TEMPLATES` capability.
+         * works and `-update-templates` can reach GitHub.
+         *
+         * `HOME` is the core mount, not `/root`, and that one word is the whole fix: nuclei writes
+         * its templates to `$HOME/nuclei-templates`, while the scan runs on the **host** (its
+         * `HOME` is the core dir) and reads the same directory there. With `HOME=/root` the
+         * download landed in `/root/nuclei-templates` — inside the rootfs, invisible to every
+         * scan — so a refresh could succeed and the next scan still say "no templates provided".
+         * `XDG_CACHE_HOME` stays in the rootfs because the download cache is transient and a core
+         * install replaces the core dir.
          */
         suspend fun nucleiUpdateTemplates(): Flow<ToolResult> {
             ensureChroot()?.let { return failure("nuclei", it) }
             val binary = "/" + ChrootScript.CORE_MOUNT.trimStart('/') + "/tools/nuclei/nuclei"
             return execInChroot(
-                chrootEngine.wrap("$binary -update-templates", mapOf("HOME" to "/root", "XDG_CACHE_HOME" to "/root/.cache")),
+                chrootEngine.wrap(
+                    "$binary -update-templates",
+                    mapOf("HOME" to ChrootScript.CORE_MOUNT, "XDG_CACHE_HOME" to "/root/.cache"),
+                ),
                 label = "nuclei update-templates",
                 timeoutMs = SCAN_TIMEOUT_MS,
             )
@@ -1156,18 +1177,27 @@ class SmartToolBox
 
         /**
          * Vulnerability scanning via direct su.
-         * nuclei needs a writable HOME for ~/.config/nuclei; the daemon's HOME is /
-         * (read-only), so set it explicitly.
+         *
+         * nuclei needs a writable HOME for `~/.config/nuclei`; the daemon's HOME is `/`
+         * (read-only), so it is set to the core dir explicitly — which is also where
+         * [nucleiUpdateTemplates] writes the template set (see [Nuclei.templatesDir]). `-t` names
+         * that directory outright instead of relying on nuclei's `$HOME/nuclei-templates`
+         * default, because a run that quietly finds no templates reports the same "no templates
+         * provided" line as a broken install.
          */
         suspend fun nucleiDirect(
             target: String,
             templates: String = "",
-        ): Flow<ToolResult> =
-            shellDirect(
-                "HOME=${shellQuote(context.filesDir.absolutePath)} nuclei -nc -stats -si 10 -u ${shellQuote(target)} $templates",
+        ): Flow<ToolResult> {
+            val dir = Nuclei.templatesDir(coreManager.coreDir, coreManager.alpinePath())
+                ?: return failure("nuclei", Nuclei.NO_TEMPLATES_FIX)
+            return shellDirect(
+                "HOME=${shellQuote(context.filesDir.absolutePath)} nuclei -nc -stats -si 10 " +
+                    "-t ${shellQuote(dir.absolutePath)} -u ${shellQuote(target)} $templates",
                 label = "nuclei",
                 timeoutMs = SCAN_TIMEOUT_MS,
             )
+        }
 
         /**
          * Runs a POSIX shell script through `/system/bin/sh -c`.

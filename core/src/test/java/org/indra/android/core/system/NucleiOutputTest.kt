@@ -5,6 +5,8 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.File
+import kotlin.io.path.createTempDirectory
 
 class NucleiOutputTest {
     private val transcript =
@@ -115,6 +117,42 @@ class NucleiOutputTest {
         assertEquals("3 findings · 1 critical · 1 high · 1 info", Nuclei.summary(findings))
         assertEquals("1 finding · 1 high", Nuclei.summary(Nuclei.parseFindings("[high] [http] http://h [t] [m]")))
     }
+
+    @Test
+    fun `templates resolve to the core dir where the refresh writes`() {
+        val core = tempDir()
+        val dir = File(core, Nuclei.TEMPLATES_DIR).apply { mkdirs() }
+        File(dir, "cves.yaml").writeText("id: cve\n")
+        assertEquals(dir, Nuclei.templatesDir(core, File(core, "alpine")))
+    }
+
+    @Test
+    fun `a legacy rootfs copy is still found`() {
+        val core = tempDir()
+        val legacy = File(core, "alpine/root/${Nuclei.TEMPLATES_DIR}").apply { mkdirs() }
+        File(legacy, "cves.yaml").writeText("id: cve\n")
+        assertEquals(legacy, Nuclei.templatesDir(core, File(core, "alpine")))
+    }
+
+    @Test
+    fun `the core dir wins over the legacy copy`() {
+        val core = tempDir()
+        val host = File(core, Nuclei.TEMPLATES_DIR).apply { mkdirs() }
+        File(host, "host.yaml").writeText("id: host\n")
+        val legacy = File(core, "alpine/root/${Nuclei.TEMPLATES_DIR}").apply { mkdirs() }
+        File(legacy, "legacy.yaml").writeText("id: legacy\n")
+        assertEquals(host, Nuclei.templatesDir(core, File(core, "alpine")))
+    }
+
+    @Test
+    fun `an empty or absent directory is not an install`() {
+        val core = tempDir()
+        assertNull(Nuclei.templatesDir(core, null))
+        File(core, Nuclei.TEMPLATES_DIR).mkdirs()
+        assertNull(Nuclei.templatesDir(core, File(core, "alpine")))
+    }
+
+    private fun tempDir(): File = createTempDirectory("nuclei-templates").toFile().also { it.deleteOnExit() }
 
     private fun completed(
         exitValue: Int?,
