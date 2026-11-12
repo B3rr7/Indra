@@ -131,7 +131,7 @@ class GobusterViewModel
             }
         }
 
-        /** Cancel an in-flight sweep (rootless) or the daemon child (rooted). */
+        /** Cancel an in-flight sweep: the app-side coroutine, or the direct `su -c` child. */
         fun stop() {
             scanJob?.cancel()
             scanJob = null
@@ -150,7 +150,7 @@ class GobusterViewModel
             // to exist (in rootless mode it cannot be executed at all).
             scanJob =
                 viewModelScope.launch {
-                    if (settings.rootlessMode) scanRootless() else scanBundled()
+                    if (settings.rootlessMode) scanInApp() else scanBundled()
                 }
         }
 
@@ -164,6 +164,11 @@ class GobusterViewModel
          * resolver-file flag the way nuclei's `-r` does. So the name is resolved by this app
          * through Android's own resolver and the tool is handed the address, with the original
          * name kept in a `Host:` header (and `-k` for https, whose certificate names the name).
+         *
+         * That header cannot stand in for the name in TLS, which is exchanged before any header:
+         * a site behind a name-based certificate answers `tls: handshake failure` (verified on
+         * device against `example.com`). There is no flag for it, so the sweep continues in-app,
+         * where OkHttp does send the name — an honest hand-off, not a dead end.
          */
         @Suppress("ReturnCount")
         private suspend fun scanBundled() {
@@ -195,27 +200,11 @@ class GobusterViewModel
                     )
             }
             val wl = st.wordlist.trim().ifBlank { toolBox.defaultDirWordlist() }
-            val ext = st.extensions.trim()
-            val args = buildString {
-                append("dir")
-                when (target) {
-                    is GobusterTarget.AsTyped -> append(" -u ").append(SmartToolBox.shellQuote(target.url))
-                    is GobusterTarget.Rewritten -> {
-                        append(" -u ").append(SmartToolBox.shellQuote(target.url))
-                        append(" -H ").append(SmartToolBox.shellQuote("Host: ${target.hostHeader}"))
-                        if (target.insecureTls) append(" -k")
-                    }
-                    // Handled above; kept exhaustive so a new state cannot silently run the tool.
-                    is GobusterTarget.Unresolved -> Unit
-                }
-                append(" -w ").append(SmartToolBox.shellQuote(wl))
-                if (ext.isNotBlank()) append(" -x ").append(SmartToolBox.shellQuote(ext))
-                // Without it gobuster redraws a progress line per request, and the console's
-                // line reader turns every redraw into another transcript row.
-                append(" --no-progress")
-            }
+            val args = gobusterArgs(target, wl, st.extensions.trim())
+            val transcript = mutableListOf<String>()
             toolBox.gobuster(args).collect { result ->
                 result.streamedLine?.let { line ->
+                    transcript += line
                     _uiState.value = _uiState.value.copy(output = _uiState.value.output + line)
                 }
                 if (!result.isStreaming) {
@@ -223,16 +212,23 @@ class GobusterViewModel
                     if (!result.success) _uiState.value = _uiState.value.copy(error = result.error)
                 }
             }
+            if (target is GobusterTarget.Rewritten && HostRewrite.tlsNeedsName(transcript)) {
+                scanInApp(TLS_NEEDS_NAME)
+            }
         }
 
         /**
-         * App-side sweep: no daemon, no bundled binary, and hostnames resolve through Android.
+         * App-side sweep: no daemon, no bundled binary, and both the host name and the TLS name
+         * resolve through Android.
          *
-         * A run where every request failed is reported as a failure, not as "0 paths found";
-         * a run that completed and found nothing says so in the console.
+         * Two callers: rootless mode, whose whole point is a daemon-free job, and a bundled run
+         * that TLS refused because its URL carries an address instead of the name ([why] says so
+         * at the top of the new transcript). A run where every request failed is reported as a
+         * failure, not as "0 paths found"; a run that completed and found nothing says so in the
+         * console.
          */
         @Suppress("ReturnCount")
-        private suspend fun scanRootless() {
+        private suspend fun scanInApp(why: String? = null) {
             val st = _uiState.value
             val base = DirBrute.normalizeUrl(st.url)
             if (base == null) {
@@ -255,9 +251,10 @@ class GobusterViewModel
 
             val paths = DirBrute.paths(words, DirBrute.extensions(st.extensions))
             _uiState.value = st.copy(isLoading = true, error = null, output = emptyList())
+            why?.let { _uiState.value = _uiState.value.appended(it) }
             _uiState.value =
                 _uiState.value.appended(
-                    "Rootless scan of $base — ${paths.size} paths, ${DirBruteRunner.CONCURRENCY} at a time",
+                    "In-app sweep of $base — ${paths.size} paths, ${DirBruteRunner.CONCURRENCY} at a time",
                 )
 
             var found = 0
@@ -296,6 +293,15 @@ class GobusterViewModel
 /** One console line appended to the transcript. */
 private fun GobusterUiState.appended(line: String): GobusterUiState = copy(output = output + line)
 
+/**
+ * What the console says when the bundled binary could not use an address because TLS wanted the
+ * name — the reason the sweep continues in-app rather than stopping on an error naming an IP the
+ * user never typed.
+ */
+private const val TLS_NEEDS_NAME =
+    "HTTPS puts the host name in the TLS handshake, before any header, so an address cannot stand " +
+        "in for it here — continuing with the in-app sweep, which sends the name"
+
 /** How the sweep should address its target once the optional name has been resolved. */
 private sealed interface GobusterTarget {
     /** Use the URL as typed: an IP literal, or something gobuster can explain better than we can. */
@@ -313,6 +319,33 @@ private sealed interface GobusterTarget {
     /** The name does not resolve, and the tool cannot resolve it either. */
     data class Unresolved(val host: String) : GobusterTarget
 }
+
+/**
+ * The `dir` arguments for [target]: the resolved address with the name kept in a `Host:` header
+ * (and `-k`, because the certificate names the name) once a lookup happened, plus `--no-progress`
+ * so gobuster's per-request redraws stop becoming transcript rows.
+ */
+private fun gobusterArgs(
+    target: GobusterTarget,
+    wordlist: String,
+    extensions: String,
+): String =
+    buildString {
+        append("dir")
+        when (target) {
+            is GobusterTarget.AsTyped -> append(" -u ").append(SmartToolBox.shellQuote(target.url))
+            is GobusterTarget.Rewritten -> {
+                append(" -u ").append(SmartToolBox.shellQuote(target.url))
+                append(" -H ").append(SmartToolBox.shellQuote("Host: ${target.hostHeader}"))
+                if (target.insecureTls) append(" -k")
+            }
+            // Handled by the caller; kept exhaustive so a new state cannot silently run the tool.
+            is GobusterTarget.Unresolved -> Unit
+        }
+        append(" -w ").append(SmartToolBox.shellQuote(wordlist))
+        if (extensions.isNotBlank()) append(" -x ").append(SmartToolBox.shellQuote(extensions))
+        append(" --no-progress")
+    }
 
 /**
  * Resolves a URL's host through Android, preferring IPv4.

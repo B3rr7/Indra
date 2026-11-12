@@ -80,6 +80,33 @@ class HostRewriteTest {
         assertEquals(false, HostRewrite.isIpLiteral("router.lan"))
     }
 
+    @Test
+    fun `the tls alert a name-based vhost sends is recognised`() {
+        // Verbatim from gobuster 3.8.2 on the device, sweeping https://example.com/ as an address.
+        val transcript =
+            listOf(
+                "2026/11/12 07:17:21 error on running gobuster on https://104.20.23.154/: " +
+                    "unable to connect to https://104.20.23.154/: Get \"https://104.20.23.154/\": " +
+                    "remote error: tls: handshake failure",
+                "Finished",
+            )
+        assertTrue(HostRewrite.tlsNeedsName(transcript))
+        assertTrue(HostRewrite.tlsNeedsName(listOf("remote error: tls: unrecognized name")))
+    }
+
+    @Test
+    fun `an ordinary sweep is not mistaken for a tls refusal`() {
+        // A server with a single certificate accepts the address, and the run finds paths.
+        val found =
+            listOf(
+                "[+] Url: https://192.168.1.1:8443/",
+                "admin.html (Status: 200) [Size: 512]",
+                "Finished",
+            )
+        assertEquals(false, HostRewrite.tlsNeedsName(found))
+        assertEquals(false, HostRewrite.tlsNeedsName(emptyList()))
+    }
+
     private fun assertUnchanged(url: String) {
         val out = HostRewrite.rewrite(url, "10.0.0.5")
         assertEquals(url, out.url)

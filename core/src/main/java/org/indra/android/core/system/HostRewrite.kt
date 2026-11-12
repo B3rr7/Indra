@@ -71,4 +71,20 @@ object HostRewrite {
         val headerHost = if (uri.port >= 0) "$host:${uri.port}" else host
         return Rewritten(rebuilt, headerHost, scheme == "https")
     }
+
+    /**
+     * TLS alerts that mean the server wanted the *name*, which a rewritten URL cannot carry.
+     *
+     * TLS puts the name on the wire (SNI) before any HTTP header exists, so the `Host:` header
+     * cannot recover it: the certificate is chosen — or refused — before the request is read,
+     * and `-k` only skips *verification* of an already-chosen certificate. Device-verified:
+     * `https://example.com/` rewritten to `https://104.20.23.154/` fails with `tls: handshake
+     * failure`, while an HTTPS server with a single certificate accepts the address happily.
+     * Both outcomes are honest; the caller only needs to know when the first one happened, so
+     * it can run the sweep a way that does send the name instead of leaving a dead end.
+     */
+    fun tlsNeedsName(output: List<String>): Boolean =
+        output.any { line -> ALERTS.any { it in line.lowercase() } }
+
+    private val ALERTS = listOf("tls: handshake failure", "tls: unrecognized name")
 }
