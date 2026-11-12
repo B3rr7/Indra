@@ -97,6 +97,30 @@ class PluginAvailabilityTest {
     }
 
     @Test
+    fun aDownloadableBinaryThatIsNotThereYetStaysOpenable() {
+        // nuclei is not bundled: `installNuclei` downloads it. Reporting "not in native core"
+        // (TOOL_MISSING) disabled the Vulnerability Scanner card, so the screen that installs
+        // nuclei could not be reached at all — the one trap ARTIFACT_MISSING exists for.
+        fun status(
+            bundled: Boolean,
+            rooted: Boolean,
+            artifact: Boolean,
+            installable: Boolean,
+        ) = PluginAvailability.directToolStatus(
+            binaryBundled = bundled,
+            rooted = rooted,
+            artifactInstalled = artifact,
+            installable = installable,
+        )
+        val artifactMissing = PluginAvailability.PluginStatus.ARTIFACT_MISSING
+        assertEquals(artifactMissing, status(false, true, false, true))
+        // Root is still checked before "install it": a direct tool cannot run without it.
+        assertEquals(PluginAvailability.PluginStatus.NEEDS_ROOT, status(false, false, false, true))
+        // A bundled binary that vanished is a broken install, not an offer to download.
+        assertEquals(PluginAvailability.PluginStatus.TOOL_MISSING, status(false, true, true, false))
+    }
+
+    @Test
     fun onlyThePhaseThreeToolsAreDirect() {
         // A plugin whose `requires` key is a direct-handler spec is gated on root by
         // directStatus; every other plugin must still go through the daemon probe.

@@ -130,10 +130,21 @@ class PluginAvailability
                 binaryBundled = toolBox.toolBinaryPath(plugin.requires) != null,
                 rooted = rootManager.cachedRootStatus().isRooted,
                 artifactInstalled = artifactInstalled(plugin.id),
+                installable = plugin.requires in downloadableArtifacts,
             )
 
         /** Runnable now. Kept for callers that only need the boolean. */
         fun isPluginAvailable(plugin: Plugin): Boolean = pluginStatus(plugin) == PluginStatus.AVAILABLE
+
+        /**
+         * Artifacts the app downloads into the core itself, so "the binary is not there" is a
+         * fixable state — the installer lives on the screen this card opens.
+         *
+         * Without this a not-yet-downloaded nuclei card read "not in native core" and was not
+         * openable, which made the screen that installs nuclei unreachable: the exact trap
+         * [PluginStatus.ARTIFACT_MISSING] exists to avoid.
+         */
+        private val downloadableArtifacts = setOf("nuclei", "gobuster", "bettercap", "msf")
 
         /** Optional artifacts that must be installed separately (File checks). */
         private fun artifactInstalled(id: String): Boolean =
@@ -157,11 +168,15 @@ class PluginAvailability
                 binaryBundled: Boolean,
                 rooted: Boolean,
                 artifactInstalled: Boolean,
+                installable: Boolean = false,
             ): PluginStatus =
                 when {
-                    !binaryBundled -> PluginStatus.TOOL_MISSING
+                    // A binary that ships in the core and is absent is a broken install; one the
+                    // app can download is just not downloaded yet, and its screen installs it.
+                    !binaryBundled && !installable -> PluginStatus.TOOL_MISSING
                     !rooted -> PluginStatus.NEEDS_ROOT
                     !artifactInstalled -> PluginStatus.ARTIFACT_MISSING
+                    !binaryBundled -> PluginStatus.ARTIFACT_MISSING
                     else -> PluginStatus.AVAILABLE
                 }
 
