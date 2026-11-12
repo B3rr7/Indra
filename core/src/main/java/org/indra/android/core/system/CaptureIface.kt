@@ -67,18 +67,42 @@ object CaptureIface {
     fun flag(iface: String?): String = if (iface.isNullOrBlank()) "" else "-e ${ShellText.quote(iface)} "
 
     /**
-     * masscan's argument prefix: the user's field when they typed one, nothing when their
-     * free-form arguments already name an interface, else [detected] — which is only called
+     * One run's interface decision: the prefix to prepend, and whether the finished command
+     * names an interface at all.
+     *
+     * The two are not the same question, and conflating them refused good runs: a caller whose
+     * own arguments already carry `-e` gets an empty [prefix], so "does the prefix start with
+     * `-e`?" read that as "there is no interface" and reported a run that was perfectly
+     * scannable as a failure. [namesInterface] answers what actually matters.
+     */
+    data class Plan(
+        val prefix: String,
+        val namesInterface: Boolean,
+    )
+
+    /**
+     * The interface decision: the user's field when they typed one, nothing plus "already
+     * named" when their free-form arguments carry `-e`, else [detected] — which is only called
      * when it is actually needed, because detecting reads the kernel's interface list.
      */
+    fun plan(
+        iface: String,
+        args: String,
+        detected: () -> String?,
+    ): Plan =
+        when {
+            iface.isNotBlank() -> Plan(flag(iface), true)
+            namesInterface(args) -> Plan("", true)
+            else -> {
+                val chosen = detected()
+                Plan(flag(chosen), chosen != null)
+            }
+        }
+
+    /** masscan's argument prefix, i.e. [plan]'s prefix followed by the caller's arguments. */
     fun masscanArgs(
         iface: String,
         args: String,
         detected: () -> String?,
-    ): String =
-        when {
-            iface.isNotBlank() -> flag(iface)
-            namesInterface(args) -> ""
-            else -> flag(detected())
-        } + args
+    ): String = plan(iface, args, detected).prefix + args
 }

@@ -89,4 +89,28 @@ class CaptureIfaceTest {
         assertEquals("-e 'wlan0' -p 80", CaptureIface.masscanArgs("", "-p 80") { "wlan0" })
         assertEquals("-p 80", CaptureIface.masscanArgs("  ", "-p 80") { null })
     }
+
+    @Test
+    fun `a free-form -e still counts as a named interface`() {
+        // The prefix is empty here because the caller already wrote the flag — the old
+        // "does the prefix start with -e?" guard read that as "no interface" and refused a
+        // perfectly scannable run.
+        val plan = CaptureIface.plan("", "-e eth0 -p 80") { error("detection must not run") }
+        assertEquals("", plan.prefix)
+        assertTrue(plan.namesInterface)
+        assertEquals("-e eth0 -p 80", CaptureIface.masscanArgs("", "-e eth0 -p 80") { null })
+    }
+
+    @Test
+    fun `a typed or detected interface is a named one`() {
+        assertTrue(CaptureIface.plan("wlan0", "") { error("detection must not run") }.namesInterface)
+        assertTrue(CaptureIface.plan("", "-p 80") { "wlan0" }.namesInterface)
+    }
+
+    @Test
+    fun `nothing to name is reported as nothing to name`() {
+        val plan = CaptureIface.plan("  ", "-p 80") { null }
+        assertEquals("", plan.prefix)
+        assertFalse(plan.namesInterface)
+    }
 }

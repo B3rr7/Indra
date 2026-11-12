@@ -791,27 +791,9 @@ class SmartToolBox
             iface: String = "",
         ): Flow<ToolResult> =
             flow {
-                // masscan cannot work out an interface on Android, and the one Android calls
-                // active is frequently cellular, which libpcap cannot scan — see [CaptureIface].
-                // Detection reads the kernel's interface list, so it stays off Main.
-                val resolved =
-                    withContext(Dispatchers.IO) {
-                        CaptureIface.masscanArgs(iface, args) { networkHelper.captureInterface() }
-                    }
-                // If no -e flag was added (empty resolved prefix), masscan will fail with
-                // "could not determine default interface". Fail early with a clear message.
-                if (!resolved.trimStart().startsWith("-e")) {
-                    emit(
-                        ToolResult(
-                            tool = "masscan",
-                            success = false,
-                            status = STATUS_FAILED,
-                            error =
-                                "No suitable network interface for masscan (need Wi-Fi, Ethernet, or " +
-                                    "USB tethering). Cellular interfaces (rmnet*) are not supported by libpcap.",
-                            rawOutput = "",
-                        ),
-                    )
+                val resolved = masscanCommand(args, iface)
+                if (resolved == null) {
+                    emit(noScannableInterface())
                     return@flow
                 }
                 emitAll(rawCommand("masscan", "${binary("masscan")} $resolved ${shellQuote(target)}", timeoutMs = SCAN_TIMEOUT_MS))
@@ -1125,22 +1107,9 @@ class SmartToolBox
             iface: String = "",
         ): Flow<ToolResult> =
             flow {
-                val resolved =
-                    withContext(Dispatchers.IO) {
-                        CaptureIface.masscanArgs(iface, args) { networkHelper.captureInterface() }
-                    }
-                if (!resolved.trimStart().startsWith("-e")) {
-                    emit(
-                        ToolResult(
-                            tool = "masscan",
-                            success = false,
-                            status = STATUS_FAILED,
-                            error =
-                                "No suitable network interface for masscan (need Wi-Fi, Ethernet, or " +
-                                    "USB tethering). Cellular interfaces (rmnet*) are not supported by libpcap.",
-                            rawOutput = "",
-                        ),
-                    )
+                val resolved = masscanCommand(args, iface)
+                if (resolved == null) {
+                    emit(noScannableInterface())
                     return@flow
                 }
                 emitAll(
@@ -1151,6 +1120,39 @@ class SmartToolBox
                     ),
                 )
             }
+
+        /**
+         * masscan's arguments with a `-e` prefix, or null when nothing names an interface.
+         *
+         * masscan cannot work out an interface on Android, and the one Android calls active is
+         * frequently cellular, which libpcap can only open as a cooked `LINUX_SLL` socket — see
+         * [CaptureIface]. Detection reads the kernel's interface list, so it stays off Main.
+         */
+        private suspend fun masscanCommand(
+            args: String,
+            iface: String,
+        ): String? {
+            val plan =
+                withContext(Dispatchers.IO) {
+                    CaptureIface.plan(iface, args) { networkHelper.captureInterface() }
+                }
+            return if (plan.namesInterface) plan.prefix + args else null
+        }
+
+        /**
+         * masscan with no interface at all would only print `FAIL: could not determine default
+         * interface`, so the run is refused with the reason and what would work instead.
+         */
+        private fun noScannableInterface(): ToolResult =
+            ToolResult(
+                tool = "masscan",
+                success = false,
+                status = STATUS_FAILED,
+                error =
+                    "No suitable network interface for masscan (need Wi-Fi, Ethernet, or " +
+                        "USB tethering). Cellular interfaces (rmnet*) are not supported by libpcap.",
+                rawOutput = "",
+            )
 
         /**
          * WiFi WEP/WPA cracker via direct su.
