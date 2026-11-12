@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.BufferedReader
+import java.io.File
 import java.io.InputStreamReader
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
@@ -73,6 +74,14 @@ class ProcessManager @Inject constructor() {
             ProcessBuilder("sh", "-c", shellCmd)
         }
         pb.redirectErrorStream(false)
+        // A run has no interactive input, and the pipe `start()` would otherwise give the child
+        // never receives a byte and never reaches EOF — so a tool that reads stdin waits for
+        // input for the whole run. nuclei does exactly that (it accepts piped targets): inside
+        // the app it blocked in read(0) for minutes before printing a single line, which read as
+        // "the scan is doing nothing" (measured on device in the Terminal, whose script is the
+        // same `shellDirect` path; the same command with `< /dev/null` streams immediately).
+        // /dev/null gives the child an immediate EOF instead, which is what "no input" means.
+        pb.redirectInput(ProcessBuilder.Redirect.from(File("/dev/null")))
 
         val process = withContext(Dispatchers.IO) { pb.start() }
         val startedAt = System.currentTimeMillis()
