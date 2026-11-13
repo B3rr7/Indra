@@ -125,9 +125,13 @@ class CoreManager
          * A runnable Metasploit rootfs: a console link at its root **and** the musl shell that
          * proves the userland unpacked with its symlinks intact. A console alone is what the
          * old bionic-ruby layout produced and it could never start.
+         *
+         * The console is tested with [DirEntry.present], not `exists()`: its link target is
+         * chroot-absolute (`/opt/metasploit-framework/msfconsole`), so `exists()` answers false
+         * from the app process and refused an install that was fine. See [DirEntry].
          */
         fun isMsfInstalled(): Boolean =
-            File(msfPath(), "msfconsole").exists() && File(msfPath(), "bin/busybox").exists()
+            DirEntry.present(File(msfPath(), "msfconsole")) && File(msfPath(), "bin/busybox").exists()
 
         fun exploitdbPath(): File = File(coreDir, EXPLOITDB_DIR_NAME)
 

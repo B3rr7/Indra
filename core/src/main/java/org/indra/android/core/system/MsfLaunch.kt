@@ -51,10 +51,19 @@ object MsfLaunch {
     /**
      * `chroot <root> /bin/sh -c '<checks>'` — the checks are printed as markers so [explain]
      * reads facts instead of matching errno text.
+     *
+     * The chroot's **own** `PATH` is set before anything is looked up, exactly as [launch] and
+     * [rpcd] do. Without it the inner shell inherits the Android PATH from the `su` that started
+     * it (`/system/bin`, `/apex/...`), so `command -v ruby` searches directories that do not exist
+     * inside a musl rootfs and reports "no ruby" for a rootfs that has `/usr/bin/ruby`. Verified
+     * on the moto g60: the probe's `PATH` was the Android one and `head` itself was "not found"
+     * inside the chroot, while `PATH=/usr/bin:…` resolved `ruby 3.3.10 (aarch64-linux-musl)`.
+     * That false negative refused a correctly installed bundle with "the archive is incomplete".
      */
     fun probe(root: String): String {
         val inner =
             buildString {
+                append("PATH=").append(PATH).append("; export PATH; ")
                 append("[ -e ").append(CONSOLE).append(" ] || echo ").append(NO_CONSOLE).append("; ")
                 append("command -v ruby >/dev/null 2>&1 || echo ").append(NO_RUBY).append("; ")
                 append("echo ").append(SHELL_OK)

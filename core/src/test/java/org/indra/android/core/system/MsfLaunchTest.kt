@@ -21,6 +21,20 @@ class MsfLaunchTest {
         assertTrue(probe.endsWith(" 2>&1"))
     }
 
+    /**
+     * The probe must run with the rootfs's own PATH. Inheriting the Android one made
+     * `command -v ruby` search `/system/bin` inside a musl chroot and refuse a bundle whose
+     * `/usr/bin/ruby` was there and runnable (device finding, 2026-11-13).
+     */
+    @Test
+    fun `the probe uses the chroots PATH, not the inherited Android one`() {
+        val probe = MsfLaunch.probe("/core/msf")
+
+        assertTrue(probe.contains("PATH=${MsfLaunch.PATH}; export PATH;"))
+        // Before the first lookup, so the lookup cannot happen under the inherited PATH.
+        assertTrue(probe.indexOf("export PATH") < probe.indexOf("command -v ruby"))
+    }
+
     @Test
     fun `the probe escapes a quote in the root path`() {
         assertTrue(MsfLaunch.probe("/core/it's").contains("'/core/it'\\''s'"))

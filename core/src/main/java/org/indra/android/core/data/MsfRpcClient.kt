@@ -6,22 +6,33 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
-import okhttp3.Response
+import org.indra.android.core.data.msgpack.MsgPack
 import org.indra.android.core.system.Logger
-import org.json.JSONArray
-import org.json.JSONObject
-import java.util.UUID
+import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 /**
- * JSON-RPC client for msfrpcd (Metasploit RPC daemon).
+ * Client for `msfrpcd`, Metasploit's RPC daemon.
  *
- * msfrpcd speaks MessagePack-RPC over HTTP POST to `/api/` with a simple 4-element
- * array format: `[type, request_id, method, params...]` where type is 0=request, 1=response.
- * msfrpcd's HTTP endpoint accepts JSON as a fallback (msf6+), and the response
- * format is the same 4-element array with JSON-encoded payloads.
+ * The wire protocol is MessagePack-RPC over `POST /api/`, and it is strict:
  *
- * We use org.json for simple JSON construction to avoid kotlinx.serialization version issues.
+ * - `Content-Type` must be exactly `binary/message-pack` (`service.rb` raises
+ *   `ArgumentError: Invalid Content Type` otherwise),
+ * - the body is a MessagePack **array** `[method, token?, *args]` — the token is the second
+ *   element, **not** an `Authorization` header, and it is absent for `auth.login`,
+ * - the reply is a MessagePack **map**: `{"result" => "success", …}`, a method's own keys
+ *   (`{"modules" => [...]}`, `{"version" => …}`, `{"id" => 0, …}`), or
+ *   `{"error" => true, "error_class" => …, "error_string" => …}` with a non-200 status for a
+ *   refused token,
+ * - its keys **and** its string values arrive as MessagePack `bin` (Ruby `ASCII-8BIT`), not
+ *   `str`, which is why [MsgPack] decodes valid-UTF-8 binary as text.
+ *
+ * This client used to post JSON with `application/msgpack` and parse a JSON array, which cannot
+ * work against msf6 at all: `msfrpcd` answered the JSON body with `Invalid Content Type` and the
+ * readiness poll in [MsfDaemon] therefore only ever saw an exception. Verified against
+ * msf 6.5.9-dev on the moto g60 (2026-11-13): `["auth.login","msf","msf"]` →
+ * `{"result":"success","token":"TEMP…"}`, `core.version` → `6.5.9-dev`, `module.exploits` → 2720
+ * names, `module.auxiliary` → 1371, a wrong token → HTTP 401.
  */
 @Suppress("TooManyFunctions") // one function per msfrpcd RPC method is deliberate
 class MsfRpcClient private constructor(
@@ -31,9 +42,12 @@ class MsfRpcClient private constructor(
 ) {
 
     companion object {
+        /** The only media type `msfrpcd` accepts; anything else is `Invalid Content Type`. */
+        const val MEDIA_TYPE = "binary/message-pack"
+
         private const val CONNECT_TIMEOUT_S = 10
         private const val READ_TIMEOUT_S = 30
-        private const val CALL_TIMEOUT_S = 60
+        private const val WRITE_TIMEOUT_S = 60
         private const val LOGIN_METHOD = "auth.login"
         private const val VERSION_METHOD = "core.version"
         private const val MODULE_EXPLOITS_METHOD = "module.exploits"
@@ -50,6 +64,10 @@ class MsfRpcClient private constructor(
         private const val CONSOLE_WRITE_METHOD = "console.write"
         private const val CONSOLE_TABS_METHOD = "console.tabs"
 
+        /**
+         * Authenticate and return a usable client, or null when `msfrpcd` is not answering
+         * (still loading) or refused the credentials.
+         */
         @JvmStatic
         suspend fun create(
             host: String = "127.0.0.1",
@@ -61,154 +79,146 @@ class MsfRpcClient private constructor(
             val client = OkHttpClient.Builder()
                 .connectTimeout(CONNECT_TIMEOUT_S.toLong(), TimeUnit.SECONDS)
                 .readTimeout(READ_TIMEOUT_S.toLong(), TimeUnit.SECONDS)
-                .writeTimeout(CALL_TIMEOUT_S.toLong(), TimeUnit.SECONDS)
+                .writeTimeout(WRITE_TIMEOUT_S.toLong(), TimeUnit.SECONDS)
                 .build()
 
             val tmpClient = MsfRpcClient(url, "", client)
             val token = tmpClient.login(user, password)
-            if (token == null) return null
+            if (token == null) {
+                // A poll that fails is the common case while msfrpcd loads; each one must not
+                // leave an OkHttp dispatcher (and its thread pool) behind.
+                tmpClient.close()
+                return null
+            }
             return MsfRpcClient(url, token, client)
         }
     }
 
-    private suspend fun login(user: String, password: String): String? =
-        withContext(Dispatchers.IO) {
-            val result = call(LOGIN_METHOD, JSONArray().put(user).put(password))
-            val arr = result?.opt(1) as? JSONArray
-            return@withContext arr?.optString(0)
-        }
+    private suspend fun login(user: String, password: String): String? {
+        val response = call(LOGIN_METHOD, listOf(user, password)) ?: return null
+        val token = if (response["result"] == "success") response["token"] as? String else null
+        // Never silent: a success this client failed to parse looked exactly like "still
+        // loading" once, and the readiness poll spent its whole budget without one line saying
+        // why (the reply's strings are MessagePack bin — see [MsgPack]).
+        if (token == null) Logger.w("MsfRpcClient: auth.login answered ${response.keys} without a usable token")
+        return token
+    }
 
     /**
-     * Generic RPC call. Returns the parsed response array [type, id, result, error],
-     * where error is non-null on failure.
+     * One RPC round trip. Returns the response map, or null when no usable answer arrived:
+     * transport failure, a non-2xx status, or an `"error" => true` map (logged with Metasploit's
+     * own class and message). Callers already treat null as "not ready / not available", so a
+     * refusal while the daemon is binding is normal, not exceptional.
      */
-    private suspend fun call(method: String, params: JSONArray): JSONArray? =
+    private suspend fun call(method: String, params: List<Any?> = emptyList()): Map<String, Any?>? =
         withContext(Dispatchers.IO) {
-            val requestId = UUID.randomUUID().toString()
-            val payload = JSONArray().put(0).put(requestId).put(method).put(params)
-            val json = payload.toString()
+            val message = buildList<Any?> {
+                add(method)
+                if (token.isNotEmpty()) add(token)
+                addAll(params)
+            }
             val request = Request.Builder()
                 .url(baseUrl)
-                .addHeader("Content-Type", "application/msgpack")
-                .addHeader("Authorization", if (token.isEmpty()) "" else token)
-                .post(json.toRequestBody("application/msgpack".toMediaType()))
+                .post(MsgPack.encode(message).toRequestBody(MEDIA_TYPE.toMediaType()))
                 .build()
 
-            client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return@withContext null
-                val body = response.body?.string() ?: return@withContext null
-                return@withContext try {
-                    JSONArray(body)
-                } catch (e: org.json.JSONException) {
-                    // Invalid JSON from msfrpcd
-                    Logger.w("MsfRpcClient: invalid JSON response: ${e.message}")
-                    null
+            try {
+                client.newCall(request).execute().use { response ->
+                    val body = response.body?.bytes() ?: return@withContext null
+                    val decoded = MsgPack.decodeMap(body)
+                    if (decoded == null) {
+                        Logger.w("MsfRpcClient: $method returned ${body.size} bytes that are not a map")
+                        return@withContext null
+                    }
+                    if (decoded["error"] == true) {
+                        Logger.w(
+                            "MsfRpcClient: $method failed: ${decoded["error_class"]}: ${decoded["error_string"]}",
+                        )
+                        return@withContext null
+                    }
+                    if (!response.isSuccessful) {
+                        Logger.w("MsfRpcClient: $method answered HTTP ${response.code}")
+                        return@withContext null
+                    }
+                    decoded
                 }
+            } catch (e: IOException) {
+                // Nothing listening yet, a dropped connection or a read timeout: all normal here,
+                // because MsfDaemon polls this while msfrpcd is still loading.
+                Logger.d("MsfRpcClient: $method got no answer: ${e.message}")
+                null
             }
         }
 
-    /** `core.version` — health check; returns version string or null. */
-    suspend fun version(): String? = withContext(Dispatchers.IO) {
-        val result = call(VERSION_METHOD, JSONArray())
-        result?.optString(2)
+    /** A `module.*` listing, which msfrpcd returns as `{"modules" => [names]}`. */
+    private suspend fun modules(method: String): List<String>? =
+        (call(method)?.get("modules") as? List<*>)?.map { it.toString() }
+
+    /** `core.version` — health check; returns the version string or null. */
+    suspend fun version(): String? {
+        val response = call(VERSION_METHOD) ?: return null
+        val version = response["version"] as? String
+        if (version == null) Logger.w("MsfRpcClient: core.version answered ${response.keys}")
+        return version
     }
 
     /** `module.exploits` — list all exploit modules. */
-    suspend fun exploits(): List<String>? = withContext(Dispatchers.IO) {
-        call(MODULE_EXPLOITS_METHOD, JSONArray())?.optJSONArray(2)?.toList()
-    }
+    suspend fun exploits(): List<String>? = modules(MODULE_EXPLOITS_METHOD)
 
     /** `module.auxiliary` — list all auxiliary modules. */
-    suspend fun auxiliary(): List<String>? = withContext(Dispatchers.IO) {
-        call(MODULE_AUXILIARY_METHOD, JSONArray())?.optJSONArray(2)?.toList()
-    }
+    suspend fun auxiliary(): List<String>? = modules(MODULE_AUXILIARY_METHOD)
 
     /** `module.post` — list all post modules. */
-    suspend fun post(): List<String>? = withContext(Dispatchers.IO) {
-        call(MODULE_POST_METHOD, JSONArray())?.optJSONArray(2)?.toList()
-    }
+    suspend fun post(): List<String>? = modules(MODULE_POST_METHOD)
 
     /** `module.payloads` — list all payloads. */
-    suspend fun payloads(): List<String>? = withContext(Dispatchers.IO) {
-        call(MODULE_PAYLOADS_METHOD, JSONArray())?.optJSONArray(2)?.toList()
-    }
+    suspend fun payloads(): List<String>? = modules(MODULE_PAYLOADS_METHOD)
 
-    /** `module.info` — detailed info for one module. */
+    /** `module.info` — the module's metadata map. */
+    suspend fun moduleInfo(moduleType: String, moduleName: String): Map<String, Any?>? =
+        call(MODULE_INFO_METHOD, listOf(moduleType, moduleName))
+
+    /** `module.compatible_payloads` — `{"payloads" => [names]}`. */
+    suspend fun compatiblePayloads(moduleName: String): List<String>? =
+        (call(MODULE_COMPATIBLE_PAYLOADS_METHOD, listOf(moduleName))?.get("payloads") as? List<*>)
+            ?.map { it.toString() }
+
+    /** `session.list` — session id → its fields, which is the map itself. */
     @Suppress("UNCHECKED_CAST")
-    suspend fun moduleInfo(moduleType: String, moduleName: String): Map<String, Any>? =
-        withContext(Dispatchers.IO) {
-            call(MODULE_INFO_METHOD, JSONArray().put(moduleType).put(moduleName))?.optJSONObject(2)?.let { obj ->
-                val map = mutableMapOf<String, Any>()
-                val keys = obj.keys()
-                while (keys.hasNext()) {
-                    val key = keys.next()
-                    map[key] = obj.get(key)
-                }
-                map
-            }
-        }
-
-    /** `module.compatible_payloads` — payloads compatible with an exploit. */
-    suspend fun compatiblePayloads(moduleName: String): List<String>? = withContext(Dispatchers.IO) {
-        call(MODULE_COMPATIBLE_PAYLOADS_METHOD, JSONArray().put(moduleName))?.optJSONArray(2)?.toList()
+    suspend fun sessionList(): Map<String, Map<String, Any?>>? {
+        val response = call(SESSION_LIST_METHOD) ?: return null
+        return response.mapValues { (_, session) -> session as? Map<String, Any?> ?: emptyMap() }
     }
 
-    /** `session.list` — all active sessions. */
-    @Suppress("UNCHECKED_CAST")
-    suspend fun sessionList(): Map<String, Map<String, Any>>? = withContext(Dispatchers.IO) {
-        call(SESSION_LIST_METHOD, JSONArray())?.optJSONObject(2)?.let { obj ->
-            val map = mutableMapOf<String, Map<String, Any>>()
-            val keys = obj.keys()
-            while (keys.hasNext()) {
-                val key = keys.next()
-                val session = obj.getJSONObject(key)
-                val sessionMap = mutableMapOf<String, Any>()
-                val sessionKeys = session.keys()
-                while (sessionKeys.hasNext()) {
-                    val skey = sessionKeys.next()
-                    sessionMap[skey] = session.get(skey)
-                }
-                map[key] = sessionMap
-            }
-            map
-        }
+    /** `session.stop` — `{"result" => "success"}`. */
+    suspend fun sessionStop(sessionId: String): Boolean =
+        call(SESSION_STOP_METHOD, listOf(sessionId))?.get("result") == "success"
+
+    /** `console.create` — `{"id" => n, "prompt" => …, "busy" => …}`. */
+    suspend fun consoleCreate(): Int? = (call(CONSOLE_CREATE_METHOD)?.get("id") as? Number)?.toInt()
+
+    /** `console.destroy` — `{"result" => "success"}`. */
+    suspend fun consoleDestroy(consoleId: Int): Boolean =
+        call(CONSOLE_DESTROY_METHOD, listOf(consoleId.toString()))?.get("result") == "success"
+
+    /** `console.read` — `{"data" => …, "prompt" => …, "busy" => …}`. */
+    suspend fun consoleRead(consoleId: Int): MsfConsoleOutput? {
+        val response = call(CONSOLE_READ_METHOD, listOf(consoleId.toString())) ?: return null
+        return MsfConsoleOutput(
+            prompt = response["prompt"] as? String ?: "",
+            busy = response["busy"] == true,
+            data = response["data"] as? String ?: "",
+        )
     }
 
-    /** `session.stop` — terminate a session. */
-    suspend fun sessionStop(sessionId: String): Boolean = withContext(Dispatchers.IO) {
-        call(SESSION_STOP_METHOD, JSONArray().put(sessionId))?.optBoolean(2) ?: false
-    }
+    /** `console.write` — `{"wrote" => n}`; the corpus is the confirmation, not a result string. */
+    suspend fun consoleWrite(consoleId: Int, command: String): Boolean =
+        call(CONSOLE_WRITE_METHOD, listOf(consoleId.toString(), command))?.containsKey("wrote") == true
 
-    /** `console.create` — new console; returns console_id. */
-    suspend fun consoleCreate(): Int? = withContext(Dispatchers.IO) {
-        call(CONSOLE_CREATE_METHOD, JSONArray())?.optInt(2, -1)?.let { if (it >= 0) it else null }
-    }
-
-    /** `console.destroy` — close a console. */
-    suspend fun consoleDestroy(consoleId: Int): Boolean = withContext(Dispatchers.IO) {
-        call(CONSOLE_DESTROY_METHOD, JSONArray().put(consoleId))?.optBoolean(2) ?: false
-    }
-
-    /** `console.read` — read pending output from a console. */
-    suspend fun consoleRead(consoleId: Int): MsfConsoleOutput? = withContext(Dispatchers.IO) {
-        call(CONSOLE_READ_METHOD, JSONArray().put(consoleId))?.optJSONObject(2)?.let {
-            MsfConsoleOutput(
-                prompt = it.optString("prompt", ""),
-                busy = it.optBoolean("busy", false),
-                data = it.optString("data", ""),
-            )
-        }
-    }
-
-    /** `console.write` — send a command to a console. */
-    suspend fun consoleWrite(consoleId: Int, command: String): Boolean = withContext(Dispatchers.IO) {
-        call(CONSOLE_WRITE_METHOD, JSONArray().put(consoleId).put(command))?.optBoolean(2) ?: false
-    }
-
-    /** `console.tabs` — tab-complete a partial command. */
-    suspend fun consoleTabs(consoleId: Int, line: String): List<String>? = withContext(Dispatchers.IO) {
-        call(CONSOLE_TABS_METHOD, JSONArray().put(consoleId).put(line))?.optJSONArray(2)?.toList()
-    }
+    /** `console.tabs` — `{"tabs" => [completions]}`. */
+    suspend fun consoleTabs(consoleId: Int, line: String): List<String>? =
+        (call(CONSOLE_TABS_METHOD, listOf(consoleId.toString(), line))?.get("tabs") as? List<*>)
+            ?.map { it.toString() }
 
     data class MsfConsoleOutput(
         val prompt: String,
@@ -220,16 +230,4 @@ class MsfRpcClient private constructor(
         client.dispatcher.executorService?.shutdown()
         client.connectionPool.evictAll()
     }
-}
-
-/** Convert JSONArray to List<String> */
-private fun JSONArray.toList(): List<String> {
-    val list = mutableListOf<String>()
-    var i = 0
-    while (i < length()) {
-        val item = get(i)
-        if (item is String) list.add(item) else list.add(item.toString())
-        i++
-    }
-    return list
 }

@@ -51,6 +51,15 @@ class MsfDaemon @Inject constructor(
 ) {
     private companion object {
         const val READY_POLL_MS = 500L
+        const val NANOS_PER_MS = 1_000_000L
+        const val MS_PER_S = 1000L
+
+        /**
+         * How long `msfrpcd` may take to load the framework before the start is declared failed.
+         * It reaches "MSGRPC starting on 127.0.0.1:55553" in ~15 s on the moto g60, but a cold
+         * run unpacks gems from the rootfs, so the ceiling is generous.
+         */
+        const val READY_TIMEOUT_MS = 180_000L
         const val LOG_MAX_LINES = 200
 
         /** Matches `ruby /msfrpcd …` without matching this kill command itself. */
@@ -173,25 +182,41 @@ class MsfDaemon @Inject constructor(
     }
 
     /**
-     * Health-check msfrpcd via RPC ping instead of log markers.
-     * Returns true when RPC responds with a version.
+     * Health-check msfrpcd via an RPC ping instead of log markers.
+     * Returns true once `core.version` answers, false on failure or after [READY_TIMEOUT_MS].
+     *
+     * Every attempt before the port is bound fails (ECONNREFUSED), which is why the client has to
+     * answer null instead of throwing — an escaping exception here killed the app process.
      */
     private suspend fun awaitReadyRpc(gen: Long): Boolean {
-        while (isCurrent(gen) && _state.value == DaemonState.STARTING) {
-            val client = MsfRpcClient.create(
-                host = "127.0.0.1",
-                port = settings.msfRpcPort,
-                user = RPC_USER,
-                password = RPC_PASSWORD,
-            )
-            if (client != null && client.version() != null) {
-                client.close()
-                return true
-            }
-            client?.close()
-            delay(READY_POLL_MS)
+        val deadline = System.nanoTime() + READY_TIMEOUT_MS * NANOS_PER_MS
+        var ready = false
+        while (!ready && isStarting(gen) && System.nanoTime() <= deadline) {
+            ready = ping()
+            if (!ready) delay(READY_POLL_MS)
         }
-        return false
+        // Only a still-starting daemon that ran out of time is a timeout; one that was stopped
+        // from the UI ended the wait on purpose and must not log a failure.
+        if (!ready && isStarting(gen)) {
+            appendLog("[msfrpcd did not answer within ${READY_TIMEOUT_MS / MS_PER_S} s]")
+        }
+        return ready
+    }
+
+    /** True while this start generation is still the live one and it is still loading. */
+    private fun isStarting(gen: Long): Boolean = isCurrent(gen) && _state.value == DaemonState.STARTING
+
+    /** One authenticated `core.version` round trip; true when msfrpcd is serving. */
+    private suspend fun ping(): Boolean {
+        val client = MsfRpcClient.create(
+            host = "127.0.0.1",
+            port = settings.msfRpcPort,
+            user = RPC_USER,
+            password = RPC_PASSWORD,
+        ) ?: return false
+        val alive = client.version() != null
+        client.close()
+        return alive
     }
 
     private fun buildMsfrpcdLaunch(port: Int): MsfrpcdLaunch {

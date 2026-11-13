@@ -40,6 +40,11 @@ android {
     kotlinOptions {
         jvmTarget = '17'
     }
+    testOptions {
+        // MsfRpcClient logs a refused call through android.util.Log, which the unit-test
+        // android.jar stub does not implement; the stubs only need to return defaults.
+        unitTests.returnDefaultValues = true
+    }
 }
 
 dependencies {

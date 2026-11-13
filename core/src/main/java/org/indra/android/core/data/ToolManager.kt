@@ -12,6 +12,7 @@ import org.indra.android.core.data.bundle.BundleInstaller
 import org.indra.android.core.data.bundle.BundleManifest
 import org.indra.android.core.data.bundle.BundleSpec
 import org.indra.android.core.data.bundle.BundleVersions
+import org.indra.android.core.system.DirEntry
 import org.indra.android.core.system.Logger
 import org.json.JSONException
 import javax.inject.Inject
@@ -141,14 +142,16 @@ class ToolManager @Inject constructor(
                 val root = File(context.filesDir, "msf")
                 if (!root.isDirectory) return@withContext "Metasploit chroot not found at $root"
                 // The three files that prove the rootfs is a runnable musl userland with the
-                // framework inside: a shell, Ruby, and the console link at the root.
+                // framework inside: a shell, Ruby, and the console link at the root. The console
+                // is a chroot-absolute link, so it must be tested as a directory entry — see
+                // DirEntry for the device finding that made `exists()` lie here.
                 if (!File(root, "bin/busybox").exists()) {
                     return@withContext "The Metasploit chroot has no /bin/busybox — the rootfs is incomplete."
                 }
                 if (!File(root, "usr/bin/ruby").exists()) {
                     return@withContext "The Metasploit chroot has no ruby, so msfconsole cannot run."
                 }
-                if (!File(root, "msfconsole").exists()) {
+                if (!DirEntry.present(File(root, "msfconsole"))) {
                     return@withContext "msfconsole not found in $root — reinstall the rootfs."
                 }
                 null

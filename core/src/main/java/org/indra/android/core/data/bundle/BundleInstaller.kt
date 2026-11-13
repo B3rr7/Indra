@@ -3,6 +3,7 @@ package org.indra.android.core.data.bundle
 import android.content.Context
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.indra.android.core.system.DirEntry
 import java.io.File
 import java.io.IOException
 import java.io.InputStream
@@ -46,7 +47,15 @@ class BundleInstaller(
 
     fun readInstalled(spec: BundleSpec): BundleManifest? = BundleManifest.parseOrNull(readInstalledJson(spec))
 
-    fun sentinelsPresent(spec: BundleSpec): Boolean = spec.sentinels.all { File(context.filesDir, it).exists() }
+    /**
+     * A bundle counts as installed when every sentinel is present **as a directory entry**.
+     *
+     * `msf/msfconsole` is a chroot-absolute link, so `exists()` (which stats through it) reports
+     * the whole Metasploit bundle as absent on a device where it unpacked correctly — see
+     * [org.indra.android.core.system.DirEntry].
+     */
+    fun sentinelsPresent(spec: BundleSpec): Boolean =
+        spec.sentinels.all { DirEntry.present(File(context.filesDir, it)) }
 
     fun readStagedVersion(spec: BundleSpec): String? = BundleManifest.parseOrNull(
         File(stagingDir(spec), "${spec.primaryDir}/$VERSION_FILE").takeIf { it.isFile }?.readText(),
