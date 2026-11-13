@@ -16,7 +16,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.indra.android.core.data.bundle.BundleOp
 import org.indra.android.core.data.bundle.BundleUpdateManager
+import org.indra.android.core.engine.EngineInstallState
+import org.indra.android.core.engine.EngineInstaller
+import org.indra.android.core.engine.EnginePackages
 import org.indra.android.core.system.AppUpdateManager
+import org.indra.android.core.system.ChrootPackages
 import org.indra.android.core.system.CoreManager
 import android.content.Context
 import org.indra.android.core.system.LogExporter
@@ -80,9 +84,19 @@ data class SettingsUiState(
     val toolStatus: List<ToolStatus> = emptyList(),
     val rootlessMode: Boolean = false,
     val wakeLockEnabled: Boolean = true,
+    /** True once `<core>/alpine/bin/busybox` is executable, i.e. the rootfs is usable. */
     val alpineInstalled: Boolean = false,
-    val alpineBusy: Boolean = false,
-    val alpineMessage: String? = null,
+    /**
+     * The app-wide engine install state, so the card reports a rootfs download **and** an
+     * `apk add` started from Wifite, Packet Capture or the Terminal — one job, one status.
+     */
+    val alpineInstall: EngineInstallState = EngineInstallState.Idle,
+    /** Bytes the installed rootfs occupies on disk; 0 when it is not installed. */
+    val alpineSizeBytes: Long = 0,
+    /** Records in the rootfs's apk database, i.e. how many packages are installed. */
+    val alpinePackageCount: Int = 0,
+    /** Of those, the packages this app added itself (`iw`, `iproute2`, …). */
+    val alpineExtraPackages: List<String> = emptyList(),
     val debugErrorLogging: Boolean = false,
     /** The user's app background, or none. */
     val wallpaper: WallpaperState = WallpaperState(),
@@ -150,6 +164,7 @@ class SettingsViewModel
         private val rootManager: RootManager,
         private val wallpaperStore: WallpaperStore,
         private val bundleUpdateManager: BundleUpdateManager,
+        private val engineInstaller: EngineInstaller,
     ) : ViewModel() {
         private val _uiState = MutableStateFlow(SettingsUiState())
         val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
@@ -186,6 +201,9 @@ class SettingsViewModel
             loadSettings(probeRoot = true)
             refreshCoreState()
             viewModelScope.launch {
+                engineInstaller.state.collect { state -> onEngineInstall(state) }
+            }
+            viewModelScope.launch {
                 bundleUpdateManager.tools.op.collect { op ->
                     toolsOp = op
                     publishBundles()
@@ -197,6 +215,19 @@ class SettingsViewModel
                     publishBundles()
                 }
             }
+        }
+
+        /**
+         * Mirrors the shared install state into the Alpine card.
+         *
+         * Everything a plugin screen starts lands here too — that is the point: an `apk add` from
+         * Wifite appears under the Alpine card, and Settings never runs a second, invisible install
+         * next to it. [EngineInstallState.Done] re-reads the disk facts, because the rootfs (or the
+         * package set inside it) just changed underneath them.
+         */
+        private fun onEngineInstall(state: EngineInstallState) {
+            _uiState.value = _uiState.value.copy(alpineInstall = state)
+            if (state == EngineInstallState.Done) loadSettings()
         }
 
         /** Rebuilds the bundle list from the two channel ops plus the installed versions. */
@@ -290,6 +321,12 @@ class SettingsViewModel
                     toolsInstalledVersion = bundleUpdateManager.installedToolsVersion()
                     toolsSource = bundleUpdateManager.toolsSource()
                     msfInstalledVersion = bundleUpdateManager.installedMsfVersion()
+                    // The Alpine card's facts are disk reads too: a walk of the rootfs for its
+                    // size and a parse of apk's database for what is inside it. Both are skipped
+                    // when there is no rootfs at all rather than reporting a misleading 0.
+                    val alpineInstalled = coreManager.isAlpineInstalled()
+                    val alpineBytes = if (alpineInstalled) coreManager.alpineOnDiskBytes() else 0L
+                    val alpinePackages = if (alpineInstalled) coreManager.alpinePackages() else emptyList()
                     _uiState.value =
                         _uiState.value.copy(
                             httpProxyPort = settings.httpProxyPort,
@@ -313,7 +350,11 @@ class SettingsViewModel
                             otaAllowTestHosts = settings.otaAllowTestHosts,
                             rootlessMode = settings.rootlessMode,
                             wakeLockEnabled = settings.wakeLockEnabled,
-                            alpineInstalled = coreManager.isAlpineInstalled(),
+                            alpineInstalled = alpineInstalled,
+                            alpineSizeBytes = alpineBytes,
+                            alpinePackageCount = alpinePackages.size,
+                            alpineExtraPackages =
+                                EnginePackages.installedByApp(ChrootPackages.names(alpinePackages)),
                             debugErrorLogging = settings.debugErrorLogging,
                             wallpaper = wallpaperStore.state(),
                             crashLogCount = crashReporter.getCrashFiles().size,
@@ -501,26 +542,17 @@ class SettingsViewModel
             _uiState.value = _uiState.value.copy(coreMessage = message, coreError = error)
         }
 
+        /**
+         * Installs the rootfs through the app-wide single-flight installer.
+         *
+         * This used to call `CoreManager.installAlpine` itself, while a plugin screen's
+         * capability fix ran through `EngineInstaller` — two independent installs, neither
+         * visible to the other, racing over one directory. Sharing the installer means this
+         * card also renders a download another screen started, and the button cannot begin a
+         * second one.
+         */
         fun installAlpine() {
-            if (_uiState.value.alpineBusy) return
-            viewModelScope.launch {
-                _uiState.value = _uiState.value.copy(alpineBusy = true, alpineMessage = "Installing Alpine Linux…")
-                coreManager
-                    .installAlpine { p ->
-                        _uiState.value = _uiState.value.copy(alpineMessage = "Installing Alpine Linux… ${(p * 100).toInt()}%")
-                    }.onSuccess {
-                        toolBox.resetChrootState()
-                        _uiState.value =
-                            _uiState.value.copy(
-                                alpineMessage = "Alpine installed",
-                                alpineInstalled = true,
-                            )
-                    }.onFailure { error ->
-                        _uiState.value = _uiState.value.copy(alpineMessage = "Install failed: ${error.message}")
-                    }
-                _uiState.value = _uiState.value.copy(alpineBusy = false)
-                loadSettings()
-            }
+            engineInstaller.installEngine()
         }
 
         fun refresh() {

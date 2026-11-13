@@ -48,11 +48,23 @@ class EngineInstaller
             }
         }
 
+        /**
+         * Installs the rootfs itself — the action behind the Settings card's Install button.
+         *
+         * Public so Settings joins the same single-flight job as a plugin screen's capability fix:
+         * two taps must not extract two rootfs archives into one directory.
+         */
+        fun installEngine() = runEngineInstall()
+
         private fun runEngineInstall() {
             // Off Main: `installAlpine` unpacks an archive and touches the disk.
             scope.launch {
                 machine.run("Installing the Alpine environment") { report ->
-                    coreManager.installAlpine { progress -> report(progress) }
+                    coreManager
+                        .installAlpine { progress -> report(progress) }
+                        // A new rootfs invalidates the memoized resolv.conf of whatever ran in the
+                        // chroot before it, so the next `ensureChroot` has to write the file again.
+                        .onSuccess { toolBox.resetChrootState() }
                 }
             }
         }

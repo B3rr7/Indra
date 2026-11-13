@@ -23,6 +23,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -35,6 +36,8 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import org.indra.android.core.engine.EngineInstallState
+import org.indra.android.ui.components.FormError
 
 /** Icon tile + title + subtitle header shared by the update-ish cards below. */
 @Composable
@@ -169,6 +172,8 @@ internal fun AlpineCard(
     // This card used to be a third verbatim copy of the OTA card: no heading, only
     // Check/Update — so SettingsViewModel.installAlpine() had no caller and the
     // Terminal's chroot switch ("install Alpine in Settings") was a dead end.
+    val install = uiState.alpineInstall
+    val installing = install is EngineInstallState.Installing
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -194,18 +199,40 @@ internal fun AlpineCard(
                     accent = SettingsPalette.Core,
                     modifier = Modifier.weight(1f),
                 )
-                StatusPill(
-                    text = if (uiState.alpineInstalled) "Installed" else "Not installed",
-                    color = if (uiState.alpineInstalled) SettingsPalette.Running else SettingsPalette.Stopped,
-                )
+                AlpineStatusPill(installed = uiState.alpineInstalled, install = install)
             }
 
-            CardStatus(message = uiState.alpineMessage)
+            if (uiState.alpineInstalled) {
+                AlpineInventory(uiState)
+            } else if (!installing) {
+                CardStatus(message = "Downloads about 5 MB — a minimal Alpine rootfs for this device.")
+            }
 
-            if (!uiState.alpineInstalled) {
+            when (install) {
+                is EngineInstallState.Installing -> {
+                    Text(
+                        text = install.label.ifBlank { "Installing…" },
+                        style = MaterialTheme.typography.labelMedium,
+                    )
+                    // Indeterminate unless the download reports a fraction; `apk add` prints no
+                    // machine-readable progress, and a fabricated bar would be worse.
+                    val progress = install.progress
+                    if (progress == null) {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    } else {
+                        LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
+                    }
+                }
+                is EngineInstallState.Failed -> FormError(install.message)
+                EngineInstallState.Done ->
+                    CardStatus(message = "Install finished.")
+                EngineInstallState.Idle -> Unit
+            }
+
+            if (!uiState.alpineInstalled || install is EngineInstallState.Failed) {
                 UpdateCardButton(
-                    busy = uiState.alpineBusy,
-                    label = "Install",
+                    busy = installing,
+                    label = if (install is EngineInstallState.Failed) "Retry install" else "Install",
                     busyLabel = "Installing…",
                     onClick = viewModel::installAlpine,
                     accent = SettingsPalette.Core,
@@ -214,6 +241,48 @@ internal fun AlpineCard(
                 )
             }
         }
+    }
+}
+
+/**
+ * The pill names the *live* state, not the last install: a package install started from Wifite
+ * must read "Installing" here, because that is what the card is showing progress for.
+ */
+@Composable
+private fun AlpineStatusPill(
+    installed: Boolean,
+    install: EngineInstallState,
+) {
+    val (text, color) =
+        when {
+            install is EngineInstallState.Installing -> "Installing" to SettingsPalette.Core
+            install is EngineInstallState.Failed -> "Failed" to SettingsPalette.Stopped
+            installed -> "Installed" to SettingsPalette.Running
+            else -> "Not installed" to SettingsPalette.Stopped
+        }
+    StatusPill(text = text, color = color)
+}
+
+/**
+ * What is actually inside the rootfs.
+ *
+ * Two separate facts on purpose: the on-disk bytes are the whole tree (rootfs + every
+ * `apk add`), while the package list is apk's own database — so an `apk add iw` shows up as
+ * "Added by Indra: iw" instead of only moving the size number.
+ */
+@Composable
+private fun AlpineInventory(uiState: SettingsUiState) {
+    Text(
+        text = "On disk: ${formatBytes(uiState.alpineSizeBytes)} · ${uiState.alpinePackageCount} packages",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    if (uiState.alpineExtraPackages.isNotEmpty()) {
+        Text(
+            text = "Added by Indra: ${uiState.alpineExtraPackages.joinToString(", ")}",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

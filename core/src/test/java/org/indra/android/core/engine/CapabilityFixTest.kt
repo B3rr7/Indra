@@ -92,4 +92,19 @@ class CapabilityFixTest {
         assertEquals("iw; rm -rf /", EnginePackages.firstRejected(listOf("iw; rm -rf /")))
         assertEquals("", EnginePackages.firstRejected(listOf("")))
     }
+
+    @Test
+    fun `what Indra added is the allow-list's intersection with the rootfs`() {
+        // The rootfs ships its own packages (busybox, musl, apk-tools…); only the allow-list names
+        // were added by this app, and the card must not claim Alpine installed them.
+        val installed = listOf("musl", "busybox", "iw", "apk-tools", "iproute2", "python3")
+
+        assertEquals(listOf("iw", "iproute2", "python3"), EnginePackages.installedByApp(installed))
+    }
+
+    @Test
+    fun `a rootfs with nothing of ours added reports nothing`() {
+        assertEquals(emptyList<String>(), EnginePackages.installedByApp(listOf("musl", "busybox")))
+        assertEquals(emptyList<String>(), EnginePackages.installedByApp(emptyList()))
+    }
 }

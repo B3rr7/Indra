@@ -94,4 +94,13 @@ object EnginePackages {
 
     /** The first package that is not on the allow-list, or null when every one is. */
     fun firstRejected(packages: Iterable<String>): String? = packages.firstOrNull { it !in ALLOWED }
+
+    /**
+     * Of [installed], the names this app installs itself, in the order given.
+     *
+     * The Settings card intersects the rootfs's apk database with this list: everything else in
+     * that database is part of the Alpine rootfs itself, so only these records answer "what did
+     * Indra add to the environment".
+     */
+    fun installedByApp(installed: Iterable<String>): List<String> = installed.filter { it in ALLOWED }
 }

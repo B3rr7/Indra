@@ -17,7 +17,11 @@ import org.tukaani.xz.XZInputStream
 import java.io.File
 import java.io.InputStream
 import java.io.PushbackInputStream
+import java.nio.file.FileVisitResult
 import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.SimpleFileVisitor
+import java.nio.file.attribute.BasicFileAttributes
 import java.util.zip.GZIPInputStream
 import java.util.zip.ZipInputStream
 import javax.inject.Inject
@@ -145,6 +149,58 @@ class CoreManager
         fun alpinePath(): File = File(coreDir, ALPINE_DIR_NAME)
 
         fun isAlpineInstalled(): Boolean = File(alpinePath(), "bin/busybox").canExecute()
+
+        /**
+         * Bytes the installed rootfs occupies on disk, or 0 when it is not installed.
+         *
+         * A walk rather than a constant: the download and what it expands to differ by more than
+         * 2x, and `apk add` grows the tree afterwards. Symlinks are not followed (a link to a
+         * directory would make the walk recurse, and a loop would never finish), so each one
+         * contributes the zero bytes it occupies.
+         */
+        fun alpineOnDiskBytes(): Long {
+            val root = alpinePath()
+            if (!root.isDirectory) return 0L
+            var total = 0L
+            runCatching {
+                // `walkFileTree`, not `Files.walk`: a stream aborts on the first entry it cannot
+                // read, and this tree is written by a root daemon, so one unreadable corner would
+                // zero the whole card ("On disk: empty" next to "16 packages"). A visitor reports
+                // what it could read and skips the rest.
+                Files.walkFileTree(
+                    root.toPath(),
+                    object : SimpleFileVisitor<Path>() {
+                        override fun visitFile(
+                            file: Path,
+                            attrs: BasicFileAttributes,
+                        ): FileVisitResult {
+                            // A symlink contributes its own length, never its target: the rootfs
+                            // is full of absolute links that only resolve inside the chroot.
+                            if (!attrs.isSymbolicLink) total += attrs.size()
+                            return FileVisitResult.CONTINUE
+                        }
+
+                        override fun visitFileFailed(
+                            file: Path,
+                            exc: java.io.IOException,
+                        ): FileVisitResult = FileVisitResult.CONTINUE
+                    },
+                )
+            }.onFailure { Logger.d("alpine on-disk walk incomplete: $it") }
+            return total
+        }
+
+        /**
+         * Packages apk records as installed in the rootfs, or an empty list when there is no
+         * readable database (no rootfs, or one whose database a failed install truncated).
+         *
+         * `apk` writes this file as root; the app can read it because it is world-readable.
+         */
+        fun alpinePackages(): List<ChrootPackage> {
+            val db = File(alpinePath(), "lib/apk/db/installed")
+            if (!db.isFile) return emptyList()
+            return runCatching { ChrootPackages.parse(db.readText()) }.getOrDefault(emptyList())
+        }
 
         /** Downloads + extracts the Alpine minirootfs (musl) for this device's ABI,
          *  giving the Terminal and the chroot-hosted tools a real Linux userspace.
