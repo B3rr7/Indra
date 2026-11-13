@@ -5,11 +5,14 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.last
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.indra.android.core.engine.Capability
 import org.indra.android.core.engine.CapabilityFix
 import org.indra.android.core.engine.CapabilityState
@@ -49,20 +52,10 @@ class WifiteViewModel
             MutableStateFlow(
                 restoredInputs(
                     WifiteUiState(wordlist = toolBox.defaultWordlist(), capturePath = toolBox.capturePath()),
+                    savedState,
                 ),
             )
         val uiState: StateFlow<WifiteUiState> = _uiState.asStateFlow()
-
-        /**
-         * Input fields, so a process death does not throw away what the user typed.
-         * Results, run state and errors stay volatile on purpose: a restored screen must
-         * not claim a scan is still running.
-         */
-        private fun restoredInputs(state: WifiteUiState) =
-            state.copy(
-                iface = savedState["iface"] ?: state.iface,
-                wordlist = savedState["wordlist"] ?: state.wordlist,
-            )
 
         fun updateIface(v: String) {
             savedState["iface"] = v
@@ -146,58 +139,103 @@ class WifiteViewModel
                     }
                     _uiState.value = _uiState.value.copy(isRunning = true, error = null, output = emptyList(), stage = "monitor")
 
-                    // Each stage is reported from its child's exit status. The old code
-                    // appended "[monitor mode enabled]" / "[capture done]" unconditionally,
-                    // so a failure at any step still looked like a completed run.
-                    val monitor = stage("monitor", toolBox.monitorMode(iface, monitor = true))
-                    if (monitor?.success != true) {
-                        // A missing `iw` is the one failure this screen can fix in-app, so it is
-                        // not an error line: the card installs the rootfs or `iw` + `iproute2`,
-                        // and Run retries.
-                        if (MonitorMode.explainFailure(monitor?.error, monitor?.rawOutput) == null) {
-                            abort("Monitor mode could not be enabled", monitor)
-                        } else {
-                            // A fresh fix gets a fresh card: the shared state still says
-                            // "Installed." from the run that just finished.
-                            toolBox.resetEngineInstall()
-                            _uiState.value =
-                                _uiState.value.copy(
-                                    isRunning = false,
-                                    stage = "idle",
-                                    // The engine decides which fix: `apk add iw iproute2` when the
-                                    // chroot exists, "Install Alpine" when there is no rootfs.
-                                    gate = CapabilityFix.of(toolBox.capability(Capability.IW)),
-                                )
-                            pid = -1
-                        }
-                        return@launch
+                    var captured = false
+                    try {
+                        // The flag is set the moment the switch succeeds, not when the whole run
+                        // returns: Stop cancels the job inside the capture stage, and the value
+                        // of a call that never returns is never assigned.
+                        captured = enterMonitor(iface)
+                        if (captured) captureAndCrack(iface)
+                    } finally {
+                        // Android cannot use Wi-Fi while the radio is a monitor interface, and a
+                        // Wifite run ends in four ways — key found, capture failed, crack failed,
+                        // Stop — so the switch back belongs on every exit path, not only the happy
+                        // one. Without this the phone sits with no Wi-Fi until something else
+                        // resets the link.
+                        if (captured) restoreManaged(iface)
                     }
+                }
+        }
 
-                    val outFile = _uiState.value.capturePath
-                    File(outFile).parentFile?.mkdirs()
-                    val capture = stage("capture", toolBox.tcpdump(iface, "", 50, outFile))
-                    if (capture?.success != true) {
-                        abort("Capture failed", capture)
-                        return@launch
-                    }
+        /**
+         * Switches [iface] to monitor mode and reports whether it did.
+         *
+         * A missing `iw` is the one failure this screen can fix in-app, so it is not an error
+         * line: the card installs the rootfs or `iw` + `iproute2`, and Run retries.
+         */
+        private suspend fun enterMonitor(iface: String): Boolean {
+            // Each stage is reported from its child's exit status. The old code
+            // appended "[monitor mode enabled]" / "[capture done]" unconditionally,
+            // so a failure at any step still looked like a completed run.
+            val monitor = stage("monitor", toolBox.monitorMode(iface, monitor = true))
+            if (monitor?.success == true) return true
+            if (MonitorMode.explainFailure(monitor?.error, monitor?.rawOutput) == null) {
+                abort("Monitor mode could not be enabled", monitor)
+            } else {
+                // A fresh fix gets a fresh card: the shared state still says
+                // "Installed." from the run that just finished.
+                toolBox.resetEngineInstall()
+                _uiState.value =
+                    _uiState.value.copy(
+                        isRunning = false,
+                        stage = "idle",
+                        // The engine decides which fix: `apk add iw iproute2` when the
+                        // chroot exists, "Install Alpine" when there is no rootfs.
+                        gate = CapabilityFix.of(toolBox.capability(Capability.IW)),
+                    )
+                pid = -1
+            }
+            return false
+        }
 
-                    val wordlist = _uiState.value.wordlist.trim()
-                    val crack =
-                        stage(
-                            "crack",
-                            toolBox.aircrackDirect(
-                                "-w ${SmartToolBox.shellQuote(wordlist)} ${SmartToolBox.shellQuote(outFile)}",
-                            ),
-                        )
+        /** Capture 50 frames on the monitor interface, then crack them. */
+        private suspend fun captureAndCrack(iface: String) {
+            val outFile = _uiState.value.capturePath
+            File(outFile).parentFile?.mkdirs()
+            val capture = stage("capture", toolBox.tcpdump(iface, "", 50, outFile))
+            if (capture?.success != true) {
+                abort("Capture failed", capture)
+                return
+            }
 
+            val wordlist = _uiState.value.wordlist.trim()
+            val crack =
+                stage(
+                    "crack",
+                    toolBox.aircrackDirect(
+                        "-w ${SmartToolBox.shellQuote(wordlist)} ${SmartToolBox.shellQuote(outFile)}",
+                    ),
+                )
+
+            _uiState.value =
+                _uiState.value.copy(
+                    stage = "done",
+                    isRunning = false,
+                    error = if (crack?.success == true) null else crack?.error ?: "aircrack did not report a result",
+                )
+            pid = -1
+        }
+
+        /**
+         * Puts the radio back into managed mode, and says so when it cannot.
+         *
+         * `NonCancellable` because [stop] cancels the job: the run the user just stopped is
+         * exactly the one that left the interface switched.
+         */
+        private suspend fun restoreManaged(iface: String) {
+            withContext(NonCancellable) {
+                val result = runCatching { toolBox.monitorMode(iface, monitor = false).last() }.getOrNull()
+                if (result?.success != true) {
                     _uiState.value =
                         _uiState.value.copy(
-                            stage = "done",
-                            isRunning = false,
-                            error = if (crack?.success == true) null else crack?.error ?: "aircrack did not report a result",
+                            error =
+                                "Could not put $iface back into managed mode, so Wi-Fi stays off: " +
+                                    (result?.error ?: "the switch did not run") +
+                                    ". Fix it in the Terminal (chroot on): `ip link set $iface down; " +
+                                    "iw dev $iface set type managed; ip link set $iface up`.",
                         )
-                    pid = -1
                 }
+            }
         }
 
         fun stop() {
@@ -208,3 +246,18 @@ class WifiteViewModel
             _uiState.value = _uiState.value.copy(isRunning = false, stage = "idle")
         }
     }
+
+/**
+ * Input fields, so a process death does not throw away what the user typed.
+ *
+ * Results, run state and errors stay volatile on purpose: a restored screen must not claim a
+ * scan is still running. File-level rather than a member because the class sits at detekt's
+ * 11-functions limit.
+ */
+private fun restoredInputs(
+    state: WifiteUiState,
+    savedState: SavedStateHandle,
+) = state.copy(
+    iface = savedState["iface"] ?: state.iface,
+    wordlist = savedState["wordlist"] ?: state.wordlist,
+)

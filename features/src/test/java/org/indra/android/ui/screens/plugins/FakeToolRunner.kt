@@ -72,6 +72,14 @@ class FakeToolRunner : ToolRunner {
      */
     var holdOpen: Boolean = false
 
+    /**
+     * The first call [holdOpen] applies to, counted from 1 (0 = every call).
+     *
+     * Wifite's Stop case needs the monitor stage to *finish* and the capture stage to still be
+     * running, which one all-or-nothing flag cannot express.
+     */
+    var holdFrom: Int = 0
+
     var lastTimeoutMs: Long = 0
 
     override suspend fun requireTool(name: String): ToolHandle {
@@ -181,6 +189,9 @@ class FakeToolRunner : ToolRunner {
     ): Flow<ToolResult> {
         calls += label to command
         lastTimeoutMs = timeoutMs
+        // The 1-based position of this call, read before the flow runs: `calls.size` inside the
+        // flow lambda would grow with the cleanup call and misjudge `holdFrom`.
+        val index = calls.size
         val results = if (scripts.isNotEmpty()) scripts.removeAt(0) else script
         return flow {
             if (results.isEmpty()) {
@@ -196,7 +207,7 @@ class FakeToolRunner : ToolRunner {
             } else {
                 results.forEach { emit(it) }
             }
-            if (holdOpen) awaitCancellation()
+            if (holdOpen && index >= holdFrom) awaitCancellation()
         }
     }
 

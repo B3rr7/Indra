@@ -201,7 +201,10 @@ class WifiteViewModelTest {
                 "Capture failed: tcpdump exited with code 1: tcpdump: wlan0: No such device exists",
                 vm.uiState.value.error,
             )
-            assertEquals(listOf("monitor", "tcpdump"), runner.calls.map { it.first })
+            // Monitor, the failed capture, and the switch back: a capture that never happened
+            // still leaves the radio in monitor mode.
+            assertEquals(listOf("monitor", "tcpdump", "monitor"), runner.calls.map { it.first })
+            assertEquals("wlan0 false", runner.calls.last().second)
             assertEquals("idle", vm.uiState.value.stage)
         }
 
@@ -235,7 +238,7 @@ class WifiteViewModelTest {
         }
 
     @Test
-    fun `a full run reaches done with no error`() =
+    fun `a full run reaches done with no error and puts the radio back`() =
         runTest(dispatcher) {
             runner.scripts += okMonitor
             runner.scripts += okCapture
@@ -245,10 +248,40 @@ class WifiteViewModelTest {
             vm.run()
             advanceUntilIdle()
 
-            assertEquals(listOf("monitor", "tcpdump", "aircrack"), runner.calls.map { it.first })
+            // The fourth call is the run's own cleanup: monitor mode is not a state to leave a
+            // phone in, so `done` means "cracked" and "managed again", not just the first one.
+            assertEquals(listOf("monitor", "tcpdump", "aircrack", "monitor"), runner.calls.map { it.first })
+            assertEquals("wlan0 false", runner.calls.last().second)
             assertEquals("done", vm.uiState.value.stage)
             assertNull(vm.uiState.value.error)
             assertTrue(vm.uiState.value.output.any { it.contains("KEY FOUND") })
+        }
+
+    @Test
+    fun `a radio that cannot be switched back is reported, not hidden`() =
+        runTest(dispatcher) {
+            runner.scripts += okMonitor
+            runner.scripts += okCapture
+            runner.scripts += okCrack
+            runner.scripts +=
+                listOf(
+                    ToolResult(
+                        tool = "monitor mode",
+                        success = false,
+                        status = "completed",
+                        error = "monitor mode exited with code 237: command failed: Operation not permitted (-1)",
+                    ),
+                )
+            val vm = WifiteViewModel(SavedStateHandle(), runner)
+
+            vm.run()
+            advanceUntilIdle()
+
+            val error = vm.uiState.value.error.orEmpty()
+            assertTrue(error, error.startsWith("Could not put wlan0 back into managed mode"))
+            assertTrue(error, error.contains("Operation not permitted"))
+            // The fix is named, because the app has a place to run it.
+            assertTrue(error, error.contains("set type managed"))
         }
 
     @Test
@@ -286,22 +319,29 @@ class WifiteViewModelTest {
         }
 
     @Test
-    fun `stop reports idle and kills the child`() =
+    fun `stop reports idle, kills the child, and still restores the interface`() =
         runTest(dispatcher) {
+            runner.scripts += okMonitor
+            // The capture stage is the one still running when Stop is pressed: monitor mode is
+            // already on, so the radio has to be switched back even though the run was cancelled.
+            runner.scripts += listOf(ToolResult(tool = "tcpdump", success = true, status = "running", pid = 77, rawOutput = ""))
             runner.holdOpen = true
-            runner.script =
-                listOf(
-                    ToolResult(tool = "monitor mode", success = true, status = "running", pid = 77, rawOutput = ""),
-                )
+            runner.holdFrom = 2
             val vm = WifiteViewModel(SavedStateHandle(), runner)
 
             vm.run()
             advanceUntilIdle()
+            // Stop cancels the job; the cleanup must not wait on a flow that never ends, or the
+            // radio would stay in monitor mode precisely when the user gave up.
+            runner.holdOpen = false
             vm.stop()
+            advanceUntilIdle()
 
             assertEquals(listOf(77), runner.stopped)
             assertEquals("idle", vm.uiState.value.stage)
             assertFalse(vm.uiState.value.isRunning)
+            assertEquals(listOf("monitor", "tcpdump", "monitor"), runner.calls.map { it.first })
+            assertEquals("wlan0 false", runner.calls.last().second)
         }
 
     @Test
