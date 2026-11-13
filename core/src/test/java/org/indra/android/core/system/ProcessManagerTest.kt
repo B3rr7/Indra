@@ -42,7 +42,11 @@ class ProcessManagerTest {
             )
         val body = cmd.substringAfter("; ")
         assertTrue(body, body.contains("export LD_LIBRARY_PATH='/core/lib';"))
-        assertTrue(body, body.contains("export PATH='/core/tools/hydra:/core/tools/nmap':'\$PATH';"))
+        // `$PATH` must be expanded, not quoted: quoted it is a literal path entry named
+        // `$PATH`, so the run finds the bundled tools and none of the system binaries
+        // (`sh: ip: inaccessible or not found` — device-verified via the masscan route probe).
+        assertTrue(body, body.contains("export PATH='/core/tools/hydra:/core/tools/nmap':\$PATH;"))
+        assertFalse(body, body.contains("'\$PATH'"))
         assertTrue(body, body.contains("cd '/core';"))
         assertTrue(body, body.trimEnd().endsWith("hydra"))
     }

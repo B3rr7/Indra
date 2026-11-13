@@ -164,7 +164,15 @@ class ProcessManager @Inject constructor() {
         env.forEach { (k, v) ->
             sb.append("export ").append(k).append("=").append(shellQuote(v)).append("; ")
         }
-        toolsDir?.let { sb.append("export PATH=").append(shellQuote(it)).append(":").append(shellQuote("\$PATH")).append("; ") }
+        toolsDir?.let {
+            // `$PATH` must stay unquoted so the shell expands it: single-quoted (which is what
+            // this line used to do) it becomes a literal path entry named `$PATH`, so the run
+            // could only find the bundled tools and every system binary answered
+            // `sh: ip: inaccessible or not found`. Device-verified: the masscan next-hop probe
+            // (`ip neigh show`) failed exactly that way while the bundled `masscan` next to it
+            // ran fine. An assignment does not word-split, so no quoting is needed for safety.
+            sb.append("export PATH=").append(shellQuote(it)).append(":\$PATH; ")
+        }
         workDir?.let { sb.append("cd ").append(shellQuote(it)).append("; ") }
         sb.append(command)
         return sb.toString()
