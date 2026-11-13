@@ -43,12 +43,6 @@ class SmartToolBoxRunner
             timeoutMs: Long,
         ): Flow<ToolResult> = box.shell(command, label, timeoutMs)
 
-        override fun masscan(
-            target: String,
-            args: String,
-            iface: String,
-        ): Flow<ToolResult> = box.masscan(target, args, iface)
-
         override fun masscanDirect(
             target: String,
             args: String,

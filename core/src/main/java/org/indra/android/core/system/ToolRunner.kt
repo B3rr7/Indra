@@ -48,12 +48,6 @@ interface ToolRunner {
         timeoutMs: Long = DEFAULT_TIMEOUT_MS,
     ): Flow<ToolResult>
 
-    fun masscan(
-        target: String,
-        args: String = "",
-        iface: String = "",
-    ): Flow<ToolResult>
-
     fun masscanDirect(
         target: String,
         args: String = "",

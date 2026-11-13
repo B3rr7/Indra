@@ -96,12 +96,6 @@ class FakeToolRunner : ToolRunner {
         timeoutMs: Long,
     ): Flow<ToolResult> = record(label, command, timeoutMs)
 
-    override fun masscan(
-        target: String,
-        args: String,
-        iface: String,
-    ): Flow<ToolResult> = record("masscan", "masscan ${if (iface.isBlank()) "" else "-e $iface "}$args $target")
-
     override fun masscanDirect(
         target: String,
         args: String,

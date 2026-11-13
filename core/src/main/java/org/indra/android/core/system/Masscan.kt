@@ -34,4 +34,15 @@ object Masscan {
                 "this phone has no default gateway there (hotspot/AP mode has none — the phone is the " +
                 "router). Run masscan while the phone is a client on a Wi-Fi network that has a gateway."
         }
+
+    /**
+     * masscan's own progress redraw, `rate: 0.00-kpps, 100.00% done, waiting 9-secs, found=1`.
+     *
+     * It redraws several times a second, and a `\r` redraw arrives as its own line, so the
+     * console's 200-line window filled with progress and pushed the **only** result line
+     * (`Discovered open port 8080/tcp on …`) out of it — device-verified: the finding survived
+     * only as `found=1` in a wall of `rate:`. Discoveries are their own lines, so this carries
+     * no result and is dropped, the same way gobuster's per-request redraws are.
+     */
+    fun isProgress(line: String): Boolean = line.trimStart().startsWith("rate:")
 }

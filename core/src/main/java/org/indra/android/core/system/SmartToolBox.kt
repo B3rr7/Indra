@@ -785,20 +785,6 @@ class SmartToolBox
                 timeoutMs = SCAN_TIMEOUT_MS,
             )
 
-        fun masscan(
-            target: String,
-            args: String = "",
-            iface: String = "",
-        ): Flow<ToolResult> =
-            flow {
-                val resolved = masscanCommand(args, iface)
-                if (resolved == null) {
-                    emit(noScannableInterface())
-                    return@flow
-                }
-                emitAll(rawCommand("masscan", "${binary("masscan")} $resolved ${shellQuote(target)}", timeoutMs = SCAN_TIMEOUT_MS))
-            }
-
         fun reaver(
             iface: String,
             bssid: String,
@@ -1100,6 +1086,12 @@ class SmartToolBox
 
         /**
          * High-speed port scanner via direct su.
+         *
+         * Two things masscan cannot work out on Android are supplied explicitly, because both
+         * are one question the kernel already answers: the interface ([CaptureIface]) and the
+         * Ethernet destination ([CaptureRoute]). Without the second it reports `resolving
+         * router 0.0.0.0 with ARP` and sends nothing — see [CaptureRoute] for why the target's
+         * own MAC, and not the gateway's, is the right frame destination here.
          */
         fun masscanDirect(
             target: String,
@@ -1107,37 +1099,86 @@ class SmartToolBox
             iface: String = "",
         ): Flow<ToolResult> =
             flow {
-                val resolved = masscanCommand(args, iface)
-                if (resolved == null) {
+                val plan =
+                    withContext(Dispatchers.IO) {
+                        CaptureIface.plan(iface, args) { networkHelper.captureInterface() }
+                    }
+                if (!plan.namesInterface) {
                     emit(noScannableInterface())
                     return@flow
                 }
-                emitAll(
-                    runDirect(
-                        "masscan",
-                        "masscan $resolved ${shellQuote(target)}",
-                        timeoutMs = SCAN_TIMEOUT_MS,
-                    ),
-                )
+                val route =
+                    withContext(Dispatchers.IO) {
+                        masscanRoute(target, args, plan.iface)
+                    }
+                val command =
+                    listOf("masscan", plan.prefix.trim(), args.trim(), route.trim(), shellQuote(target))
+                        .filter { it.isNotEmpty() }
+                        .joinToString(" ")
+                emitAll(runDirect("masscan", command, timeoutMs = SCAN_TIMEOUT_MS))
             }
 
         /**
-         * masscan's arguments with a `-e` prefix, or null when nothing names an interface.
+         * `--router-mac`/`--router-ip` for [target], or "" when the caller already named one
+         * or the kernel knows neither the target nor a gateway on [iface].
          *
-         * masscan cannot work out an interface on Android, and the one Android calls active is
-         * frequently cellular, which libpcap can only open as a cooked `LINUX_SLL` socket — see
-         * [CaptureIface]. Detection reads the kernel's interface list, so it stays off Main.
+         * The neighbour table is read through `su` (a direct run has no daemon, and the app uid
+         * cannot read the table itself); it is one short command, and its output is consumed
+         * here rather than shown, so the console stays the scan's own transcript.
+         *
+         * One ICMP echo is sent first only when the table does not know a single-host target —
+         * an idle entry ages out, and the fallback hop then reports `0 found` for a host that
+         * answers (device-verified; see [CaptureRoute.needsWarm]).
          */
-        private suspend fun masscanCommand(
+        private suspend fun masscanRoute(
+            target: String,
             args: String,
-            iface: String,
-        ): String? {
-            val plan =
-                withContext(Dispatchers.IO) {
-                    CaptureIface.plan(iface, args) { networkHelper.captureInterface() }
-                }
-            return if (plan.namesInterface) plan.prefix + args else null
+            iface: String?,
+        ): String {
+            if (CaptureRoute.namesNextHop(args)) return ""
+            val gateway = gatewayOn(iface)
+            return nextHopFlags(target, gateway, iface)
         }
+
+        /** The neighbour table's answer, re-read once after warming a single-host target. */
+        private suspend fun nextHopFlags(
+            target: String,
+            gateway: String?,
+            iface: String?,
+        ): String {
+            val first = CaptureRoute.hop(target, gateway, neighborMacs(iface)::get)
+            if (!CaptureRoute.needsWarm(first, target)) return CaptureRoute.flags(first)
+            warmNeighbor(target)
+            return CaptureRoute.flags(CaptureRoute.hop(target, gateway, neighborMacs(iface)::get))
+        }        /**
+         * Populates the kernel's neighbour entry for [target] with one echo request.
+         *
+         * `ping` is the reliable way to make the kernel resolve an address (an unanswered ARP
+         * leaves the entry `FAILED`, which reads as "unknown" and falls back cleanly). The
+         * command runs as root through [runDirect], so the typed target is quoted.
+         */
+        private suspend fun warmNeighbor(target: String) {
+            runCatching { runDirect("neigh", "ping -c 1 -W 1 ${shellQuote(target)}", NEIGHBOR_PROBE_TIMEOUT_MS).last() }
+        }
+
+        /** The gateway on the scan interface, or null when the phone *is* the router there. */
+        private fun gatewayOn(iface: String?): String? =
+            runCatching { networkHelper.gatewayFor(iface) }.getOrNull()
+
+        /** `ip neigh show` on [iface] as root, as address → MAC. Empty when the probe failed. */
+        private suspend fun neighborMacs(iface: String?): Map<String, String> =
+            runCatching {
+                val probe =
+                    runDirect("neigh", CaptureRoute.neighCommand(iface), NEIGHBOR_PROBE_TIMEOUT_MS)
+                        .last()
+                if (!probe.success) {
+                    emptyMap()
+                } else {
+                    NeighborTable.parseEntries(probe.rawOutput)
+                        .filter { it.mac.isNotEmpty() }
+                        .associate { it.ip to it.mac }
+                }
+            }.getOrElse { emptyMap() }
 
         /**
          * masscan with no interface at all would only print `FAIL: could not determine default

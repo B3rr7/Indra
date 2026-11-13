@@ -179,6 +179,35 @@ class NetworkHelper
         }
 
         /**
+         * The **IPv4** default gateway **on [iface]**, or null when the platform has no `Network`
+         * there.
+         *
+         * Deliberately not [getGatewayAddress], which answers for whichever network Android
+         * calls active: while the phone is tethering that is the cellular connection, and
+         * handing its gateway to a tool bound to the Wi-Fi AP would name an address the scan
+         * cannot reach. An AP has no `Network` at all, so this returns null there — correct,
+         * because the phone is the router on that link.
+         *
+         * IPv4-only on purpose: a dual-stack link lists an IPv6 default route too, and a first
+         * match returned its link-local gateway. masscan is an IPv4 scanner and refuses that
+         * outright (`FAIL: bad source IPv4 address: router-ip=fe80::…`, device-verified), so
+         * the IPv6 route is not a usable answer to this question.
+         */
+        @Suppress("ReturnCount")
+        fun gatewayFor(iface: String?): String? {
+            if (iface.isNullOrBlank()) return null
+            val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return null
+            val properties =
+                cm.allNetworks
+                    .mapNotNull { cm.getLinkProperties(it) }
+                    .firstOrNull { it.interfaceName == iface } ?: return null
+            return properties.routes
+                .firstOrNull { it.isDefaultRoute && it.gateway is Inet4Address }
+                ?.gateway
+                ?.hostAddress
+        }
+
+        /**
          * The DNS servers this network actually uses.
          *
          * Android resolves through `netd` and has no `/etc/resolv.conf`, so the only way to give

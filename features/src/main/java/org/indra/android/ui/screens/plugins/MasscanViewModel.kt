@@ -110,7 +110,7 @@ class MasscanViewModel
                     _uiState.value = _uiState.value.copy(isRunning = true, error = null, output = emptyList())
                     toolBox.masscanDirect(target, "-p $ports --rate=$rate", st.iface.trim()).collect { result ->
                         if (result.pid > 0) pid = result.pid
-                        result.streamedLine?.let { line ->
+                        result.streamedLine?.takeUnless(Masscan::isProgress)?.let { line ->
                             _uiState.value = _uiState.value.copy(output = _uiState.value.output + line)
                         }
                         if (!result.isStreaming) {

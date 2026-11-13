@@ -78,6 +78,8 @@ object CaptureIface {
     data class Plan(
         val prefix: String,
         val namesInterface: Boolean,
+        /** The interface the run will use, when it is known (not when the caller wrote `-e`). */
+        val iface: String?,
     )
 
     /**
@@ -91,11 +93,11 @@ object CaptureIface {
         detected: () -> String?,
     ): Plan =
         when {
-            iface.isNotBlank() -> Plan(flag(iface), true)
-            namesInterface(args) -> Plan("", true)
+            iface.isNotBlank() -> Plan(flag(iface), true, iface.trim())
+            namesInterface(args) -> Plan("", true, null)
             else -> {
                 val chosen = detected()
-                Plan(flag(chosen), chosen != null)
+                Plan(flag(chosen), chosen != null, chosen)
             }
         }
 
