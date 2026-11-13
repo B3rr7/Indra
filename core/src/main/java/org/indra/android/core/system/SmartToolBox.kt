@@ -593,7 +593,8 @@ class SmartToolBox
             // direct call was a Main-thread disk read (7 × `DiskReadViolation` on device).
             val inChroot = capability(Capability.IW) == CapabilityState.Available
             if (inChroot) {
-                ensureChroot()?.let { return failure("monitor mode", it) }
+                // `iw` and `ip` speak netlink: a missing resolver must not block the switch.
+                ensureChroot(requireDns = false)?.let { return failure("monitor mode", it) }
                 return shell(
                     chrootEngine.wrapShell(script),
                     label = "monitor mode",
@@ -657,7 +658,8 @@ class SmartToolBox
             capturePath: String,
             wordlistPath: String? = null,
         ): Flow<ToolResult> {
-            ensureChroot()?.let { return failure("hashcat", it) }
+            // hashcat reads local files; a missing resolver must not block cracking.
+            ensureChroot(requireDns = false)?.let { return failure("hashcat", it) }
             val capture =
                 chrootEngine.translate(capturePath)
                     ?: return failure(
@@ -1516,7 +1518,8 @@ class SmartToolBox
             label: String = "alpine",
             timeoutMs: Long = TOOL_TIMEOUT_MS,
         ): Flow<ToolResult> {
-            ensureChroot()?.let { return failure(label, it) }
+            // The Terminal is the escape hatch: it must open on a network with no resolver too.
+            ensureChroot(requireDns = false)?.let { return failure(label, it) }
             return shell(chrootEngine.wrapShell(command), label = label, timeoutMs = timeoutMs)
         }
 
@@ -1530,9 +1533,15 @@ class SmartToolBox
          * `/proc/mounts` rather than re-created (the old per-run `mount --bind … || true`
          * stacked a new mount on every nuclei invocation and never unmounted any), and the
          * script only re-runs when the network's DNS servers change.
+         *
+         * [requireDns] is false for callers that run nothing resolver-dependent: switching an interface
+         * to monitor mode, hashcat, and the Terminal. The chroot's `resolv.conf` exists so `apk add`
+         * and nuclei can reach the network; requiring it for `iw` meant a phone whose active network
+         * reports no DNS (LTE does exactly that) failed Wifite with a sentence about Go tools while a
+         * perfectly usable `iw` sat in the rootfs.
          */
         @Suppress("ReturnCount")
-        suspend fun ensureChroot(): String? =
+        suspend fun ensureChroot(requireDns: Boolean = true): String? =
             // Everything below runs off Main: `capability()` stats files in the rootfs and
             // `setupScript()`/`requiredTargets()` read `context.cacheDir` (which creates the
             // directory), so calling them from a `viewModelScope.launch` was a Main-thread disk
@@ -1544,10 +1553,13 @@ class SmartToolBox
                 if (notInstalled != null) return@withContext notInstalled
 
                 val dns = chrootEngine.dnsText()
-                if (dns.isBlank()) {
+                // No resolver means no `apk add` and no nuclei template download, but the mounts are
+                // still worth making — `setupScript` omits `resolv.conf` when the text is blank, so the
+                // rootfs keeps whatever it had and the caller decides whether a resolver matters.
+                if (dns.isBlank() && requireDns) {
                     return@withContext "No DNS servers available on the active network. " +
-                        "Connect to a network with DNS, or configure a custom resolver. " +
-                        "Go tools (nuclei, gobuster) require a working resolver."
+                        "Connect to a network with DNS, or configure a custom resolver — " +
+                        "downloading Alpine packages and nuclei templates needs one."
                 }
                 if (chrootDns.get() == dns) return@withContext null
 
