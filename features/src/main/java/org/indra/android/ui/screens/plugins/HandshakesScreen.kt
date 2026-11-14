@@ -16,14 +16,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.io.File
-import org.indra.android.core.engine.Hashcat
-import org.indra.android.ui.components.EngineFixCard
+import org.indra.android.core.system.handshake.CrackRun
 import org.indra.android.ui.components.FormError
 import org.indra.android.ui.components.LiveOutputCard
 import org.indra.android.ui.components.PluginScaffold
@@ -64,14 +62,16 @@ fun HandshakesScreen(
 
     uiState.crackTarget?.let { path ->
         var wordlist by remember(path) { mutableStateOf(uiState.wordlist) }
+        var ssid by remember(path) { mutableStateOf(uiState.ssid) }
         AlertDialog(
             onDismissRequest = { viewModel.closeCrack() },
             title = { Text("Crack ${File(path).name}") },
             text = {
                 Column {
                     Text(
-                        "hashcat runs inside the Alpine environment: the capture is converted with " +
-                            "hcxpcapngtool, then matched against the wordlist.",
+                        "Reads the 4-way handshake straight out of the capture and tests each " +
+                            "wordlist line against it. Nothing is installed; a phone tries a few " +
+                            "hundred passwords per second.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -86,6 +86,24 @@ fun HandshakesScreen(
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = ssid,
+                        onValueChange = {
+                            ssid = it
+                            viewModel.updateSsid(it)
+                        },
+                        label = { Text("Network name (SSID)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        supportingText = {
+                            Text(
+                                "Only needed when the capture has no beacon for this network — a " +
+                                    "capture taken while already connected. The name is half of the " +
+                                    "key derivation.",
+                            )
+                        },
+                    )
                 }
             },
             confirmButton = {
@@ -98,7 +116,7 @@ fun HandshakesScreen(
     }
 
     PluginScaffold(
-        title = "Handshakes / Captures",
+        title = "Handshakes / Captures", pluginId = "handshakes",
         onNavigateBack = onNavigateBack,
         actions = {
             IconButton(onClick = { viewModel.refresh() }) {
@@ -187,11 +205,6 @@ fun HandshakesScreen(
                     Text("Share ${file.name}")
                 }
             }
-            uiState.gate?.let { gate ->
-                // The sentence said what was missing and left the user to find Settings; the
-                // card carries the fix for the one capability this screen needs.
-                EngineFixCard(gate, uiState.install, viewModel::installFix)
-            }
             uiState.error?.let { FormError(it) }
             HandshakeCrackPanel(
                 uiState = uiState,
@@ -203,8 +216,9 @@ fun HandshakesScreen(
 }
 
 /**
- * The verdict is four states, not two: a capture with no handshake is not a failed crack, and
- * a wordlist that ran out is not a tool error (hashcat exits 1 when it finds nothing).
+ * The verdict is one shape per way a crack can end, carried as a [CrackRun] rather than read out
+ * of a transcript — a capture with no handshake is not a failed crack, and a wordlist that ran
+ * out is not a failure at all.
  */
 @Composable
 private fun HandshakeCrackPanel(
@@ -227,7 +241,7 @@ private fun HandshakeCrackPanel(
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                if (uiState.cracking) "hashcat · running" else "hashcat",
+                if (uiState.cracking) "Handshake crack · running" else "Handshake crack",
                 style = MaterialTheme.typography.titleSmall,
                 modifier = Modifier.weight(1f),
             )
@@ -243,7 +257,7 @@ private fun HandshakeCrackPanel(
             title = "Crack output",
             placeholder =
                 if (uiState.cracking) {
-                    "Converting the capture…"
+                    "Reading the capture…"
                 } else {
                     "No output"
                 },
@@ -253,27 +267,37 @@ private fun HandshakeCrackPanel(
 }
 
 @Composable
-private fun VerdictLine(verdict: Hashcat.Verdict) {
+private fun VerdictLine(verdict: CrackRun) {
     when (verdict) {
-        is Hashcat.Verdict.Cracked ->
+        is CrackRun.Accepted ->
             Text(
-                "Key found: ${verdict.key}",
+                "Key found: ${verdict.recovered}",
                 style = MaterialTheme.typography.titleMedium,
             )
-        Hashcat.Verdict.NoHandshake ->
+        is CrackRun.Exhausted -> VerdictNote(verdict.summary, "The handshake is usable — try a larger wordlist.")
+        is CrackRun.NoHandshake -> VerdictNote(verdict.summary, verdict.error)
+        is CrackRun.NoNetwork -> VerdictNote(verdict.summary, verdict.error)
+        is CrackRun.Unsupported -> VerdictNote(verdict.summary, verdict.error)
+        // A capture we cannot read, or a failure of our own, is a real error.
+        is CrackRun.BadCapture -> FormError(verdict.error)
+        is CrackRun.Failed -> FormError(verdict.error)
+    }
+}
+
+/** A verdict sentence: the headline, then the reason in the muted "not an error" style. */
+@Composable
+private fun VerdictNote(
+    headline: String,
+    detail: String?,
+) {
+    Column {
+        Text(headline, style = MaterialTheme.typography.titleSmall)
+        detail?.let {
             Text(
-                "This capture has no WPA handshake (hcxpcapngtool found no EAPOL exchange). " +
-                    "A handshake needs a client to connect while capturing — in managed mode you usually " +
-                    "only get normal traffic.",
+                it,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-        Hashcat.Verdict.NotCracked ->
-            Text(
-                "The wordlist ran out without a match. The handshake is usable — try a larger wordlist.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        is Hashcat.Verdict.Failed -> FormError(verdict.reason)
+        }
     }
 }

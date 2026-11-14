@@ -82,7 +82,8 @@ class SmartToolBoxRunner
         override suspend fun crackHandshake(
             capturePath: String,
             wordlistPath: String?,
-        ): Flow<ToolResult> = box.crackHandshake(capturePath, wordlistPath)
+            ssid: String?,
+        ): Flow<ToolResult> = box.crackHandshake(capturePath, wordlistPath, ssid)
 
         override suspend fun monitorMode(
             iface: String,

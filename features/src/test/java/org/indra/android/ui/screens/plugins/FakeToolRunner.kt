@@ -143,7 +143,8 @@ class FakeToolRunner : ToolRunner {
     override suspend fun crackHandshake(
         capturePath: String,
         wordlistPath: String?,
-    ): Flow<ToolResult> = record("hashcat", "$capturePath ${wordlistPath ?: ""}")
+        ssid: String?,
+    ): Flow<ToolResult> = record("handshakes", "$capturePath ${wordlistPath ?: ""} ${ssid ?: ""}")
 
     override suspend fun monitorMode(
         iface: String,

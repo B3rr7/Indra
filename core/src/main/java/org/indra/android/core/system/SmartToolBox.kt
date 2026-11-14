@@ -29,7 +29,8 @@ import org.indra.android.core.engine.CapabilityState
 import org.indra.android.core.engine.ChrootEngine
 import org.indra.android.core.engine.ChrootScript
 import org.indra.android.core.engine.EnginePackages
-import org.indra.android.core.engine.Hashcat
+import org.indra.android.core.system.handshake.CrackRun
+import org.indra.android.core.system.handshake.HandshakeCrack
 import org.indra.android.core.system.ProcessEvent as SystemProcessEvent
 import org.indra.android.core.system.ProcessManager
 import org.indra.android.core.system.RootManager
@@ -90,6 +91,9 @@ class SmartToolBox
             private const val CHROOT_SETUP_TIMEOUT_MS = 30_000L
 
             private const val WORDLIST_PATH = "wordlists/common-passwords.txt"
+
+            /** Tool label every [crackHandshake] emission carries. */
+            private const val CRACK_LABEL = "handshakes"
 
             /** Where tcpdump writes .cap files when the Packet Capture screen's
              *  save-to-file switch is on; WiFi Audit prefill's from here too. */
@@ -645,41 +649,63 @@ class SmartToolBox
         }
 
         /**
-         * Cracks a captured WPA handshake with hashcat inside the chroot.
+         * Cracks a captured WPA/WPA2 handshake against a wordlist, **in-process**.
          *
-         * Both paths must be reachable from inside the chroot, so [capturePath] has to live in the
-         * core directory or the app cache (the VM copies a shared-storage capture into the cache
-         * first rather than handing hashcat a path that cannot exist there). The verdict is
-         * [Hashcat.interpret] on the transcript — hashcat exits 1 on "exhausted", which is a
-         * completed run, not a failure.
+         * There is no engine and no chroot here on purpose. `hcxpcapngtool` and `hashcat` were the
+         * previous pipeline, and neither exists in Alpine's repository, so `HCXTOOLS`/`HASHCAT`
+         * could never be satisfied on this device — the Crack button was dead by construction.
+         * A WPA2 passphrase check is `PBKDF2-HMAC-SHA1` at 4096 rounds, which is arithmetic, not a
+         * tool: [HandshakeCrack] reads the capture, derives, and returns a [CrackRun]. Nothing has
+         * to be installed, so this also works with no rootfs and no root.
+         *
+         * Live emissions are `running` progress lines. The final emission always carries the
+         * verdict in [ToolResult.parsedData] under [CrackRun.RESULT_KEY] — the screen renders that
+         * rather than scraping a transcript, so the wording of a guess counter cannot change the
+         * UI's behaviour.
+         *
+         * [ssid] is the escape hatch for a capture taken while already associated: no beacon means
+         * no network name, and the name is half of the PMK input. The user has the missing piece,
+         * so [CrackRun.NoNetwork] asks for it instead of failing flat.
          */
-        @Suppress("ReturnCount")
         suspend fun crackHandshake(
             capturePath: String,
             wordlistPath: String? = null,
-        ): Flow<ToolResult> {
-            // hashcat reads local files; a missing resolver must not block cracking.
-            ensureChroot(requireDns = false)?.let { return failure("hashcat", it) }
-            val capture =
-                chrootEngine.translate(capturePath)
-                    ?: return failure(
-                        "hashcat",
-                        "$capturePath is not reachable inside the Alpine chroot (it must be in the app cache " +
-                            "or the core directory). Copy it into the Indra folder and try again.",
-                    )
-            val wordlistHost = wordlistPath?.takeIf { it.isNotBlank() } ?: defaultWordlist()
-            val wordlist =
-                chrootEngine.translate(wordlistHost)
-                    ?: return failure(
-                        "hashcat",
-                        "$wordlistHost is not reachable inside the Alpine chroot. Use a wordlist from the " +
-                            "Indra folder (the bundled list is ${defaultWordlist()}).",
-                    )
-            return shell(
-                chrootEngine.wrapShell(Hashcat.script(capture, wordlist)),
-                label = "hashcat",
-                timeoutMs = LONG_RUNNING_TIMEOUT_MS,
+            ssid: String? = null,
+        ): Flow<ToolResult> = channelFlow {
+            send(
+                ToolResult(
+                    tool = CRACK_LABEL,
+                    success = true,
+                    status = STATUS_RUNNING,
+                    rawOutput = "Reading $capturePath…",
+                ),
             )
+            val run =
+                HandshakeCrack.run(
+                    capturePath = capturePath,
+                    wordlistPath = wordlistPath?.takeIf { it.isNotBlank() } ?: defaultWordlist(),
+                    ssid = ssid?.takeIf { it.isNotBlank() },
+                ) { progress ->
+                    send(
+                        ToolResult(
+                            tool = CRACK_LABEL,
+                            success = true,
+                            status = STATUS_RUNNING,
+                            rawOutput = progress,
+                        ),
+                    )
+                }
+            send(
+                ToolResult(
+                    tool = CRACK_LABEL,
+                    success = run is CrackRun.Accepted || run is CrackRun.Exhausted,
+                    status = if (run.error == null) STATUS_COMPLETED else STATUS_FAILED,
+                    rawOutput = run.summary,
+                    parsedData = mapOf(CrackRun.RESULT_KEY to run),
+                    error = run.error,
+                ),
+            )
+            close()
         }
 
         /**

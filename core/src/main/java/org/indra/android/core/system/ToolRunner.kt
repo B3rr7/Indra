@@ -89,6 +89,7 @@ interface ToolRunner {
     suspend fun crackHandshake(
         capturePath: String,
         wordlistPath: String? = null,
+        ssid: String? = null,
     ): Flow<ToolResult>
 
     suspend fun monitorMode(

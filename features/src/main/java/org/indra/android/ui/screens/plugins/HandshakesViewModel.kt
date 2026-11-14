@@ -7,19 +7,14 @@ import java.io.File
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import org.indra.android.core.engine.Capability
-import org.indra.android.core.engine.CapabilityFix
-import org.indra.android.core.engine.EngineInstallState
-import org.indra.android.core.engine.Hashcat
 import org.indra.android.core.system.IndraWorkspace
 import org.indra.android.core.system.ToolRunner
+import org.indra.android.core.system.handshake.CrackRun
 import org.indra.android.core.system.isStreaming
 import org.indra.android.core.system.streamedLine
 import javax.inject.Inject
@@ -37,6 +32,11 @@ data class HandshakesUiState(
     /** Capture the crack dialog is open for, null when it is closed. */
     val crackTarget: String? = null,
     val wordlist: String = "",
+    /**
+     * The network name, for a capture taken while already associated: no beacon means no SSID,
+     * and the SSID is half of the PMK input. Blank leaves the cracker using what the capture says.
+     */
+    val ssid: String = "",
     val cracking: Boolean = false,
     val lines: List<String> = emptyList(),
     /**
@@ -44,21 +44,19 @@ data class HandshakesUiState(
      * `lines.size` (it stops changing at the cap and the view freezes there).
      */
     val lineCount: Int = 0,
-    val verdict: Hashcat.Verdict? = null,
-    /**
-     * The capability this screen needs and does not have — the fix, not a failure, so the screen
-     * can offer the install itself instead of pointing at Settings.
-     */
-    val gate: CapabilityFix? = null,
-    /** The shared engine-install state, so this screen shows the same progress as any other. */
-    val install: EngineInstallState = EngineInstallState.Idle,
-    /** True once a crack run ended, so "not cracked yet" can differ from "ran, found nothing". */
+    /** The verdict of the last completed run, or null before one ran. */
+    val verdict: CrackRun? = null,
+    /** True once a crack run ended, so "not run yet" can differ from "ran, no key". */
     val finished: Boolean = false,
 )
 
 /**
  * Browse + crack. The two halves share the file list, so splitting the crack flow into a second
  * ViewModel would mean passing the list across a navigation boundary for no benefit.
+ *
+ * The crack itself needs no capability gate any more: it is arithmetic in this process, so there
+ * is no engine to install and no rootfs to check. That removed the whole `gate` / `install` /
+ * `missingCapability` / staging path this file used to carry for hashcat.
  */
 @Suppress("TooManyFunctions")
 @HiltViewModel
@@ -75,35 +73,19 @@ class HandshakesViewModel
         /**
          * Input fields, so a process death does not throw away what the user typed.
          * Results, run state and errors stay volatile on purpose: a restored screen must
-         * not claim a scan is still running.
+         * not claim a crack is still running.
          */
         private fun restoredInputs(state: HandshakesUiState) =
             state.copy(
                 crackTarget = savedState["crackTarget"] ?: state.crackTarget,
                 wordlist = savedState["wordlist"] ?: state.wordlist,
+                ssid = savedState["ssid"] ?: state.ssid,
             )
 
         private var job: Job? = null
-        private var pid = -1
 
         init {
             refresh()
-            // One install for the whole app: another screen may have started it, and this one
-            // must show the same progress rather than a second card that starts a second run.
-            viewModelScope.launch {
-                toolBox.engineInstall.collect { state ->
-                    _uiState.value = _uiState.value.copy(install = state)
-                    // Re-check after a finished install: the gate is what tells the user what to
-                    // do next, so it must reflect the rootfs as it is now, not as it was.
-                    if (state is EngineInstallState.Done && _uiState.value.gate != null) {
-                        val next = missingCapability()
-                        _uiState.value = _uiState.value.copy(gate = next)
-                        // The card must not carry the previous run's "Installed." next to a
-                        // button that installs something else.
-                        if (next != null) toolBox.resetEngineInstall()
-                    }
-                }
-            }
         }
 
         fun refresh() {
@@ -188,6 +170,11 @@ class HandshakesViewModel
             _uiState.value = _uiState.value.copy(wordlist = wordlist)
         }
 
+        fun updateSsid(ssid: String) {
+            savedState["ssid"] = ssid
+            _uiState.value = _uiState.value.copy(ssid = ssid)
+        }
+
         @Suppress("ReturnCount")
         fun startCrack() {
             if (job?.isActive == true) return
@@ -204,54 +191,36 @@ class HandshakesViewModel
                             crackTarget = null,
                             cracking = true,
                             error = null,
-                            gate = null,
                             lines = emptyList(),
                             lineCount = 0,
                             verdict = null,
                             finished = false,
                         )
-                    val gate = missingCapability()
-                    if (gate != null) {
-                        // Whatever the previous install left behind must not label this fix.
-                        toolBox.resetEngineInstall()
-                        _uiState.value = _uiState.value.copy(cracking = false, gate = gate)
-                        return@launch
-                    }
-                    if (!stage(target)) {
-                        _uiState.value =
-                            _uiState.value.copy(
-                                cracking = false,
-                                error = "Cannot copy $target into the app cache (hashcat can only read " +
-                                    "files inside the Indra folder or the cache).",
-                            )
-                        return@launch
-                    }
-                    toolBox.crackHandshake(stagedPath(target), _uiState.value.wordlist.trim()).collect { result ->
-                        if (result.pid > 0) pid = result.pid
-                        result.streamedLine?.let { line ->
-                            _uiState.value =
-                                _uiState.value.copy(
-                                    lines = (_uiState.value.lines + line).takeLast(MAX_LINES),
-                                    lineCount = _uiState.value.lineCount + 1,
-                                )
+                    toolBox
+                        .crackHandshake(
+                            capturePath = target,
+                            wordlistPath = _uiState.value.wordlist.trim(),
+                            ssid = _uiState.value.ssid.trim(),
+                        ).collect { result ->
+                            result.streamedLine?.let { line ->
+                                _uiState.value =
+                                    _uiState.value.copy(
+                                        lines = (_uiState.value.lines + line).takeLast(MAX_LINES),
+                                        lineCount = _uiState.value.lineCount + 1,
+                                    )
+                            }
+                            if (!result.isStreaming) {
+                                val run =
+                                    CrackRun.from(result)
+                                        ?: CrackRun.Failed(result.error ?: "The crack ended without a verdict.")
+                                _uiState.value =
+                                    _uiState.value.copy(
+                                        cracking = false,
+                                        verdict = run,
+                                        finished = true,
+                                    )
+                            }
                         }
-                        if (!result.isStreaming) {
-                            val transcript = result.rawOutput
-                            val neverRan = result.status == "failed" && transcript.isBlank()
-                            val verdict =
-                                if (neverRan) {
-                                    Hashcat.Verdict.Failed(result.error ?: "hashcat could not run")
-                                } else {
-                                    Hashcat.interpret(transcript)
-                                }
-                            _uiState.value =
-                                _uiState.value.copy(
-                                    cracking = false,
-                                    verdict = verdict,
-                                    finished = true,
-                                )
-                        }
-                    }
                     _uiState.value = _uiState.value.copy(cracking = false)
                 }
         }
@@ -259,53 +228,22 @@ class HandshakesViewModel
         fun stopCrack() {
             job?.cancel()
             job = null
-            toolBox.stop(pid)
-            pid = -1
-            _uiState.value = _uiState.value.copy(cracking = false, finished = true)
-        }
-
-        /** True once the capture is readable from inside the chroot; false when the copy failed. */
-        private suspend fun stage(capture: String): Boolean =
-            withContext(Dispatchers.IO) {
-                val source = File(capture)
-                if (!source.isFile) return@withContext false
-                val target = File(stagedPath(capture))
-                target.parentFile?.mkdirs()
-                runCatching { source.copyTo(target, overwrite = true) }.isSuccess
-            }
-
-        /**
-         * Shared-storage captures are not visible inside the chroot (only the core directory
-         * and the app cache are mounted), so the file is copied into the cache first.
-         */
-        private fun stagedPath(capture: String): String = File(File(context.cacheDir, STAGING_DIR), File(capture).name).absolutePath
-
-        /** The first missing piece of the hashcat pipeline, with its fix; null when both exist. */
-        private suspend fun missingCapability(): CapabilityFix? {
-            for (capability in CRACK_CAPABILITIES) {
-                // `Available` maps to null; the first capability that is not maps to what would
-                // clear it (an install, an `apk add`, or a sentence when neither can work).
-                val fix = CapabilityFix.of(toolBox.capability(capability)) ?: continue
-                return fix
-            }
-            return null
-        }
-
-        /** The fix card's button — starts a single-flight install shared with every other screen. */
-        fun installFix() {
-            _uiState.value.gate?.let { toolBox.installEngineFix(it) }
+            // A stop is not a failure, so it is a console line and not a verdict: the console
+            // keeps whatever it already showed, and the missing verdict is what says "unfinished".
+            _uiState.value =
+                _uiState.value.copy(
+                    cracking = false,
+                    lines = (_uiState.value.lines + "Stopped.").takeLast(MAX_LINES),
+                    lineCount = _uiState.value.lineCount + 1,
+                )
         }
 
         override fun onCleared() {
-            toolBox.stop(pid)
+            job?.cancel()
             super.onCleared()
         }
 
         companion object {
             private const val MAX_LINES = 400
-            private const val STAGING_DIR = "handshakes"
-
-            /** Both halves of the pipeline: hashcat cannot open a capture without hcxtools. */
-            private val CRACK_CAPABILITIES = listOf(Capability.HCXTOOLS, Capability.HASHCAT)
         }
     }
