@@ -1,0 +1,72 @@
+{
+  "note": "Vendored trees Indra patches (see the patch table in AGENTS.md). Regenerate with scripts/source-pins.py after an intentional edit; SourcePinGateTest fails when a tree drifts.",
+  "trees": [
+    {
+      "name": "hydra",
+      "path": "indra/jni/hydra",
+      "sha256": "fd83e7d9f32701c1f1b0dbf0c68f5df0c9e6047224df7a6d3ecb059a04c56487"
+    },
+    {
+      "name": "hping3",
+      "path": "indra/jni/hping3",
+      "sha256": "5bbdf18bb2c0a8b38ab8f1fde6ae696d691c20339c036e9b968f72fd7f407962"
+    },
+    {
+      "name": "network-radar",
+      "path": "indra/jni/network-radar",
+      "sha256": "485695fd2e742e5fe9ba0670a4013ff1b6dd0c69a17c8c4531bda70c0023c99d"
+    },
+    {
+      "name": "arpspoof",
+      "path": "indra/jni/arpspoof",
+      "sha256": "ea9baccf34dfdee25900e11b109996c1e7163eea39627b1aac87e78c80868db6"
+    },
+    {
+      "name": "ettercap-ng",
+      "path": "indra/jni/ettercap-ng",
+      "sha256": "b031ef70a1ce34911e2ff421a820d3bb6cf7623f351ed1c04fff0f332a715489"
+    },
+    {
+      "name": "libncp",
+      "path": "indra/jni/libncp",
+      "sha256": "d6d29740e00df6c531ab9b60dcaf12235ce0070cc1a374eadf82952a0366ba74"
+    },
+    {
+      "name": "thomson",
+      "path": "indra/jni/thomson",
+      "sha256": "47013fb3cc43efd9f0250bed1d1e26be98f4609d00b378eb67af6aabe47c561d"
+    },
+    {
+      "name": "aircrack-ng",
+      "path": "indra/jni/aircrack-ng",
+      "sha256": "9b3406b5e33965d768c30c5e717c31729fcfd309eee80e7a49a24413accd49ac"
+    }
+  ],
+  "files": [
+    {
+      "name": "nmap-makefile",
+      "path": "indra/jni/nmap/Android.mk",
+      "sha256": "30cbda25e4222d2258f17c5e22e3e2908076236f8261fb098369780ca02ddb29"
+    },
+    {
+      "name": "icu-uspoof",
+      "path": "indra/jni/icu4c/i18n/uspoof.cpp",
+      "sha256": "48d07952c0fd2e0ed6e73ed1c0b829ba8454268134f98030272cccf2805fbfb0"
+    },
+    {
+      "name": "jni-build-sh",
+      "path": "indra/jni/build.sh",
+      "sha256": "ccd51e2f1c9a98acd49438817994adea161a8fb93d574b3f24f11396d20c5919"
+    },
+    {
+      "name": "jni-application-mk",
+      "path": "indra/jni/Application.mk",
+      "sha256": "71175004cb4f817b0dac4053d1c154296803085f1829df34c110cd11d0f8b60b"
+    },
+    {
+      "name": "jni-droid-header",
+      "path": "indra/jni/include/droid.h",
+      "sha256": "e002e196ba01bbd8fe2c049682f94c6c3680c5a7b033a6624652ff9b5916c3a9"
+    }
+  ]
+}

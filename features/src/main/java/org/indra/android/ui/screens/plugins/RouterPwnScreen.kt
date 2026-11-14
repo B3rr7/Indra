@@ -12,6 +12,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.indra.android.ui.components.FormError
 import org.indra.android.ui.components.HostSuggestions
 import org.indra.android.ui.components.PluginScaffold
+import org.indra.android.ui.components.ResultLine
+import org.indra.android.ui.components.ResultList
 
 @Composable
 fun RouterPwnScreen(
@@ -60,36 +62,20 @@ fun RouterPwnScreen(
             if (uiState.vulnerabilities.isNotEmpty()) {
                 // Open services are a finding, not a failure: painting them in the error colour
                 // made a completed scan look like it went wrong. Errors use FormError instead.
-                Text(
-                    text = "Found ${uiState.vulnerabilities.size} open services",
-                    style = MaterialTheme.typography.titleMedium,
+                ResultList(
+                    lines =
+                        uiState.vulnerabilities.map { finding ->
+                            ResultLine(
+                                // A finding is identified by what it is, so the key carries both
+                                // halves of the pair the row renders.
+                                key = "${finding.name}|${finding.description}",
+                                title = finding.name,
+                                detail = finding.description,
+                            )
+                        },
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    header = "${uiState.vulnerabilities.size} open services",
                 )
-                LazyColumn(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    items(
-                        items = uiState.vulnerabilities,
-                        // A finding is identified by what it is, so the key has to carry both
-                        // halves of the pair the row renders.
-                        key = { "${it.name}|${it.description}" },
-                        contentType = { "router-vulnerability" },
-                    ) { vuln ->
-                        Card(modifier = Modifier.fillMaxWidth()) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Text(
-                                    text = vuln.name,
-                                    style = MaterialTheme.typography.bodyLarge,
-                                )
-                                Text(
-                                    text = vuln.description,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
-                    }
-                }
             }
 
             if (uiState.result.isNotBlank()) {

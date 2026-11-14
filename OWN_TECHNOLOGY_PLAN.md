@@ -311,3 +311,15 @@ Every assumption in this plan was re-verified against the tree on 2026-11-14.
 
 *Design record, 2026-11-14, re-checked the same day. No source from the compared projects is copied;
 file names and type shapes above are ours.*
+
+### Status (2026-11-14)
+
+| Phase | State |
+|---|---|
+| P0 handshake | **done** — 64 tests, `CrackRun` on `parsedData`, device-tested through the Handshakes screen |
+| P0 MSF | **done** — configure/run/follow, refusal sentence preserved, `Completed · job 0` verified on the g60 |
+| P1 source pins | **done** — `pins/sources.json` (8 trees + 5 files), `SourcePinGateTest` fails the gate on drift; caught a probe edit on demand |
+| P2 radio profile | not started — `Capability.MONITOR_RADIO` + a driver-capability reader |
+| P2 HID layout/UDC | not started — `HidLayout` as data, `HidUdc` bind probe |
+| P3 link probe | not started |
+| P4 SDK 37 | blocked on AGP 9.1 / Nav3 1.2 |
