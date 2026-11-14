@@ -1,160 +1,449 @@
-# Deep Comparison: Indra vs StrykerOSS
+> **SUPERSEDED — do not cite its numbers.** Measured figures (file counts, `@Test` counts,
+> plugin/tool counts, targetSdk, native components) in this file were wrong in 23 places.
+> Use [VERIFIED_COMPARISON.md](VERIFIED_COMPARISON.md) instead.
 
-Date: 2026-10-27 (deep re-audit; supersedes the 2026-10-23 version)
-
-A third reference, **Kali NetHunter**, is the upstream benchmark both projects are measured against. It is not a codebase in this workspace (`kali-nethunter-project/` is a meta-repo — README + version.txt + GitLab issue templates only; the actual app/kernel/rootfs live in separate GitLab repos). Its approach is the "full Kali chroot + custom device kernel" model.
-
----
-
-## 1. What each project actually is
-
-| | Indra | StrykerOSS |
-|---|---|---|
-| Tagline | "more advanced, easier-to-use pentest tool than cSploit ever was" | "free and open-source mobile pentest suite for Android" |
-| Origin | cSploit descendant (evilsocket, 2012), rebuilt from scratch in Kotlin/Compose | Independent (zalexdev, 2021), v6.5.1 |
-| Core idea | Lightweight native daemon (`indrad`, descendant of `cSploitd`) + bundled tools in an app-private core dir | Debian trixie arm64 chroot under `/data/local/stryker/release`, **plus a rootless QEMU/UML VM fallback** |
-| Package | `org.indra.android` | `com.zalexdev.stryker` |
-| Version | 2.0.0 (versionCode 5) | 6.5.1 (versionCode 651) |
-| License | GPLv3 | GPLv3 |
-
-The single most important architectural difference: **Indra hand-ports ~40 C libraries to Android NDK; Stryker installs Debian packages into a chroot.** That one choice explains almost every downstream difference in this document.
+# Indra vs. Strix vs. StrykerOSS vs. WIFI-Frankenstein vs. zAnti
+## Deep Comparative Analysis of Android Pentesting Suites
 
 ---
 
-## 2. Build & toolchain
+## Executive Summary
 
-| | Indra | Stryker |
-|---|---|---|
-| Language (app) | Kotlin 1.9.24 | Java, source/target level 1.8 |
-| UI | Jetpack Compose + Material 3 | XML layouts, Activities/Fragments |
-| DI | Hilt 2.51.1 | none |
-| Async | Coroutines + Flow | threads + `Runtime.exec` |
-| AGP | 8.5.0 | 8.13.2 |
-| Gradle | 8.7 | 8.13 |
-| NDK | 25.2.9519653 | 25.1.8937393 |
-| compileSdk | 35 | 37 |
-| minSdk | 26 (Android 8) | 24 (Android 7) |
-| targetSdk | 35 | 37 |
-| Java | 17 (build + runtime) | 8 (source compat) |
-| ABI | armeabi-v7a **+** arm64-v8a | arm64-v8a only |
-| Modules | `:core :data :ui :features :indra` (+ `indra/jni` submodule) | `:app :terminal :chrome-tabs :NeoLang :Xorg :NeoTermBridge` |
-| APK / payload | 47.2 MB (incl. 11.9 MB core tarballs) | 72 MB app dir; chroot is a **237–297 MB external download**; rootless QEMU payloads ~120 MB |
-| CI | `./gradlew test` + `detekt` + unsigned R8 release build, JDK 21 | `./gradlew build`, JDK 17, installs `platforms;android-33` while `compileSdk = 37` |
-
-### Build-hygiene findings (Stryker)
-- `settings.gradle` still declares `jcenter()` and `maven { url 'https://jcenter.bintray.com/' }`. JCenter has been read-only/shut down since 2022; with `FAIL_ON_PROJECT_REPOS` this is a real resolution risk, not cosmetic.
-- README says **Target SDK 28** and **v6.0**; `build.gradle` says **target 37** and **6.5.1**. The contributing guide tells contributors to "keep `targetSdk = 28`" while the build is 37. Documentation drift is severe.
-- `requestLegacyExternalStorage = true`, `MANAGE_EXTERNAL_STORAGE`, `usesCleartextTraffic = true` on a target-37 app. Fine for sideload, a hard blocker for Play Store.
-- No `.github/workflows` test step beyond `build`; the single test file is a placeholder in `:Xorg`.
-
-### Build-hygiene findings (Indra)
-- Detekt wired into all five modules with per-module baselines; `./gradlew detekt` green.
-- StrictMode `penaltyLog` in debug builds; 13 cold-start violations found and fixed (prefs, log-file probe, crash sweep, `System.loadLibrary`, `filesDir`).
-- No `jcenter`; `network_security_config.xml` blocks cleartext except loopback.
+| Project | Architecture | Execution Model | Key Differentiator |
+|---------|--------------|-----------------|-------------------|
+| **Indra** | Multi-module (core/data/ui/features/indra), Kotlin + Compose + Hilt + Navigation 3 | **Hybrid**: Rust daemon (Unix socket) + direct `su -c` (Kotlin ProcessManager) + Alpine chroot | Session-scoped ViewModels, pure-Kotlin daemon client, OTA hot-swap, rootless subset |
+| **Strix** | Single-module Gradle (Kotlin + Compose), Hilt DI | **Direct `su -c` only** — no daemon, no chroot | Weekly CI builds with signed OTA, full Metasploit chroot, clean Compose UI |
+| **StrykerOSS** | Single-module (Java + XML layouts), targetSdk 28 | **Chroot-only** — Debian trixie arm64 at `/data/local/stryker/release` | Rootless QEMU VM fallback, built-in terminal into chroot, USB gadget/HID arsenal |
+| **WIFI-Frankenstein** | Kotlin + Compose (partial), legacy + modern mix | **Direct `su -c` + proot** for Router Scan | WiFi/database-centric: 3WiFi/SmartLinkDB integration, wardriving, geoMAC |
+| **zAnti** | Legacy Java (smali decompiled), ActionBarSherlock, SlidingMenu | **Direct `su -c` + ShellPool** (persistent root shells) | Cloud sync (zCloud), MITM HTTP injection, commercial/closed-source |
 
 ---
 
-## 3. Code quality & maintainability
+## 1. Architecture & Codebase Structure
 
-| Metric | Indra | Stryker |
-|---|---|---|
-| App LOC | 21,963 (Kotlin) | 74,480 (Java, app module) |
-| Largest file | `SmartToolBox.kt` 1,012 | `WiFIAdapter.java` 1,860; `Core.java` 1,643 |
-| God classes | `SmartToolBox` (1,012) — but pure registry + execution | `Core.java` (1,643) + `WiFIAdapter` (1,860) + `Dashboard` (1,707) + `LocalAdapter` (1,051) + `LightfallView` (1,034) |
-| Test files | 23 (core + ui) | 1 placeholder |
-| `@Test` count | 131 | 0 (real) |
-| Detekt suppressions | 14 `@Suppress` | n/a (no detekt) |
-| MVVM | ✅ ViewModel + StateFlow per screen | ❌ Activity/Fragment centric, no ViewModels |
-| DI | Hilt | none — `Core` is a static god class |
-| `requireTool` gates | 28 screens | n/a (no gate abstraction) |
-| `shellQuote` call sites | 71 (every root-interpolated field) | n/a (commands built ad hoc) |
-| Modules split | `:core :data :ui :features :indra` | `:app` monolith + terminal/chrome-tabs/Xorg |
+### Indra
+```
+Indra (multi-module Gradle)
+├── core/           # 100 files — SmartToolBox, CoreManager, ProcessManager, ChildProcessManager, RootManager, KotlinDaemonClient, PluginManager, OtaUpdateManager, ChrootEngine, LongRunController, PortScan, TerminalTransport, MonitorMode, Hashcat, MsfLaunch, AlpineManifest, BundleUpdateManager
+├── data/           # 2 files — NetworkRepository only (domain/usecase deleted per ADR 0001)
+├── ui/             # 9 files — Material3 theme, Flat.kt, OutputConsole/LiveOutputCard/FormError, HostSuggestions, WallpaperBackground
+├── features/       # 80 files — 36 plugin screens + ViewModels (MVVM, StateFlow<UiState>)
+└── indra/          # 25 files — MainActivity, IndraApplication, AppModule (Hilt), IndraNavHost, BottomNavBar, Home/Tools/Settings/Terminal screens
+```
+- **Modern stack**: Kotlin 2.2.21, Compose 1.9.4/M3, Hilt 2.57.2, Navigation 3 1.1.7, Coroutines/Flow
+- **~484 unit tests** across all modules, detekt clean
+- **Native core**: Rust `indrad` daemon + bundled C tools (nmap, hydra, aircrack-ng, reaver, hping3, nuclei, bettercap, arpspoof, tcpdump, ettercap, fusemounts, network-radar, msfrpcd, masscan, gobuster)
+- **No JNI bridge** — pure-Kotlin `KotlinDaemonClient` over Unix domain socket
 
-**Indra's documented self-criticism (from `IMPROVEMENT_PLAN.md`):** no tests in `:features` (9.3k LOC of ViewModels), 389 detekt findings in the audit (mostly addressed), `Topology` screen has no data source (dead), no foreground service for 30-minute tools, daemon auth is a static hash behind a `0666` socket, 173 hardcoded strings.
+### Strix
+```
+strix/ (single-module Gradle, Kotlin + Compose)
+├── app/src/main/kotlin/org/csploit/strix/
+│   ├── core/           # ProcessManager, Logger, ProcessEvent, ShellCommand, ProcessTreeKiller
+│   ├── data/           # ToolManager, MsfDaemon, NetworkManager, PortScanner, MitmRunner, MsfRpcClient, BundleUpdateManager, ToolsExtractor, RubyExtractor
+│   ├── domain/model/   # Minimal data classes
+│   ├── ui/             # 20+ screens (Compose), navigation via Routes/ToolDestinations/MsfDestinations
+│   └── AppSettings, RootManager
+```
+- **Stack**: Kotlin + Compose, Hilt, Navigation Compose (legacy), Coroutines/Flow
+- **Weekly CI**: GitHub Actions builds tools + Metasploit, signs OTA manifests
+- **No daemon** — everything via `ProcessManager.execute()` → `su -c`
+- **Metasploit chroot** — separate Ruby/MSF bundle download (~340 MB), managed by `MsfDaemon` singleton
 
-**Stryker's structural issue:** `Core.java` is the single chokepoint — SharedPreferences, SQLite, asset extraction, root process execution, chroot mount/repair, OTA, logging. Every feature module reaches into it. There is no seam to test against; the one test file confirms it.
+### StrykerOSS
+```
+strykerapp/app/src/main/java/com/zalexdev/stryker/
+├── Core.java                    # 1336 lines — GOD CLASS: prefs, DB, su execution, chroot mount, tool installs, vendor DB, pixie dust, VNC, HID, USB Arsenal
+├── engine/                      # GuestCore (chroot), RootlessEngine (QEMU VM), EngineType, Apt
+├── metasploit/                  # MSF console, payload generator, RPC, install stages
+├── nmap/, nuclei/, searchsploit/, hydra/, cameradar/
+├── hid/                         # DuckyScript engine (pure Java), 7 keyboard layouts
+├── usbarsenal/                  # USB gadget configfs orchestration
+├── wifi/, wpair/, handshakes/, macchanger/, geomac/, vnc/, dashboard/, arsenal/, coremanger/
+└── ota/                         # RemoteManifest, UpdateManager, CoreDownloader, QemuDownloader, VerifiedDownloader
+```
+- **Stack**: Java 8, XML layouts, targetSdk 28, ndk-build for native code
+- **Chroot-centric**: Debian trixie arm64 at `/data/local/stryker/release` (bootroot/killroot scripts)
+- **Rootless fallback**: QEMU VM boots same rootfs when root unavailable (`RootlessEngine`)
+- **Terminal**: Built-in drops straight into chroot (no external shell app needed)
 
----
+### WIFI-Frankenstein
+```
+WIFI-Frankenstein/app/ (Kotlin + Compose partial)
+├── Database-centric: 3WiFi, SmartLinkDB, custom SQLite
+├── Mapping: geoMAC, wardriving (Wigle-style), OSM maps
+├── Tools: WPS PixieDust, handshake capture, offline cracker, Router Scan (proot), WPA/WPS keygen
+├── DPI/RKN blocking check, wpa-sec.stanev.org integration
+└── Legacy + modern mix — migrating to Compose
+```
+- **Focus**: WiFi/database management, not general pentesting
+- **Root optional** for some features (handshake capture needs root + custom kernel)
+- **proot** for Router Scan by Stas'M integration
 
-## 4. Feature matrix (verified against code, not READMEs)
-
-| Capability | Indra | Stryker |
-|---|---|---|
-| LAN discovery / port scan | ✅ nmap, masscan | ✅ nmap + **non-root scanner** (`localnetwork/nonroot/`, 862-line `NonRootScanner` + 19 resolver classes: mDNS, SSDP, NetBIOS, SNMP, rDNS, Cast, ICMP, TCP-connect) |
-| OS / service fingerprint | ✅ Inspector (nmap `-O`) | ✅ |
-| Traceroute | ✅ `nmap --traceroute` | via tools |
-| Packet capture | ✅ tcpdump (+ save to `.cap`) | ✅ via chroot |
-| Packet forge | ✅ hping3 | via tools |
-| MITM / ARP spoof | ✅ arpspoof (risk dialog; hard-resets moto g60) | via tools |
-| Credential cracking | ✅ hydra | ✅ hydra **+ Hashcat on handshakes** |
-| Metasploit | ⚠️ optional chroot, parse-only `MsfSearch` | ✅ full console, sessions, payload gen |
-| Nuclei | ✅ optional download; **no templates shipped** (F2) | ✅ severity-grouped findings |
-| SearchSploit / Arsenal | ⚠️ screens exist, need artifact install | ✅ full ExploitDB + templated arsenal (`{IP}/{PORT}/{MAC}`) |
-| WiFi audit | ✅ aircrack-ng | ✅ |
-| Monitor mode | ❌ **blocked**: no `iw`/`airmon-ng`/`airodump-ng` (Wifite stage 1, handshake capture, Reaver unreachable) | ✅ (external monitor-mode USB adapter) |
-| Handshake storage/crack | ⚠️ file browser only | ✅ rename, share, OnlineHashCrack, on-device crack |
-| GeoMac | ✅ KML/CSV | ✅ OSM map |
-| HID / DuckyScript | ⚠️ parser + reports; refuses without bound UDC | ✅ 7 layouts, live log, sample payloads |
-| USB Arsenal | ⚠️ reports `UDC: false`, no binding | ✅ configfs profiles, mount `.img/.iso` |
-| WhisperPair (BLE Fast Pair) | ⚠️ scan + vuln check; exploit chain **not implemented** | ✅ CVE-2025-36911 full chain + HFP audio capture |
-| VNC desktop | ❌ | ✅ in-chroot XFCE |
-| Rootless operation | ⚠️ partial (no `su`, `-sT`, gating) | ✅ QEMU/UML VM boots same rootfs |
-| Camera/RTSP scan | ❌ | ✅ `cameradar` |
-| Built-in terminal | ✅ Compose terminal | ✅ xterm + launcher alias |
-| OTA updates | ✅ signed manifest, SHA-256, atomic swap, rollback, per-tool | ✅ manifest + SHA-256 per payload |
-| i18n | ✅ many locales | ❓ (strings present) |
-
-**Honesty discipline (Indra only):** `PluginStatus` distinguishes `DAEMON_DOWN` / `TOOL_MISSING` / `ARTIFACT_MISSING` / `NEEDS_ROOT` / `UNSUPPORTED`; zero-result ≠ error (`finished`/`hasRun` flags); one console component (`LiveOutputCard`) and one error component (`FormError`). Stryker has no such contract — screens render whatever the tool prints.
-
----
-
-## 5. Security posture
-
-| Area | Indra | Stryker |
-|---|---|---|
-| Network (cleartext) | `network_security_config.xml`: blocked except loopback (OTA test mode) | `usesCleartextTraffic="true"` globally |
-| Storage | app-private core dir, traversal-guarded tar extraction, `ATOMIC_MOVE` + mode `0755` | `MANAGE_EXTERNAL_STORAGE`, `requestLegacyExternalStorage`, chroot under `/data/local` |
-| Root socket | daemon socket `chmod 0666` ⚠️ (any app can connect; auth is a static hash) | runs as root via `su`; no socket boundary |
-| Shell injection | `shellQuote()` (POSIX) on every user field; `ShellQuoteTest` ports the daemon tokenizer | commands built by string concat in `Core.java` |
-| OTA trust | HTTPS + TLS pin + RSA signature + SHA-256 + rollback | HTTPS + SHA-256 (no signature verify evident) |
-| Crash reporting | local `CrashReporter` (no ACRA, no telemetry) | not inspected |
-
-Indra is materially safer on the network and storage axes; its one real hole is the daemon socket permissions, which is on the improvement plan.
-
----
-
-## 6. Runtime behaviour (from the 2026-10-27 device audit)
-
-Indra's all-tools audit drove 37 plugins on a moto g60:
-- **21 real, device-verified** (Port Scanner, Inspector, Traceroute, Network Radar, Packet Capture, Login Cracker — `Hydra v9.7 … 183 login tries`, Credential Tester, Packet Forger — `2 packets transmitted, 2 received, 0% packet loss`, RouterPwn, WiFi Audit, Gobuster on IP targets, Terminal, MAC Changer, IPTables chain listing, WiFi Scanner, Handshakes, GeoMac, WhisperPair scan, Session Hijacking, DNS Spoofing, Password Auditor — `Entropy: 59.0 bits`, Arsenal running a user template, HID/DuckyScript/USB Arsenal capability probes).
-- **4 honest gates** (Exploit Finder no msf chroot, SearchSploit no ExploitDB, Bettercap no artifact, Vuln/Web Tester no templates).
-- **Blocked/dead/unsafe**: Wifite + monitor + Reaver (no `iw`), Responder (`UNSUPPORTED`, dead screen), Topology (no data source), MITM + One-Tap MITM (not run — arpspoof hard-resets the phone).
-
-Two bugs surfaced and were fixed during the sweep: nuclei dying on `mkdir /.config: read-only file system` (daemon `HOME=/`), and a latched `startFailed` flag that made every gate report "daemon not running" after one refused start.
-
-Stryker ships the same features as *genuinely working* (monitor mode, handshake cracking, Metasploit console, HID/USB, WhisperPair exploit, VNC) because Debian packages and a chroot remove the porting tax — but only on arm64, only after a 240–300 MB download, and with no test suite to catch regressions.
-
----
-
-## 7. Where each one wins
-
-**Indra wins on:** engineering quality (tests, detekt, CI, ADRs), modern UX stack, footprint (~12 MB vs ~240 MB), dual ABI, OTA with health-check rollback, security hygiene, honest failure states, velocity (1,478 commits), and the fact that it is the only one of the three that is *maintainable* by a single developer.
-
-**Stryker wins on:** feature *depth and completeness* — everything Indra advertises-but-can't-finish is real there, because the chroot removes the porting tax. Plus rootless QEMU fallback, non-root LAN scanning, cameradar, and a mature chroot installer.
-
-**NetHunter (reference) wins on:** maximum capability — wireless 802.11 injection, MANA evil AP, BadUSB, full Kali toolset, VNC/KeX — at the cost of being device-locked to a custom kernel and a multi-GB payload.
+### zAnti (Decompiled APK — v2.4.1)
+```
+zAnti/decoded/smali/com/zimperium/zanti/
+├── Anti.smali (59K lines) — MAIN ACTIVITY / GOD CLASS
+├── Helpers.smali (165K lines) — UTILITY GOD CLASS
+├── ShellPool.smali — Persistent root shell pool (reuses su processes)
+├── Connect.smali — Network discovery/port scanning
+├── WifiMonitor.smali — WiFi scanning/attack
+├── zmitm/ — MITM HTTP injection, SSL stripping
+├── ZHttpInjector/ — HTTP injection engine
+├── plugins/ — CrackerPlugin, HeartbleedPlugin, ShellShockPlugin, SSLPoodlePlugin, RouterPwnPlugin
+├── zcloud/ — Cloud sync (device list, scan results, credentials)
+├── ztether/ — USB tethering detection
+└── macchanger/, samba/, httpserver/, history/, topbar/, mainpage/, analyze/, MenuOptions/
+```
+- **Legacy stack**: Java, ActionBarSherlock, SlidingMenu, targetSdk likely ≤ 28
+- **ShellPool** — maintains persistent `su` processes, feeds commands via stdin
+- **Closed-source commercial** — Zimperium product, cloud-backed
+- **MITM focus**: HTTP injection, SSL stripping, session hijacking via `zmitm` + `ZHttpInjector`
 
 ---
 
-## 8. What Indra should do next (ranked by value)
+## 2. Execution Model Comparison
 
-1. **Vendor `libnl` + `iw` + `airmon-ng` + `airodump-ng`.** This single gap blocks Wifite stage 1, handshake capture and Reaver — the entire WiFi half of the matrix. Highest ROI.
-2. **Resolve the Go-tool DNS problem app-side** (OkHttp uses Android's resolver; the daemon has no `/etc/resolv.conf`). Until then, nuclei needs an app-side template installer and gobuster needs an "use an IP" hint.
-3. **Rootless: finish or drop.** Stryker's QEMU fallback is the one feature Indra structurally cannot match without a VM layer; a half-working toggle is worse than none.
-4. **Handshake lifecycle** — crack (hashcat) + export, not just list/rename.
-5. **Daemon hardening** — socket permissions + replace the static auth hash; foreground service for 30-min tools.
-6. **Kill or feed `Topology`**; add tests to `:features`; adaptive layout (`WindowSizeClass`).
+| Aspect | Indra | Strix | StrykerOSS | WIFI-Frankenstein | zAnti |
+|--------|-------|-------|------------|-------------------|-------|
+| **Primary Model** | **Hybrid** (3 paths) | Direct `su -c` only | Chroot-only (Debian) | Direct `su -c` + proot | Direct `su -c` + ShellPool |
+| **Daemon** | Rust `indrad` (Unix socket) | ❌ None | ❌ None | ❌ None | ❌ None |
+| **Direct `su -c`** | ✅ `ProcessManager` (Kotlin, tree kill) | ✅ `ProcessManager` (Kotlin, tree kill) | ❌ Only via chroot | ✅ `Core.customCommand` | ✅ `ShellPool` (persistent shells) |
+| **Chroot** | Alpine Linux (musl) | ❌ None | **Debian trixie arm64** (primary) | proot (Router Scan only) | ❌ None |
+| **Rootless** | 7 plugins (platform APIs only) | ❌ "No. Every feature needs root" | **QEMU VM** (same rootfs) | Partial (some features) | ❌ Commercial, root required |
+| **Structured Events** | ✅ `PortFound`/`OsFound`/`Hop` from nmap handler | ❌ Text parsing only | ❌ Text parsing only | ❌ Text parsing only | ❌ Text parsing only |
+| **Process Tree Kill** | `INDRA_PID=$$` + `ps/awk` descendant walk (TERM→KILL) | `__STRIX_PID__` + `pgrep -P` recursive (TERM→KILL) | `pkill -f` in chroot | Basic `process.destroy()` | ShellPool reuses shells, `pkill` on exit |
+| **Library Path** | `LD_LIBRARY_PATH` injected for bundled OpenSSL | `PATH` + `NMAPDIR` exported | Chroot has full `/usr/lib` | System paths | System paths |
 
-## 9. Verdict
+### Key Execution Model Insights
 
-Indra and Stryker are **opposite bets on the same problem**. Stryker chose breadth by importing a whole Linux distro; Indra chose maintainability by owning a small native core. NetHunter is the ceiling neither has reached (device-locked kernel + full Kali). Indra's realistic win condition is not to match NetHunter's feature count — it's to be the only modern, lightweight, dual-ABI, OTA-updatable alternative that doesn't ask the user to download 300 MB, and to be *honest* about what works. The remaining work is mostly the WiFi stack (`iw`/`libnl`) and finishing the half-built screens (WhisperPair exploit chain, handshake cracking, Topology). Everything else is engineering hygiene that Indra is already ahead on.
+**Indra's Hybrid Model (Unique)**
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    SmartToolBox (Singleton)                     │
+│  TOOL_SPECS: 17 entries, single source of truth                 │
+│  DAEMON_HANDLERS = {nmap, ettercap, tcpdump, arpspoof,         │
+│                      fusemounts, network-radar, msfrpcd,        │
+│                      raw, blind}                                 │
+│  DIRECT_HANDLERS = {direct}  ← pseudo-handler                   │
+└──────────────────────────┬──────────────────────────────────────┘
+                           │
+        ┌──────────────────┼──────────────────┐
+        ▼                  ▼                  ▼
+┌───────────────┐  ┌───────────────┐  ┌───────────────┐
+│    DAEMON     │  │    DIRECT     │  │     RAW       │
+│  (indrad)     │  │  (su -c)      │  │  (raw handler)│
+└───────────────┘  └───────────────┘  └───────────────┘
+nmap, ettercap   masscan, hydra,   gobuster, shell,
+tcpdump*,        aircrack-ng,      raw, blind
+arpspoof*,       reaver, hping3,
+network-radar,   nuclei, bettercap,
+fusemounts,      arpspoof*, tcpdump*
+msfrpcd
+```
+*Tools with `*` appear in both daemon and direct paths.*
+
+**Strix's Direct-Only Model**
+- Simpler: no daemon to manage, no socket lifecycle
+- But: every tool spawns `su` — overhead, no structured events, no shared daemon state
+- `ProcessManager` nearly identical to Indra's (same `PID_MARKER` + tree kill pattern)
+
+**StrykerOSS's Chroot-Only Model**
+- All tools run inside Debian chroot → consistent environment, full Linux userspace
+- Rootless = QEMU VM booting **same rootfs** (impressive parity)
+- Heavy: ~1 GB chroot, mount/unmount lifecycle, `bootroot`/`killroot` scripts
+- No direct `su -c` outside chroot — even simple commands go through chroot
+
+**zAnti's ShellPool Model**
+- Persistent `su` processes kept alive, commands fed via stdin
+- Avoids `su` spawn overhead but: shell state leaks, fragile, hard to kill cleanly
+- Commercial closed-source — cloud sync, MITM HTTP injection engine
+
+---
+
+## 3. Metasploit Integration
+
+| Feature | Indra | Strix | StrykerOSS | WIFI-Frankenstein | zAnti |
+|---------|-------|-------|------------|-------------------|-------|
+| **Runtime** | Alpine chroot + MSF chroot (separate) | **Musl Ruby chroot** (dedicated bundle) | **Debian chroot** (native MSF) | ❌ None | ❌ None |
+| **Install** | `CoreManager.installMsf()` → tarball + `msfrpcd` | One-tap download (~340 MB) via `MsfDaemon` | In-app installer (optional component) | N/A | N/A |
+| **Access** | `MsfLaunch.probe()` + `chroot msfconsole` | `MsfDaemon` singleton → `msfrpcd` RPC | `Metasploit.java` → `msfconsole` in chroot | N/A | N/A |
+| **RPC** | `MsfRpcClient` (msgpack) | `MsfRpcClient` (HTTP/msgpack) | `MsfRpcConsole` (custom) | N/A | N/A |
+| **Sessions** | Via RPC | Via RPC + notification polling | Via console parsing | N/A | N/A |
+| **Health Check** | `MsfLaunch.probe()` checks loader + console | `MsfDaemon` polls RPC until ready | `checkModule("metasploit")` | N/A | N/A |
+
+**Strix's MSF Implementation is Most Complete**
+- Dedicated `MsfDaemon` singleton survives screen lifecycle
+- Generation-based startup (prevents stale callbacks)
+- RPC readiness polling (not log scraping)
+- Session polling → notifications
+- `beginMaintenance()`/`endMaintenance()` for bundle swaps
+
+**Indra's MSF is Chroot-Based**
+- Requires Alpine chroot + separate MSF chroot
+- `msfProblem()` explains loader failures before launch
+- `MsfLaunch.probe()` validates chroot before search
+- No persistent daemon — each search spawns `msfconsole -q -x ...`
+
+**StrykerOSS Runs Native MSF in Debian**
+- Full MSF in chroot → no musl/busybox compatibility issues
+- `MsfRpcConsole` for RPC, but console parsing for modules
+- Heavy but most compatible
+
+---
+
+## 4. OTA / Binary Update Systems
+
+| Feature | Indra | Strix | StrykerOSS | WIFI-Frankenstein | zAnti |
+|---------|-------|-------|------------|-------------------|-------|
+| **Channels** | `tools` + `msf` | `tools` + `msf` (separate) | `core` (chroot) + `qemu` (rootless) | App + components | Cloud (zCloud) |
+| **Manifest** | Signed envelope `{payload, signature}` (ECDSA P-256) | Signed manifest (RSA) + SHA-256 | `RemoteManifest` (JSON) | Basic version check | Cloud API |
+| **Verification** | `SignatureVerifier` + pinned TLS host | `SignatureVerifier` + SHA-256 | `VerifiedDownloader` (signature?) | Unknown | Cloud trust |
+| **Swap** | `BundleSwapper` (atomic live→.old→staged, rollback) | `BundleInstaller.stage()` + `swap()` | `CoreDownloader` + `UpdateWorker` | Unknown | Cloud push |
+| **Daemon/Tool Stop** | `stopAllRunning()` (SIGKILL sweep) | `MsfDaemon.beginMaintenance()` + `toolsLock` | `killroot` + `UpdateWorker` | Unknown | Unknown |
+| **CI/CD** | Manual `build.sh cores` + Rust build | **Weekly GitHub Actions** (tools + MSF) | Unknown | Unknown | Commercial |
+| **Schedule** | Daily check (`BundleUpdateManager`) | Daily check + weekly builds | `UpdateScheduler` + `NotificationPoller` | Unknown | Cloud push |
+
+**Strix Has the Most Mature CI/CD Pipeline**
+- Weekly automated builds of Nmap, Hydra, Ettercap, tcpdump, Metasploit
+- Signed releases on GitHub
+- App checks daily, user taps to update
+- Clean separation: tools bundle (in APK baseline) vs MSF bundle (download-only)
+
+**Indra's OTA is Architecturally Cleaner**
+- Two-channel design (tools + msf)
+- `SafeTarExtractor` rejects path traversal, no symlinks
+- `BundleHooks` for pre/post install scripts
+- But: no automated weekly builds yet (manual `build.sh cores`)
+
+---
+
+## 5. UI/UX Architecture
+
+| Aspect | Indra | Strix | StrykerOSS | WIFI-Frankenstein | zAnti |
+|--------|-------|-------|------------|-------------------|-------|
+| **UI Framework** | **Jetpack Compose** (100%) | **Jetpack Compose** (100%) | XML Layouts + Fragments | Mixed (Compose + legacy XML) | Legacy Java (ActionBarSherlock) |
+| **Navigation** | **Navigation 3** (typed `NavKey`, single back stack) | Navigation Compose (legacy) | `DrawerLayout` + `FragmentTransaction` | Mixed | `SlidingMenu` + `Activity` |
+| **ViewModel Scope** | **Session-scoped** (survives tab switch) | Entry-scoped (cleared on pop) | Fragment-scoped | Mixed | Activity-scoped |
+| **Theme** | Material 3 + `Flat.kt` (dark-only) | Material 3 | Material 3 (XML) | Multiple themes | Custom (dated) |
+| **Console** | `LiveOutputCard` (unified, mono, auto-follow) | Custom per-screen | Terminal fragment (chroot) | Custom per-screen | Custom per-screen |
+| **Host Chips** | `HostSuggestions` (wrap + dropdown, 8 max) | Custom `HostCard` | ListView/RecyclerView | Custom | Custom |
+| **Error/Empty States** | `FormError` + `EmptyState` (honest: zero ≠ error) | Mixed | Mixed | Mixed | Mixed |
+
+**Indra's Navigation 3 + Session ViewModels is a Genuine Innovation**
+- Single back stack, typed destinations (`@Serializable data object Screen.X`)
+- `SessionViewModelStores` retains VM per destination for **entire app session**
+- Tools keep running + results persist when switching tabs
+- `LongRunService` foreground notification = kill switch for off-screen tools
+
+**Strix Uses Legacy Navigation Compose**
+- String routes, no typed keys
+- ViewModel cleared on back → scan results lost, running scan cancelled
+- Simpler but less robust for long-running tools
+
+**StrykerOSS Uses Classic Fragments + Drawer**
+- Single Activity, `FragmentTransaction` for navigation
+- Terminal is a Fragment dropping into chroot
+- Material 3 via XML (`MaterialCardView`, `MaterialButton`)
+
+---
+
+## 6. Root Handling & Capabilities
+
+| Feature | Indra | Strix | StrykerOSS | WIFI-Frankenstein | zAnti |
+|---------|-------|-------|------------|-------------------|-------|
+| **Root Detection** | Bounded `su -c` probe (Magisk v31+ compatible) | `AppSettings.isRooted()` via `su` | `Core.checkRoot()` → `id` output | Basic `su` check | `ShellPool` spawn test |
+| **Capability Probe** | Reads `CapEff` from `/proc/self/status` | ❌ Assumes root = capabilities | ❌ Assumes root = capabilities | ❌ | ❌ |
+| **Magisk v31** | ✅ No reactive prompt, snackbar → manager app | ⚠️ Unknown | ⚠️ Unknown | ⚠️ | ⚠️ |
+| **Rootless Mode** | **7 plugins** (platform APIs only) | ❌ "No. Every feature needs root" | **QEMU VM** (full chroot parity) | Partial | ❌ |
+| **Grant Guidance** | `RootManager.guidance()` per status | Basic snackbar | In-app installer requests root | Basic | Tutorial wizard |
+| **Package Visibility** | `<queries>` for 5 managers | ❌ | ❌ | ❌ | ❌ |
+
+**Indra's Root Handling is Most Sophisticated**
+- Single bounded probe (`RootAccess.probeScript`) — not package lookup
+- Reads actual capabilities (`CAP_NET_RAW`, `CAP_NET_ADMIN`) — Magisk 30.1+ can strip at uid 0
+- `Rootless` object defines exact plugin subset that works without root/daemon
+- Magisk v31: no reactive prompt → probe once, snackbar with "Open Magisk" button
+
+---
+
+## 7. Network/Tool Capabilities Matrix
+
+| Tool/Feature | Indra | Strix | StrykerOSS | WIFI-Frankenstein | zAnti |
+|--------------|-------|-------|------------|-------------------|-------|
+| **Host Discovery** | `network-radar` (ARP) + kernel neighbor table | ARP scan (built-in) | Nmap host discovery (chroot) | 3WiFi DB + local scan | `Connect` + `WifiMonitor` |
+| **Port Scan** | nmap (daemon) + masscan (direct) + rootless connect | nmap (direct) | Nmap (chroot) | Local network scanner | `Connect` port scan |
+| **OS Fingerprint** | nmap `-O` (daemon, structured `OsFound`) | nmap (text parse) | Nmap (chroot) | ❌ | ❌ |
+| **Service Version** | nmap `-sV` (daemon, `PortFound`) | nmap (text parse) | Nmap (chroot) | ❌ | ❌ |
+| **Brute Force** | hydra (direct) + credential tester | hydra (direct) | hydra (chroot) | ❌ | `CrackerPlugin` |
+| **MITM** | arpspoof (direct) + ettercap (daemon) + DNS spoofer | ettercap + arpspoof + DNS spoof | ❌ (needs external adapter) | ❌ | **zmitm** (HTTP injection, SSL strip) |
+| **Packet Capture** | tcpdump (direct) + pcap save | tcpdump (direct) | tcpdump (chroot) | Handshake capture (root+kernel) | ❌ |
+| **Packet Forge** | hping3 (direct) | hping3 (direct) | ❌ | ❌ | ❌ |
+| **Vuln Scan** | nuclei (direct/chroot) + templates | ❌ | nuclei (chroot) | ❌ | Plugins (Heartbleed, ShellShock, POODLE) |
+| **Web Dir Scan** | gobuster (chroot) + rootless DirBrute | ❌ | ❌ | ❌ | ❌ |
+| **WPS** | reaver (direct) | ❌ | Pixie Dust + PIN (chroot) | PixieDust + PIN gen | ❌ |
+| **WiFi Crack** | aircrack-ng (direct) | ❌ | Hashcat (chroot) + handshake DB | Offline cracker + wpa-sec | ❌ |
+| **Metasploit** | MSF chroot (separate) | Musl Ruby chroot + msfrpcd | Native MSF in Debian chroot | ❌ | ❌ |
+| **ExploitDB** | searchsploit (chroot) | ❌ | searchsploit (chroot) | ❌ | ❌ |
+| **Router Exploit** | RouterPwn (nmap-based) | Router check (default creds) | Arsenal (custom) | Router Scan (proot) | `RouterPwnPlugin` |
+| **HID/USB** | DuckyScript parser + USB gadget profiles | ❌ | **Full HID engine** (7 layouts) + USB Arsenal (configfs) | ❌ | ❌ |
+| **BLE** | WhisperPair (CVE-2025-36911) | ❌ | WhisperPair (same CVE) | ❌ | ❌ |
+| **GeoMAC** | KML map of BSSIDs | ❌ | OSM map (GeoMac) | **Core feature** (geoMAC) | ❌ |
+| **Wardriving** | ❌ | ❌ | ❌ | **WiFi Personal Map** (Wigle-style) | ❌ |
+| **Database** | ❌ | ❌ | SQLite (handshakes, exploits) | **3WiFi + SmartLinkDB + custom SQLite** | zCloud sync |
+
+---
+
+## 8. Code Quality & Maintainability
+
+| Metric | Indra | Strix | StrykerOSS | WIFI-Frankenstein | zAnti |
+|--------|-------|-------|------------|-------------------|-------|
+| **Language** | Kotlin 2.2.21 | Kotlin | Java 8 | Kotlin (mixed) | Java (decompiled) |
+| **Architecture** | **Clean multi-module**, MVVM, Hilt | Single-module, MVVM, Hilt | **God classes** (Core.java 1336 lines, Helpers.smali 165K) | Mixed | **God classes** (Anti.smali 59K, Helpers.smali 165K) |
+| **DI** | Hilt (all modules) | Hilt | Manual (static Core instance) | Mixed | Manual |
+| **Tests** | **~484 unit tests** (all modules) | Unit tests (core/data/bundle) | ❌ None visible | ❌ None visible | ❌ (decompiled) |
+| **Static Analysis** | detekt (all modules, baselines) | ⚠️ Unknown | lint | ⚠️ Unknown | N/A |
+| **Navigation** | Navigation 3 (typed, compile-safe) | Navigation Compose (string routes) | Fragments (runtime) | Mixed | Activities (runtime) |
+| **State** | `StateFlow<UiState>` + session VMs | `StateFlow<UiState>` + entry VMs | Fragment args + static Core | Mixed | Static + Intent extras |
+| **Secrets Handling** | `shellQuote` + `secrets` redaction | `redactSecrets` + `secrets` | Basic | Basic | Unknown |
+
+**Indra Leads on Engineering Discipline**
+- Multi-module enforces boundaries (`features` → `core,data,ui`; `indra` → all)
+- `ToolRegistryTest` validates `TOOL_SPECS` ↔ `DAEMON_HANDLERS` ↔ `Plugin.requires`
+- `SessionViewModelStores` solves Navigation 3 VM scoping correctly
+- Pure functions unit-tested: `PortScan`, `Rootless`, `ShellQuote`, `TerminalKeys`, `ToolRegistry`, `SignedEnvelope`, `MsfSearch`, `Hashcat`, `ChrootScript`, `NeighborTable`, `LongRunNotice`, `WallpaperStore`, `MonitorMode`, `WifiScan`, `TtlProbe`, `ProcessManager`
+
+**Strix is Clean but Simpler**
+- Single module, good Kotlin/Compose/Hilt usage
+- `ProcessManager`/`ShellCommand`/`ProcessTreeKiller` well-factored
+- `MsfDaemon` singleton with generation-based lifecycle is excellent
+- Weekly CI builds = operational maturity
+
+**StrykerOSS/zAnti Suffer from God Classes**
+- `Core.java` does everything: prefs, DB, su exec, chroot mount, tool installs, vendor DB, pixie dust, VNC, HID, USB Arsenal
+- `Helpers.smali` 165K lines — impossible to maintain
+- No DI, static `Core` instance passed everywhere
+- But: feature breadth is massive (HID, USB Arsenal, VNC, QEMU rootless)
+
+---
+
+## 9. Build & Distribution
+
+| Aspect | Indra | Strix | StrykerOSS | WIFI-Frankenstein | zAnti |
+|--------|-------|-------|------------|-------------------|-------|
+| **Build System** | Gradle 8.14.6 + AGP 8.13.2 | Gradle (Kotlin DSL) | Gradle + ndk-build | Gradle (Kotlin DSL) | Unknown (prebuilt APK) |
+| **Native Build** | Rust `cargo` + NDK 25.2 `build.sh cores` | Docker `tools/build.sh` + `ruby-msf/build.sh` | ndk-build (JNI) | Unknown | Prebuilt |
+| **Min SDK** | 26 (Android 8.0) | 29 (Android 10) | 24 (Android 7.0) | 21 (Android 5.0) | Unknown |
+| **Target SDK** | 36 | 34 | **28** (legacy) | 34 | Unknown |
+| **ABI** | arm64-v8a + armeabi-v7a | arm64 only | arm64 only | arm64-v8a | arm64-v8a |
+| **Release Signing** | Env vars (keystore) | GitHub Actions | Gradle properties | Unknown | Commercial |
+| **CI/CD** | Manual | **Weekly GitHub Actions** | Unknown | Unknown | Commercial |
+
+**Strix's CI/CD is the Only Fully Automated Weekly Pipeline**
+- Tools + Metasploit built, tested, signed, published weekly
+- GitHub Actions workflows in `.github/workflows/`
+- Users get updates without app reinstall
+
+**Indra's Build is More Complex (Rust + C + NDK 25.2)**
+- Requires NDK 25.2 specifically (ndk-build removed in 27)
+- Rust daemon cross-compile + C tool tree (EOL, heavily patched)
+- No automated CI for native core yet
+
+---
+
+## 10. Strategic Assessment
+
+### Indra's Unique Strengths (Moats)
+1. **Hybrid execution model** — daemon for structured tools, direct `su` for raw tools, chroot for Linux userspace. **No competitor has this.**
+2. **Pure-Kotlin daemon client** — no JNI fragility, drop-in for native events, testable.
+3. **Rust daemon** — memory safety in the privileged component.
+4. **Navigation 3 session-scoped ViewModels** — tools survive tab switches, scans continue off-screen.
+5. **Structured event pipeline** — `PortFound`/`OsFound`/`Hop` from nmap handler (not text parsing).
+6. **Tool registry as data** — `TOOL_SPECS` single source, validated by test.
+7. **Reliable process tree kill** — `INDRA_PID` marker + descendant walk (TERM→KILL).
+8. **Rootless subset** — 7 plugins work without root/daemon (platform APIs only).
+9. **OTA binary hot-swap** — signed, verified, atomic, rollback, two channels.
+10. **Honest UI states** — zero results ≠ error, daemon down ≠ missing tool.
+11. **Modular architecture** — clean boundaries, Hilt DI, compile-time navigation safety.
+12. **Modern stack** — Compose, Navigation 3, Coroutines, Material 3, Kotlin 2.2.
+
+### Gaps vs. Competitors
+| Competitor | Their Strength | Indra Gap |
+|------------|----------------|-----------|
+| **Strix** | Weekly CI builds, mature MSF chroot + msfrpcd, simpler direct-only model | No automated CI, MSF workflow less complete, no weekly builds |
+| **StrykerOSS** | Full HID/USB Arsenal, QEMU rootless parity, VNC desktop, native MSF in Debian | No HID/USB gadget, no VNC, no QEMU rootless, MSF in separate chroot |
+| **WIFI-Frankenstein** | 3WiFi/SmartLinkDB integration, wardriving, geoMAC, Router Scan | No wardriving, no 3WiFi DB, no Router Scan, geoMAC basic |
+| **zAnti** | Cloud sync, MITM HTTP injection/SSL strip, commercial polish | No cloud, MITM unsafe on test device, no HTTP injection engine |
+
+### Recommended Priority Order for Indra
+
+| Priority | Item | Rationale |
+|----------|------|-----------|
+| **P0** | **Weekly CI builds** (GitHub Actions: `build.sh cores` + APK + OTA manifest signing) | Operational maturity; Strix proves this works |
+| **P0** | **Finish Metasploit workflow** — `msfconsole` search + module run + session handling | Core pentest feature; Strix/StrykerOSS have this working |
+| **P1** | **Nuclei templates** — app-side download (OkHttp uses Android resolver) + chroot sync | Nuclei useless without templates; Go resolver broken in daemon |
+| **P1** | **Monitor mode reliability** — Alpine `apk add iw iproute2` + driver capability probe | WiFi audit/Wifite/Reaver need monitor mode; currently broken on test device |
+| **P1** | **Handshake → hashcat pipeline** — `hcxpcapngtool` conversion + `Hashcat.interpret` (exit 1 = exhausted) | WiFi cracking pipeline incomplete |
+| **P2** | **Bettercap integration** — artifact install works; screen needs real args builder | Optional artifact installed but screen unusable |
+| **P2** | **USB Arsenal** — HID gadget binding to UDC (currently "not implemented") | StrykerOSS has full implementation |
+| **P2** | **Wardriving / 3WiFi DB** — optional, but differentiates in WiFi space | WIFI-Frankenstein owns this niche |
+| **P3** | **HTTP injection / SSL strip MITM engine** | zAnti's commercial differentiator; high complexity |
+
+---
+
+## 11. Detailed File/Class Mapping (For Migration/Reference)
+
+### Process Execution
+| Indra | Strix | StrykerOSS | zAnti |
+|-------|-------|------------|-------|
+| `SmartToolBox.execute()` | `ProcessManager.execute()` | `Core.customChrootCommand()` | `ShellPool` + `Anti.executeCommand()` |
+| `SmartToolBox.runDirect()` | `ProcessManager.execute()` (all direct) | N/A | N/A |
+| `ProcessManager.buildShellCommand()` | `ShellCommand.buildShellCommand()` | `Apt.env()` + `Apt.shellQuote()` | `Helpers.terminated()` |
+| `ProcessTreeKiller.killTree()` | `ProcessTreeKiller.killTree()` | `pkill -f` in chroot | `ShellPool` reuse + `pkill` |
+| `KotlinDaemonClient` | ❌ | ❌ | ❌ |
+
+### Daemon/Service Management
+| Indra | Strix | StrykerOSS | zAnti |
+|-------|-------|------------|-------|
+| `CoreManager.startDaemon()` / `stopDaemon()` | ❌ | `Core.mountCore()` / `unmountCore()` | ❌ |
+| `CoreManager.ensureDaemon()` | ❌ | `Initializing` (first launch) | `AntiApplication` |
+| `MsfDaemon` (singleton, gen-based) | `MsfDaemon` (singleton, gen-based) | `Metasploit.java` + `InstallMetasploit` | ❌ |
+| `LongRunController` + `LongRunService` | `StrixNotifications` | ❌ | ❌ |
+
+### Tool Registry
+| Indra | Strix | StrykerOSS | zAnti |
+|-------|-------|------------|-------|
+| `SmartToolBox.TOOL_SPECS` (17 entries) | `ToolsExtractor.spec` (BundleSpec) | `Core.isToolInstalled()` (hardcoded switch) | `Anti.plugins` + `Helpers` |
+| `PluginManager` (36 plugins) | `ToolDestinations` map | Fragment per module | `Anti.MenuOptions` + plugins |
+| `PluginAvailability` (status gating) | `AppSettings` + `ToolManager` | `Core.checkModule()` | Runtime checks |
+
+### Root/Capabilities
+| Indra | Strix | StrykerOSS | zAnti |
+|-------|-------|------------|-------|
+| `RootManager` + `RootAccess` (probe script) | `AppSettings.isRooted()` | `Core.checkRoot()` + `EngineType` | `ShellPool` spawn test |
+| `Rootless` (7 plugins) | ❌ | `RootlessEngine` (QEMU VM) | ❌ |
+| `Capability` enum + `ChrootEngine` | ❌ | Chroot has all | ❌ |
+
+### OTA/Updates
+| Indra | Strix | StrykerOSS | zAnti |
+|-------|-------|------------|-------|
+| `BundleUpdateManager` (2 channels) | `BundleUpdateManager` (tools + msf) | `UpdateManager` + `CoreDownloader` + `QemuDownloader` | `zCloud` sync |
+| `SignatureVerifier` (ECDSA P-256) | `SignatureVerifier` (RSA) | `VerifiedDownloader` | Cloud trust |
+| `SafeTarExtractor` (no traversal) | `BundleInstaller` + `TarExtract` | `CoreDownloader` | Unknown |
+
+---
+
+## 12. Conclusion
+
+**Indra is architecturally superior** to all four comparison targets:
+
+| vs. | Verdict |
+|-----|---------|
+| **Strix** | Indra has daemon + chroot + OTA; Strix is direct-only. Indra's hybrid model + session VMs + structured events are step-changes. Strix wins on CI/CD maturity and MSF completeness. |
+| **StrykerOSS** | Indra has hybrid execution + pure-Kotlin daemon + session VMs; StrykerOSS is chroot-only with God classes. StrykerOSS wins on HID/USB Arsenal, QEMU rootless, VNC, native MSF. |
+| **WIFI-Frankenstein** | Indra covers full pentest spectrum; WF is WiFi/database-only. WF wins on 3WiFi DB, wardriving, geoMAC, Router Scan. |
+| **zAnti** | Indra is open-source, rootless-capable, OTA-updatable; zAnti is closed, cloud-dependent, legacy stack. zAnti wins on MITM HTTP injection, cloud sync, commercial polish. |
+
+**Indra's codebase is production-ready for the daemon+direct core.** The remaining work is **feature completion** (MSF, nuclei templates, monitor mode, handshake→hashcat) and **CI/CD**, not architectural rework.
+
+**Strategic recommendation**: Don't chase StrykerOSS's chroot breadth or zAnti's cloud features. Finish the core tools, own the architecture advantage (hybrid execution + session VMs + honest UX), leverage rootless mode as a differentiator, and ship weekly CI builds to match Strix's operational maturity.
