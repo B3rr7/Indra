@@ -8,6 +8,18 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.indra.android.core.data.msgpack.MsgPack
 import org.indra.android.core.system.Logger
+import org.indra.android.core.system.msf.MsfExecution
+import org.indra.android.core.system.msf.MsfJob
+import org.indra.android.core.system.msf.MsfModuleDetail
+import org.indra.android.core.system.msf.MsfOption
+import org.indra.android.core.system.msf.MsfRunState
+import org.indra.android.core.system.msf.MsfSession
+import org.indra.android.core.system.msf.parseMsfExecution
+import org.indra.android.core.system.msf.parseMsfJobs
+import org.indra.android.core.system.msf.parseMsfModuleDetail
+import org.indra.android.core.system.msf.parseMsfOptions
+import org.indra.android.core.system.msf.parseMsfRunState
+import org.indra.android.core.system.msf.parseMsfSessions
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 
@@ -56,6 +68,13 @@ class MsfRpcClient private constructor(
         private const val MODULE_PAYLOADS_METHOD = "module.payloads"
         private const val MODULE_INFO_METHOD = "module.info"
         private const val MODULE_COMPATIBLE_PAYLOADS_METHOD = "module.compatible_payloads"
+        private const val MODULE_OPTIONS_METHOD = "module.options"
+        private const val MODULE_TARGET_PAYLOADS_METHOD = "module.target_compatible_payloads"
+        private const val MODULE_EXECUTE_METHOD = "module.execute"
+        private const val MODULE_RESULTS_METHOD = "module.results"
+        private const val MODULE_ACK_METHOD = "module.ack"
+        private const val JOB_LIST_METHOD = "job.list"
+        private const val JOB_STOP_METHOD = "job.stop"
         private const val SESSION_LIST_METHOD = "session.list"
         private const val SESSION_STOP_METHOD = "session.stop"
         private const val CONSOLE_CREATE_METHOD = "console.create"
@@ -105,12 +124,26 @@ class MsfRpcClient private constructor(
     }
 
     /**
-     * One RPC round trip. Returns the response map, or null when no usable answer arrived:
-     * transport failure, a non-2xx status, or an `"error" => true` map (logged with Metasploit's
-     * own class and message). Callers already treat null as "not ready / not available", so a
-     * refusal while the daemon is binding is normal, not exceptional.
+     * One RPC round trip. Returns the response map, or null when no usable answer arrived;
+     * [exchange] is the same trip with Metasploit's own refusal sentence kept, which is what the
+     * execution path needs (a rejected option is a sentence, not a silent null).
      */
     private suspend fun call(method: String, params: List<Any?> = emptyList()): Map<String, Any?>? =
+        exchange(method, params).body
+
+    /**
+     * One RPC round trip that keeps the refusal sentence.
+     *
+     * `body == null && error == null` means silence — the daemon is not answering; a non-null
+     * [Reply.error] means `msfrpcd` answered and refused. Those two are different problems with
+     * different fixes, and `module.execute` is where the difference is visible: a validation
+     * failure arrives as HTTP 500 with `{"error": true, "error_class": "Msf::OptionValidateError",
+     * "error_string": "One or more options failed to validate: RHOSTS."}` (measured).
+     */
+    private suspend fun exchange(
+        method: String,
+        params: List<Any?>,
+    ): Reply =
         withContext(Dispatchers.IO) {
             val message = buildList<Any?> {
                 add(method)
@@ -124,31 +157,41 @@ class MsfRpcClient private constructor(
 
             try {
                 client.newCall(request).execute().use { response ->
-                    val body = response.body?.bytes() ?: return@withContext null
+                    val body = response.body?.bytes() ?: return@withContext Reply(null, "an empty reply")
                     val decoded = MsgPack.decodeMap(body)
                     if (decoded == null) {
+                        // A 400 from msfrpcd (a non-scalar option, an oversized value) is plain
+                        // text, so the status is the only honest thing to report.
                         Logger.w("MsfRpcClient: $method returned ${body.size} bytes that are not a map")
-                        return@withContext null
+                        return@withContext Reply(null, if (response.isSuccessful) "an unreadable reply" else "HTTP ${response.code}")
                     }
                     if (decoded["error"] == true) {
-                        Logger.w(
-                            "MsfRpcClient: $method failed: ${decoded["error_class"]}: ${decoded["error_string"]}",
-                        )
-                        return@withContext null
+                        val sentence = refusal(decoded)
+                        Logger.w("MsfRpcClient: $method failed: $sentence")
+                        return@withContext Reply(null, sentence)
                     }
                     if (!response.isSuccessful) {
                         Logger.w("MsfRpcClient: $method answered HTTP ${response.code}")
-                        return@withContext null
+                        return@withContext Reply(null, "HTTP ${response.code}")
                     }
-                    decoded
+                    Reply(decoded, null)
                 }
             } catch (e: IOException) {
                 // Nothing listening yet, a dropped connection or a read timeout: all normal here,
                 // because MsfDaemon polls this while msfrpcd is still loading.
                 Logger.d("MsfRpcClient: $method got no answer: ${e.message}")
-                null
+                Reply(null, null)
             }
         }
+
+    private fun refusal(decoded: Map<String, Any?>): String {
+        val sentence = listOfNotNull(decoded["error_class"] as? String, decoded["error_string"] as? String)
+            .joinToString(": ")
+        return sentence.ifEmpty { "msfrpcd refused the call" }
+    }
+
+    /** A reply plus the sentence explaining a refusal; both null-bodied when the daemon is silent. */
+    private data class Reply(val body: Map<String, Any?>?, val error: String?)
 
     /** A `module.*` listing, which msfrpcd returns as `{"modules" => [names]}`. */
     private suspend fun modules(method: String): List<String>? =
@@ -183,6 +226,65 @@ class MsfRpcClient private constructor(
         (call(MODULE_COMPATIBLE_PAYLOADS_METHOD, listOf(moduleName))?.get("payloads") as? List<*>)
             ?.map { it.toString() }
 
+    /**
+     * `module.options` — the module's datastore schema.
+     *
+     * The reply is the **bare** option map (no `{"options" => …}` wrapper; `module.info` is the
+     * one that nests it), measured against msf 6.5.9-dev.
+     */
+    suspend fun moduleOptions(moduleType: String, moduleName: String): List<MsfOption>? =
+        call(MODULE_OPTIONS_METHOD, listOf(moduleType, moduleName))?.let { parseMsfOptions(it) }
+
+    /**
+     * `module.info` — metadata **and** the target list. There is no `module.targets` RPC method
+     * (`Unknown API Call: "rpc_targets"`), and one call supplies rank, date, targets, default
+     * target and the option schema together, so selecting a module costs one round trip.
+     */
+    suspend fun moduleDetail(moduleType: String, moduleName: String): MsfModuleDetail? =
+        parseMsfModuleDetail(
+            call(MODULE_INFO_METHOD, listOf(moduleType, moduleName)),
+            moduleType,
+            moduleName,
+        )
+
+    /**
+     * `module.target_compatible_payloads(mname, target)` — `{"payloads" => [names]}`.
+     *
+     * Two arguments: the module name **without** its type and the target index. The
+     * type-carrying three-argument form is answered `Msf::RPC::Exception` (measured).
+     */
+    suspend fun targetCompatiblePayloads(moduleName: String, target: Int): List<String>? =
+        (call(MODULE_TARGET_PAYLOADS_METHOD, listOf(moduleName, target))?.get("payloads") as? List<*>)
+            ?.map { it.toString() }
+
+    /**
+     * `module.execute` — start the module with [datastore], reporting which of the four answers
+     * arrived. The datastore's values may be strings; msfrpcd coerces them per option type.
+     */
+    suspend fun moduleExecute(
+        moduleType: String,
+        moduleName: String,
+        datastore: Map<String, Any?>,
+    ): MsfExecution {
+        val reply = exchange(MODULE_EXECUTE_METHOD, listOf(moduleType, moduleName, datastore))
+        return parseMsfExecution(reply.body, reply.error)
+    }
+
+    /** `module.results` — one poll of a started module; null when msfrpcd is not answering. */
+    suspend fun moduleResults(uuid: String): MsfRunState? =
+        parseMsfRunState(call(MODULE_RESULTS_METHOD, listOf(uuid)))
+
+    /** `module.ack` — `{"success" => true}`; the run's result is acknowledged and dropped. */
+    suspend fun moduleAck(uuid: String): Boolean =
+        call(MODULE_ACK_METHOD, listOf(uuid))?.get("success") == true
+
+    /** `job.list` — job id → `"<Type>: <module name>"`; null when msfrpcd is not answering. */
+    suspend fun jobList(): List<MsfJob>? = parseMsfJobs(call(JOB_LIST_METHOD))
+
+    /** `job.stop` — `{"result" => "success"}`. */
+    suspend fun jobStop(jobId: String): Boolean =
+        call(JOB_STOP_METHOD, listOf(jobId))?.get("result") == "success"
+
     /** `session.list` — session id → its fields, which is the map itself. */
     @Suppress("UNCHECKED_CAST")
     suspend fun sessionList(): Map<String, Map<String, Any?>>? {
@@ -193,6 +295,9 @@ class MsfRpcClient private constructor(
     /** `session.stop` — `{"result" => "success"}`. */
     suspend fun sessionStop(sessionId: String): Boolean =
         call(SESSION_STOP_METHOD, listOf(sessionId))?.get("result") == "success"
+
+    /** `session.list` projected onto the fields a run's result card shows; null when unreachable. */
+    suspend fun sessions(): List<MsfSession>? = parseMsfSessions(call(SESSION_LIST_METHOD))
 
     /** `console.create` — `{"id" => n, "prompt" => …, "busy" => …}`. */
     suspend fun consoleCreate(): Int? = (call(CONSOLE_CREATE_METHOD)?.get("id") as? Number)?.toInt()

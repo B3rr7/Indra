@@ -2,6 +2,8 @@ package org.indra.android.core.data
 
 import kotlinx.coroutines.runBlocking
 import org.indra.android.core.data.msgpack.MsgPack
+import org.indra.android.core.system.msf.MsfExecution
+import org.indra.android.core.system.msf.MsfRunStatus
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -34,6 +36,10 @@ class MsfRpcClientTest {
     @Volatile
     private var responder: (List<Any?>) -> ByteArray = { ByteArray(0) }
 
+    /** The HTTP status per method; `module.execute` refuses with 500, everything else is 200. */
+    @Volatile
+    private var status: (List<Any?>) -> Int = { 200 }
+
     private val port: Int get() = server.port
 
     @Before
@@ -41,6 +47,7 @@ class MsfRpcClientTest {
         server = FakeMsfrpcd(
             respond = { message -> responder(message) },
             onRequest = { contentType, message -> requests += contentType to message },
+            statusOf = { message -> status(message) },
         )
     }
 
@@ -162,6 +169,185 @@ class MsfRpcClientTest {
         assertTrue(runBlocking { client.sessionStop("3") })
         client.close()
     }
+
+    @Test
+    fun `module options read the bare map, not a wrapper`() {
+        serving(
+            "auth.login" to reply(mapOf("result" to "success", "token" to "T")),
+            "module.options" to reply(
+                mapOf(
+                    "RHOSTS" to mapOf(
+                        "type" to "rhosts",
+                        "required" to true,
+                        "advanced" to false,
+                        "evasion" to false,
+                        "desc" to "The target host(s)",
+                    ),
+                    "RPORT" to mapOf(
+                        "type" to "port",
+                        "required" to true,
+                        "advanced" to false,
+                        "evasion" to false,
+                        "desc" to "The target port",
+                        "default" to 445,
+                    ),
+                ),
+            ),
+        )
+
+        val client = runBlocking { MsfRpcClient.create(port = port) }!!
+        val options = runBlocking { client.moduleOptions("exploit", "windows/smb/ms17_010_eternalblue") }
+        client.close()
+
+        requireNotNull(options)
+        assertEquals(listOf("RHOSTS", "RPORT"), options.map { it.name })
+        assertEquals("445", options[1].defaultValue)
+        assertEquals(listOf<Any?>("module.options", "T", "exploit", "windows/smb/ms17_010_eternalblue"), requests[1].second)
+    }
+
+    @Test
+    fun `module info supplies rank date targets and options in one reply`() {
+        serving(
+            "auth.login" to reply(mapOf("result" to "success", "token" to "T")),
+            "module.info" to reply(
+                mapOf(
+                    "rank" to "great",
+                    "disclosuredate" to "2017-03-14",
+                    "platform" to listOf("Windows"),
+                    "targets" to mapOf(0 to "Automatic Targeting", 1 to "Windows 7 / 2008 R2"),
+                    "default_target" to 1,
+                    "options" to mapOf(
+                        "RHOSTS" to mapOf("type" to "rhosts", "required" to true, "advanced" to false, "desc" to ""),
+                    ),
+                ),
+            ),
+        )
+
+        val client = runBlocking { MsfRpcClient.create(port = port) }!!
+        val detail = runBlocking { client.moduleDetail("exploit", "windows/smb/ms17_010_eternalblue") }
+        client.close()
+
+        requireNotNull(detail)
+        assertEquals("great", detail.rank)
+        assertEquals("2017-03-14", detail.disclosureDate)
+        assertEquals(listOf("Windows"), detail.platforms)
+        // The integer keys Ruby sends come back as string keys, so the index is parsed from text.
+        assertEquals(listOf(0, 1), detail.targets.entries.map { it.index })
+        assertEquals("Windows 7 / 2008 R2", detail.targets.named(1))
+        assertEquals(1, detail.targets.defaultIndex)
+        assertEquals(listOf("RHOSTS"), detail.options.map { it.name })
+    }
+
+    @Test
+    fun `target compatible payloads sends the module name and the target index`() {
+        serving(
+            "auth.login" to reply(mapOf("result" to "success", "token" to "T")),
+            "module.target_compatible_payloads" to reply(
+                mapOf("payloads" to listOf("generic/custom", "windows/x64/meterpreter/reverse_tcp")),
+            ),
+        )
+
+        val client = runBlocking { MsfRpcClient.create(port = port) }!!
+        val payloads =
+            runBlocking { client.targetCompatiblePayloads("windows/smb/ms17_010_eternalblue", 1) }
+        client.close()
+
+        assertEquals(listOf("generic/custom", "windows/x64/meterpreter/reverse_tcp"), payloads)
+        // Two arguments, and the name without its type — the three-argument form is refused.
+        assertEquals(
+            listOf<Any?>("module.target_compatible_payloads", "T", "windows/smb/ms17_010_eternalblue", 1),
+            requests[1].second,
+        )
+    }
+
+    @Test
+    fun `module execute reports started, not started and a 500 refusal`() {
+        val executions = mutableListOf<MsfExecution>()
+        responder = { message ->
+            when (message[0]) {
+                "auth.login" -> reply(mapOf("result" to "success", "token" to "T"))
+                "module.execute" -> {
+                    // [method, token, moduleType, moduleName, datastore]
+                    val datastore = message[4] as Map<*, *>
+                    when (datastore["RHOSTS"]) {
+                        "refuse" ->
+                            reply(
+                                mapOf(
+                                    "error" to true,
+                                    "error_class" to "Msf::OptionValidateError",
+                                    "error_string" to "One or more options failed to validate: RHOSTS.",
+                                ),
+                            )
+                        "nothing" -> reply(mapOf("job_id" to null, "uuid" to null))
+                        else -> reply(mapOf("job_id" to 2, "uuid" to "qkd87EZwlxfx42lKo25YEKbs"))
+                    }
+                }
+                else -> reply(mapOf("error" to true, "error_string" to "unexpected"))
+            }
+        }
+        status = { message ->
+            val refuse = (message.getOrNull(4) as? Map<*, *>)?.get("RHOSTS") == "refuse"
+            if (message[0] == "module.execute" && refuse) 500 else 200
+        }
+
+        val client = runBlocking { MsfRpcClient.create(port = port) }!!
+        executions += runBlocking { client.moduleExecute("exploit", "m", mapOf("RHOSTS" to "10.0.0.5")) }
+        executions += runBlocking { client.moduleExecute("exploit", "m", mapOf("RHOSTS" to "nothing")) }
+        executions += runBlocking { client.moduleExecute("exploit", "m", mapOf("RHOSTS" to "refuse")) }
+        client.close()
+
+        assertEquals(MsfExecution.Started(2, "qkd87EZwlxfx42lKo25YEKbs"), executions[0])
+        assertEquals(MsfExecution.NotStarted, executions[1])
+        // The sentence Metasploit sent, not a generic failure: it names the option to fix.
+        assertEquals(
+            MsfExecution.Refused("Msf::OptionValidateError: One or more options failed to validate: RHOSTS."),
+            executions[2],
+        )
+    }
+
+    @Test
+    fun `module results polls and ack drops the result`() {
+        serving(
+            "auth.login" to reply(mapOf("result" to "success", "token" to "T")),
+            "module.results" to reply(mapOf("status" to "completed", "result" to null)),
+            "module.ack" to reply(mapOf("success" to true)),
+        )
+
+        val client = runBlocking { MsfRpcClient.create(port = port) }!!
+        val state = runBlocking { client.moduleResults("qkd87EZwlxfx42lKo25YEKbs") }
+        val acked = runBlocking { client.moduleAck("qkd87EZwlxfx42lKo25YEKbs") }
+        client.close()
+
+        requireNotNull(state)
+        assertEquals(MsfRunStatus.COMPLETED, state.status)
+        // A completed auxiliary scan carries no payload; the status is the verdict.
+        assertTrue(state.finished)
+        assertTrue(acked)
+        assertEquals(listOf<Any?>("module.results", "T", "qkd87EZwlxfx42lKo25YEKbs"), requests[1].second)
+    }
+
+    @Test
+    fun `job list reads ids and job stop answers success`() {
+        serving(
+            "auth.login" to reply(mapOf("result" to "success", "token" to "T")),
+            "job.list" to reply(
+                mapOf("1" to "Auxiliary: scanner/portscan/tcp", "2" to "Exploit: multi/http/tomcat_mgr_deploy"),
+            ),
+            "job.stop" to reply(mapOf("result" to "success")),
+        )
+
+        val client = runBlocking { MsfRpcClient.create(port = port) }!!
+        val jobs = runBlocking { client.jobList() }
+        val stopped = runBlocking { client.jobStop("1") }
+        client.close()
+
+        requireNotNull(jobs)
+        assertEquals(listOf("1", "2"), jobs.map { it.id })
+        assertEquals("Auxiliary", jobs[0].kind)
+        assertEquals("scanner/portscan/tcp", jobs[0].name)
+        assertTrue(stopped)
+        assertEquals(listOf<Any?>("job.stop", "T", "1"), requests[2].second)
+    }
 }
 
 /**
@@ -172,6 +358,7 @@ class MsfRpcClientTest {
 private class FakeMsfrpcd(
     private val respond: (List<Any?>) -> ByteArray,
     private val onRequest: (String?, List<Any?>) -> Unit,
+    private val statusOf: (List<Any?>) -> Int = { 200 },
 ) {
     private val server = ServerSocket(0, 16, InetAddress.getByName("127.0.0.1"))
 
@@ -226,10 +413,13 @@ private class FakeMsfrpcd(
         onRequest(contentType, message)
 
         val response = respond(message)
+        // msfrpcd answers a validation failure with HTTP 500 and an `{"error" => true}` map, and a
+        // non-scalar option with a 400 and a plain-text body, so the status is per call.
+        val status = statusOf(message)
         socket.getOutputStream().apply {
             write(
                 (
-                    "HTTP/1.1 200 OK\r\n" +
+                    "HTTP/1.1 $status ${if (status == 200) "OK" else "Error"}\r\n" +
                         "Content-Type: ${MsfRpcClient.MEDIA_TYPE}\r\n" +
                         "Content-Length: ${response.size}\r\n" +
                         "Connection: close\r\n\r\n"
@@ -280,7 +470,10 @@ private object BinReply {
             is Map<*, *> -> {
                 out.write(0x80 or value.size)
                 value.forEach { (key, entry) ->
-                    write(out, key.toString())
+                    // Ruby sends integer keys as integers (a module's `targets` map is
+                    // `{0 => "Automatic Targeting", …}`); the client's decoder normalises the
+                    // map key to a string either way, so the fixture must send the real shape.
+                    write(out, key)
                     write(out, entry)
                 }
             }

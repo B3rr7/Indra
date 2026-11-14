@@ -1,11 +1,17 @@
 package org.indra.android.core.system
 
-/** One row of `msfconsole search` output. */
+/** One row of `msfconsole search` output, or one row of the RPC module lists. */
 data class MsfModule(
     val name: String,
     val disclosureDate: String,
     val rank: String,
     val description: String,
+    /**
+     * `exploit` or `auxiliary` when the row came from the RPC lists (which is what selecting a
+     * module needs), blank for a row parsed out of msfconsole's table, where the type is inside
+     * the name.
+     */
+    val moduleType: String = "",
 )
 
 /**
