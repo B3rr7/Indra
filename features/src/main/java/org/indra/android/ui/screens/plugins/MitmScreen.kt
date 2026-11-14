@@ -43,7 +43,7 @@ fun MitmScreen(
         )
     }
 
-    PluginScaffold(title = "MITM", onNavigateBack = onNavigateBack) { paddingValues ->
+    PluginScaffold(title = "MITM", pluginId = "mitm", onNavigateBack = onNavigateBack) { paddingValues ->
         Column(
             modifier =
                 Modifier

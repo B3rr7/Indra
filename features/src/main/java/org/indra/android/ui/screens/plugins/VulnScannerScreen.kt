@@ -26,7 +26,7 @@ fun VulnScannerScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    PluginScaffold(title = "Vulnerability Scanner", onNavigateBack = onNavigateBack) { paddingValues ->
+    PluginScaffold(title = "Vulnerability Scanner", pluginId = "vuln_scanner", onNavigateBack = onNavigateBack) { paddingValues ->
         Column(
             modifier =
                 Modifier

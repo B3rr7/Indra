@@ -18,7 +18,7 @@ fun BettercapScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    PluginScaffold(title = "Bettercap", onNavigateBack = onNavigateBack) { paddingValues ->
+    PluginScaffold(title = "Bettercap", pluginId = "bettercap", onNavigateBack = onNavigateBack) { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()

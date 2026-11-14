@@ -18,7 +18,7 @@ fun IptablesScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    PluginScaffold(title = "IPTables", onNavigateBack = onNavigateBack) { paddingValues ->
+    PluginScaffold(title = "IPTables", pluginId = "iptables", onNavigateBack = onNavigateBack) { paddingValues ->
         Column(
             modifier =
                 Modifier

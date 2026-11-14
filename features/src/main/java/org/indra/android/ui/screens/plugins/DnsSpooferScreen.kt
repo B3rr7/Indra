@@ -18,7 +18,7 @@ fun DnsSpooferScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    PluginScaffold(title = "DNS Spoofing", onNavigateBack = onNavigateBack) { paddingValues ->
+    PluginScaffold(title = "DNS Spoofing", pluginId = "dns_spoofer", onNavigateBack = onNavigateBack) { paddingValues ->
         Column(
             modifier =
                 Modifier

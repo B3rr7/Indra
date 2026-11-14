@@ -32,7 +32,7 @@ fun MsfConsoleScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    PluginScaffold(title = "Metasploit", onNavigateBack = onNavigateBack) { paddingValues ->
+    PluginScaffold(title = "Metasploit", pluginId = "msf", onNavigateBack = onNavigateBack) { paddingValues ->
         Column(
             modifier =
                 Modifier

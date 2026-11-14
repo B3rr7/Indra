@@ -23,7 +23,7 @@ fun WebTesterScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    PluginScaffold(title = "Web Tester", onNavigateBack = onNavigateBack) { paddingValues ->
+    PluginScaffold(title = "Web Tester", pluginId = "web_tester", onNavigateBack = onNavigateBack) { paddingValues ->
         Column(
             modifier =
                 Modifier

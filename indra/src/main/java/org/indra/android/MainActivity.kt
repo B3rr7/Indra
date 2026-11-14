@@ -61,6 +61,7 @@ import org.indra.android.ui.navigation.Screen
 import org.indra.android.ui.navigation.rememberNavigationState
 import org.indra.android.ui.screens.settings.openAllFilesAccessSettings
 import org.indra.android.ui.theme.IndraTheme
+import org.indra.android.ui.theme.Palettes
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -169,7 +170,10 @@ class MainActivity : ComponentActivity() {
         refreshWallpaper()
 
         setContent {
-            IndraTheme {
+            // The palette is read as state, not once: the picker in Settings must restyle the app
+            // while it is still open. The theme animates the sixteen roles it changes.
+            val paletteId by settings.themePaletteId.collectAsStateWithLifecycle()
+            IndraTheme(palette = Palettes.byId(paletteId)) {
                 // The user's app background, if any, painted behind everything. Read here rather
                 // than in a ViewModel because it has to survive navigation: the background is the
                 // window's, not a screen's, and re-reading it per screen would flash the plain

@@ -14,6 +14,8 @@ import org.indra.android.ui.components.FormError
 import org.indra.android.ui.components.HostSuggestions
 import org.indra.android.ui.components.LiveOutputCard
 import org.indra.android.ui.components.PluginScaffold
+import org.indra.android.ui.components.ResultLine
+import org.indra.android.ui.components.ResultList
 
 @Composable
 fun PortScannerScreen(
@@ -22,7 +24,7 @@ fun PortScannerScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    PluginScaffold(title = "Port Scanner", onNavigateBack = onNavigateBack) { paddingValues ->
+    PluginScaffold(title = "Port Scanner", pluginId = "port_scanner", onNavigateBack = onNavigateBack) { paddingValues ->
         Column(
             modifier =
                 Modifier
@@ -81,40 +83,18 @@ fun PortScannerScreen(
 
             if (uiState.results.isNotEmpty()) {
                 val plural = if (uiState.results.size == 1) "" else "s"
-                Text(
-                    text = "Results (${uiState.results.size} open port$plural)",
-                    style = MaterialTheme.typography.titleMedium,
+                ResultList(
+                    lines =
+                        uiState.results.map { result ->
+                            ResultLine(
+                                key = result.port.toString(),
+                                title = "Port ${result.port}",
+                                trailing = result.service,
+                            )
+                        },
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    header = "${uiState.results.size} open port$plural",
                 )
-                LazyColumn(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    items(
-                        items = uiState.results,
-                        key = { it.port },
-                        contentType = { "port-result" },
-                    ) { result ->
-                        Card(modifier = Modifier.fillMaxWidth()) {
-                            Row(
-                                modifier =
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .padding(12.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                            ) {
-                                Text(
-                                    text = "Port ${result.port}",
-                                    style = MaterialTheme.typography.bodyLarge,
-                                )
-                                Text(
-                                    text = result.service,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
-                    }
-                }
             } else if (uiState.finished && uiState.error == null) {
                 EmptyState(
                     text = "No open ports in ${uiState.portRange}",

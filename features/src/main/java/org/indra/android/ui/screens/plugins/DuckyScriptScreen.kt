@@ -19,7 +19,7 @@ fun DuckyScriptScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    PluginScaffold(title = "DuckyScript", onNavigateBack = onNavigateBack) { paddingValues ->
+    PluginScaffold(title = "DuckyScript", pluginId = "duckyscript", onNavigateBack = onNavigateBack) { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()

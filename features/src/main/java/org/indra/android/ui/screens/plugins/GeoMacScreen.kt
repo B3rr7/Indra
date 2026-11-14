@@ -32,7 +32,7 @@ fun GeoMacScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
-    PluginScaffold(title = "GeoMac", onNavigateBack = onNavigateBack) { paddingValues ->
+    PluginScaffold(title = "GeoMac", pluginId = "geomac", onNavigateBack = onNavigateBack) { paddingValues ->
         Column(
             modifier =
                 Modifier

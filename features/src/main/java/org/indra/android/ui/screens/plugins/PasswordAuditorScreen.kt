@@ -16,7 +16,7 @@ fun PasswordAuditorScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    PluginScaffold(title = "Password Auditor", onNavigateBack = onNavigateBack) { paddingValues ->
+    PluginScaffold(title = "Password Auditor", pluginId = "password_auditor", onNavigateBack = onNavigateBack) { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()

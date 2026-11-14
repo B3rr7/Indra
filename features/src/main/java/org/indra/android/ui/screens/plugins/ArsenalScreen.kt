@@ -35,7 +35,7 @@ fun ArsenalScreen(
     }
 
     PluginScaffold(
-        title = "Arsenal (custom templates)",
+        title = "Arsenal (custom templates)", pluginId = "arsenal",
         onNavigateBack = onNavigateBack,
         actions = {
             IconButton(onClick = { viewModel.startEdit(null) }) {

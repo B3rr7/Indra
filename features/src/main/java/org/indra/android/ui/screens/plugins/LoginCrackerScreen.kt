@@ -20,7 +20,7 @@ fun LoginCrackerScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    PluginScaffold(title = "Login Cracker", onNavigateBack = onNavigateBack) { paddingValues ->
+    PluginScaffold(title = "Login Cracker", pluginId = "login_cracker", onNavigateBack = onNavigateBack) { paddingValues ->
         Column(
             modifier =
                 Modifier

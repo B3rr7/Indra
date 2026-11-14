@@ -14,6 +14,8 @@ import org.indra.android.ui.components.EmptyState
 import org.indra.android.ui.components.FormError
 import org.indra.android.ui.components.HostSuggestions
 import org.indra.android.ui.components.PluginScaffold
+import org.indra.android.ui.components.ResultLine
+import org.indra.android.ui.components.ResultList
 
 @Composable
 fun TracerouteScreen(
@@ -22,7 +24,7 @@ fun TracerouteScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    PluginScaffold(title = "Traceroute", onNavigateBack = onNavigateBack) { paddingValues ->
+    PluginScaffold(title = "Traceroute", pluginId = "traceroute", onNavigateBack = onNavigateBack) { paddingValues ->
         Column(
             modifier =
                 Modifier
@@ -89,38 +91,17 @@ private fun HopList(
     hops: List<TracerouteHop>,
     modifier: Modifier = Modifier,
 ) {
-    LazyColumn(
+    ResultList(
+        lines =
+            hops.map { hop ->
+                ResultLine(
+                    key = hop.number.toString(),
+                    title = "${hop.number}. ${hop.address}",
+                    trailing = hop.time,
+                )
+            },
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        items(
-            items = hops,
-            // Hop numbers are unique: the ViewModel keys its map on them.
-            key = { it.number },
-            contentType = { "hop" },
-        ) { hop ->
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Row(
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Text(
-                        text = "${hop.number}. ${hop.address}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontFamily = FontFamily.Monospace,
-                    )
-                    Text(
-                        text = hop.time,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-        }
-    }
+    )
 }
 
 data class TracerouteHop(

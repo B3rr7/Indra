@@ -18,7 +18,7 @@ fun WifiScannerScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    PluginScaffold(title = "WiFi Scanner", onNavigateBack = onNavigateBack) { paddingValues ->
+    PluginScaffold(title = "WiFi Scanner", pluginId = "wifi_scanner", onNavigateBack = onNavigateBack) { paddingValues ->
         Column(
             modifier =
                 Modifier

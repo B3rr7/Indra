@@ -13,6 +13,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.indra.android.ui.components.EmptyState
 import org.indra.android.ui.components.FormError
 import org.indra.android.ui.components.PluginScaffold
+import org.indra.android.ui.components.ResultLine
+import org.indra.android.ui.components.ResultList
 
 @Composable
 fun SessionHijackScreen(
@@ -21,7 +23,7 @@ fun SessionHijackScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    PluginScaffold(title = "Session Hijacking", onNavigateBack = onNavigateBack) { paddingValues ->
+    PluginScaffold(title = "Session Hijacking", pluginId = "session_hijack", onNavigateBack = onNavigateBack) { paddingValues ->
         Column(
             modifier =
                 Modifier
@@ -36,27 +38,18 @@ fun SessionHijackScreen(
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             }
             CapturedSessionsHeader(uiState)
-            LazyColumn(
-                modifier = Modifier.weight(1f).fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                items(
-                    items = uiState.sessions,
-                    // The ViewModel deduplicates on the cookie, so it is the row's identity.
-                    key = { it.cookie },
-                    contentType = { "session" },
-                ) { session ->
-                    Card(modifier = Modifier.fillMaxWidth()) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            Text("Host: ${session.host}", style = MaterialTheme.typography.bodyMedium)
-                            Text(
-                                text = "Cookie: ${session.cookie}",
-                                style = MaterialTheme.typography.bodySmall,
-                                fontFamily = FontFamily.Monospace,
+            if (uiState.sessions.isNotEmpty()) {
+                ResultList(
+                    lines =
+                        uiState.sessions.map { session ->
+                            ResultLine(
+                                key = session.cookie,
+                                title = "Cookie: ${session.cookie}",
+                                detail = "Host: ${session.host}",
                             )
-                        }
-                    }
-                }
+                        },
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                )
             }
             uiState.error?.let { FormError(it) }
         }
@@ -72,8 +65,9 @@ private fun CapturedSessionsHeader(uiState: SessionHijackUiState) {
     when {
         uiState.sessions.isNotEmpty() ->
             Text(
-                text = "Captured sessions: ${uiState.sessions.size}",
-                style = MaterialTheme.typography.titleSmall,
+                text = "${uiState.sessions.size} captured session(s)",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         uiState.isRunning ->
             Text(

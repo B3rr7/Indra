@@ -24,7 +24,7 @@ fun MacChangerScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    PluginScaffold(title = "MAC Changer", onNavigateBack = onNavigateBack) { paddingValues ->
+    PluginScaffold(title = "MAC Changer", pluginId = "mac_changer", onNavigateBack = onNavigateBack) { paddingValues ->
         Column(
             modifier =
                 Modifier

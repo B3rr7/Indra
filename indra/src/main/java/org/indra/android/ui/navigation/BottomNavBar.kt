@@ -41,7 +41,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation3.runtime.NavKey
-import org.indra.android.ui.theme.StatusCyan
 import org.indra.android.ui.theme.StatusGreen
 import org.indra.android.ui.theme.StatusOrange
 
@@ -80,7 +79,9 @@ fun BottomNavBar(
 ) {
     val items =
         listOf(
-            BottomNavItem("Home", Screen.Home, Icons.Filled.Home, Icons.Outlined.Home, StatusCyan),
+            // Home carries the palette, so the bar itself re-tints when the theme changes. Tools and
+            // Terminal keep their own hues: they are names for two tool families, not for the app.
+            BottomNavItem("Home", Screen.Home, Icons.Filled.Home, Icons.Outlined.Home, MaterialTheme.colorScheme.primary),
             BottomNavItem("Tools", Screen.Tools, Icons.Filled.Build, Icons.Outlined.Build, StatusOrange),
             BottomNavItem("Terminal", Screen.Terminal, Icons.Filled.Terminal, Icons.Outlined.Terminal, StatusGreen),
         )

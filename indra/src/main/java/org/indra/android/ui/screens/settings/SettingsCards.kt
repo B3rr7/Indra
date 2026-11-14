@@ -44,6 +44,7 @@ internal object SettingsPalette {
     val Running = Color(0xFF00E676) // green
     val Stopped = Color(0xFFFF5252) // red
     val Wallpaper = Color(0xFF40C4FF) // sky — the app's own background image
+    val Appearance = Color(0xFFFF8FAB) // rose — the colour-palette picker
 }
 
 @Composable

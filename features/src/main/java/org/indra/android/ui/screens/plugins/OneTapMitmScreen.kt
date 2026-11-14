@@ -19,7 +19,7 @@ fun OneTapMitmScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    PluginScaffold(title = "One-Tap MITM", onNavigateBack = onNavigateBack) { paddingValues ->
+    PluginScaffold(title = "One-Tap MITM", pluginId = "one_tap_mitm", onNavigateBack = onNavigateBack) { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()

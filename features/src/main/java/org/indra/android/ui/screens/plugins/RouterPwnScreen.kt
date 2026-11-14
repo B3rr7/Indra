@@ -20,7 +20,7 @@ fun RouterPwnScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    PluginScaffold(title = "RouterPwn", onNavigateBack = onNavigateBack) { paddingValues ->
+    PluginScaffold(title = "RouterPwn", pluginId = "router_pwn", onNavigateBack = onNavigateBack) { paddingValues ->
         Column(
             modifier =
                 Modifier

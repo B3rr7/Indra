@@ -5,6 +5,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.EntryProviderScope
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.tween
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
@@ -80,6 +84,11 @@ fun IndraNavHost(
         backStack = navigationState.backStack,
         modifier = modifier,
         onBack = { navigator.goBack() },
+        // A cross-fade rather than a slide: plugin screens are full-bleed forms, and a horizontal
+        // push implies a hierarchy the single back stack does not have. 180 ms in, 120 ms out —
+        // the outgoing screen clears faster than the incoming one arrives, which is what makes the
+        // transition feel immediate instead of simultaneous.
+        transitionSpec = { fadeIn(tween(NAV_ENTER_MS)) togetherWith fadeOut(tween(NAV_EXIT_MS)) },
         // Both decorators are load-bearing: the saveable one keeps each entry's UI state, and the
         // session one keeps each *destination's* ViewModel for the whole app session (a tool keeps
         // its results and its running coroutine when you leave to open another tool). Dropping
@@ -192,3 +201,6 @@ private fun EntryProviderScope<NavKey>.hardwareEntries(navigator: Navigator) {
     entry<Screen.DuckyScript> { DuckyScriptScreen(onNavigateBack = { navigator.goBack() }) }
     entry<Screen.GadgetProfiles> { GadgetProfilesScreen(onNavigateBack = { navigator.goBack() }) }
 }
+
+private const val NAV_ENTER_MS = 180
+private const val NAV_EXIT_MS = 120

@@ -19,7 +19,7 @@ fun WifiAuditScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    PluginScaffold(title = "WiFi Audit", onNavigateBack = onNavigateBack) { paddingValues ->
+    PluginScaffold(title = "WiFi Audit", pluginId = "wifi_audit", onNavigateBack = onNavigateBack) { paddingValues ->
         Column(
             modifier =
                 Modifier

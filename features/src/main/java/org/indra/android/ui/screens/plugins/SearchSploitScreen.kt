@@ -18,7 +18,7 @@ fun SearchSploitScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    PluginScaffold(title = "SearchSploit", onNavigateBack = onNavigateBack) { paddingValues ->
+    PluginScaffold(title = "SearchSploit", pluginId = "searchsploit", onNavigateBack = onNavigateBack) { paddingValues ->
         Column(
             modifier =
                 Modifier

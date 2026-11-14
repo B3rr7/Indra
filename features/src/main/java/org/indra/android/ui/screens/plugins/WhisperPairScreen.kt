@@ -19,7 +19,7 @@ fun WhisperPairScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    PluginScaffold(title = "WhisperPair (BLE Fast Pair)", onNavigateBack = onNavigateBack) { paddingValues ->
+    PluginScaffold(title = "WhisperPair (BLE Fast Pair)", pluginId = "whisperpair", onNavigateBack = onNavigateBack) { paddingValues ->
         Column(
             modifier =
                 Modifier

@@ -34,7 +34,7 @@ fun GobusterScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    PluginScaffold(title = "Gobuster", onNavigateBack = onNavigateBack) { paddingValues ->
+    PluginScaffold(title = "Gobuster", pluginId = "gobuster", onNavigateBack = onNavigateBack) { paddingValues ->
         Column(
             modifier = Modifier.fillMaxSize().padding(paddingValues).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),

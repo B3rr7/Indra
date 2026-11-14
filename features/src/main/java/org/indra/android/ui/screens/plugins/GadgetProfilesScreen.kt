@@ -24,7 +24,7 @@ fun GadgetProfilesScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val cap = uiState.capability
 
-    PluginScaffold(title = "USB Arsenal (Gadget Profiles)", onNavigateBack = onNavigateBack) { paddingValues ->
+    PluginScaffold(title = "USB Arsenal (Gadget Profiles)", pluginId = "usb_arsenal", onNavigateBack = onNavigateBack) { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()

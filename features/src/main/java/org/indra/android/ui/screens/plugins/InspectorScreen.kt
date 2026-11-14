@@ -14,6 +14,8 @@ import org.indra.android.ui.components.EmptyState
 import org.indra.android.ui.components.FormError
 import org.indra.android.ui.components.HostSuggestions
 import org.indra.android.ui.components.PluginScaffold
+import org.indra.android.ui.components.ResultLine
+import org.indra.android.ui.components.ResultList
 
 @Composable
 fun InspectorScreen(
@@ -22,7 +24,7 @@ fun InspectorScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    PluginScaffold(title = "Inspector", onNavigateBack = onNavigateBack) { paddingValues ->
+    PluginScaffold(title = "Inspector", pluginId = "inspector", onNavigateBack = onNavigateBack) { paddingValues ->
         Column(
             modifier =
                 Modifier
@@ -84,41 +86,18 @@ fun InspectorScreen(
             }
 
             if (uiState.services.isNotEmpty()) {
-                Text(
-                    text = "Services",
-                    style = MaterialTheme.typography.titleMedium,
+                ResultList(
+                    lines =
+                        uiState.services.map { service ->
+                            ResultLine(
+                                key = service.port.toString(),
+                                title = "${service.port}/tcp",
+                                trailing = service.name,
+                            )
+                        },
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    header = "Services · ${uiState.services.size}",
                 )
-                LazyColumn(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    items(
-                        items = uiState.services,
-                        // Services are already deduplicated by port in the ViewModel.
-                        key = { it.port },
-                        contentType = { "service" },
-                    ) { service ->
-                        Card(modifier = Modifier.fillMaxWidth()) {
-                            Row(
-                                modifier =
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .padding(12.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                            ) {
-                                Text(
-                                    text = "${service.port}/tcp",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontFamily = FontFamily.Monospace,
-                                )
-                                Text(
-                                    text = service.name,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                )
-                            }
-                        }
-                    }
-                }
             } else if (uiState.finished && uiState.error == null) {
                 EmptyState(
                     text = "No open ports found",

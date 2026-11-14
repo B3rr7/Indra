@@ -19,7 +19,7 @@ fun MasscanScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    PluginScaffold(title = "Masscan", onNavigateBack = onNavigateBack) { paddingValues ->
+    PluginScaffold(title = "Masscan", pluginId = "masscan", onNavigateBack = onNavigateBack) { paddingValues ->
         Column(
             modifier =
                 Modifier

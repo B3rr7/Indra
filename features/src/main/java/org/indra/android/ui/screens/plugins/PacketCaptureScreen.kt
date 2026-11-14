@@ -20,7 +20,7 @@ fun PacketCaptureScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    PluginScaffold(title = "Packet Capture", onNavigateBack = onNavigateBack) { paddingValues ->
+    PluginScaffold(title = "Packet Capture", pluginId = "packet_capture", onNavigateBack = onNavigateBack) { paddingValues ->
         Column(
             modifier =
                 Modifier

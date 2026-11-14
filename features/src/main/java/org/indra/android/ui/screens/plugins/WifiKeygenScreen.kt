@@ -39,7 +39,7 @@ fun WifiKeygenScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    PluginScaffold(title = "WiFi Keygen", onNavigateBack = onNavigateBack) { paddingValues ->
+    PluginScaffold(title = "WiFi Keygen", pluginId = "wifi_keygen", onNavigateBack = onNavigateBack) { paddingValues ->
         Column(
             modifier =
                 Modifier

@@ -169,6 +169,17 @@ class SettingsViewModel
         private val _uiState = MutableStateFlow(SettingsUiState())
         val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
 
+        /**
+         * The chosen colour palette. Read straight from the repository's flow rather than copied
+         * into [SettingsUiState]: the theme has to change the moment this screen changes it, and a
+         * second copy of the value would be a second thing to keep in sync.
+         */
+        val themePaletteId: StateFlow<String> get() = settings.themePaletteId
+
+        fun selectPalette(id: String) {
+            settings.setThemePalette(id)
+        }
+
         /** Latest op of each channel, kept so either collector can rebuild the whole list. */
         @Volatile
         private var toolsOp: BundleOp = BundleOp.Idle("tools")

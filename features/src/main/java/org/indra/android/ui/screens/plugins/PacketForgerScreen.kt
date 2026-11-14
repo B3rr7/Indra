@@ -18,7 +18,7 @@ fun PacketForgerScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    PluginScaffold(title = "Packet Forger", onNavigateBack = onNavigateBack) { paddingValues ->
+    PluginScaffold(title = "Packet Forger", pluginId = "packet_forger", onNavigateBack = onNavigateBack) { paddingValues ->
         Column(
             modifier =
                 Modifier

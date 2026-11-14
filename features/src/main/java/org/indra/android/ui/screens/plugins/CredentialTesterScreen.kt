@@ -24,7 +24,7 @@ fun CredentialTesterScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var passwordVisible by remember { mutableStateOf(false) }
 
-    PluginScaffold(title = "Credential Tester", onNavigateBack = onNavigateBack) { paddingValues ->
+    PluginScaffold(title = "Credential Tester", pluginId = "credential_tester", onNavigateBack = onNavigateBack) { paddingValues ->
         Column(
             modifier =
                 Modifier

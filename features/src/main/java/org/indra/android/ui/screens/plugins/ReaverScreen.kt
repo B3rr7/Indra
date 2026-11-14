@@ -18,7 +18,7 @@ fun ReaverScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    PluginScaffold(title = "Reaver (WPS PIN)", onNavigateBack = onNavigateBack) { paddingValues ->
+    PluginScaffold(title = "Reaver (WPS PIN)", pluginId = "reaver", onNavigateBack = onNavigateBack) { paddingValues ->
         Column(
             modifier =
                 Modifier

@@ -18,7 +18,7 @@ fun HidScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val cap = uiState.capability
 
-    PluginScaffold(title = "HID Attacks", onNavigateBack = onNavigateBack) { paddingValues ->
+    PluginScaffold(title = "HID Attacks", pluginId = "hid", onNavigateBack = onNavigateBack) { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()

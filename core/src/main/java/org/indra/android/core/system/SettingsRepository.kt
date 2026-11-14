@@ -3,6 +3,9 @@ package org.indra.android.core.system
 import android.content.Context
 import android.content.SharedPreferences
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import org.indra.android.core.data.bundle.BundleManifest
 import org.indra.android.core.system.terminal.TerminalType
 import javax.inject.Inject
@@ -20,6 +23,9 @@ class SettingsRepository
 
             /** File-logging toggle; `IndraApplication` reads it off the main thread at startup. */
             const val KEY_FILE_LOGGING = "PREF_DEBUG_ERROR_LOGGING"
+
+            /** The chosen colour palette id; see `SettingsRepository.themePaletteId`. */
+            const val KEY_THEME_PALETTE = "PREF_THEME_PALETTE"
 
             /** Default floating-terminal panel size, as a fraction of the available space. */
             const val DEFAULT_TERMINAL_PANEL_WIDTH = 0.94f
@@ -106,6 +112,24 @@ class SettingsRepository
         var rootlessMode: Boolean
         get() = prefs.getBoolean("ROOTLESS_MODE", false)
         set(value) = prefs.edit().putBoolean("ROOTLESS_MODE", value).apply()
+
+        /**
+         * The chosen colour palette id (`ui/theme/Palette.kt` holds the catalogue).
+         *
+         * Published as a flow because the theme has to change while the picker is still on screen —
+         * reading a preference at startup only would make a palette choice look like it did
+         * nothing until the next launch. The preference is the source of truth on a cold start;
+         * the flow seeds from it.
+         */
+        private val _themePaletteId = MutableStateFlow(prefs.getString(KEY_THEME_PALETTE, "") ?: "")
+
+        /** Emits the selected palette id; empty means "use the default". */
+        val themePaletteId: StateFlow<String> = _themePaletteId.asStateFlow()
+
+        fun setThemePalette(id: String) {
+            prefs.edit().putString(KEY_THEME_PALETTE, id).apply()
+            _themePaletteId.value = id
+        }
 
         /**
          * Whether the first-install "set up storage access" prompt has already been shown.

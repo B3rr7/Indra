@@ -99,6 +99,19 @@ fun SettingsScreen(
             // ── System status hero ───────────────────────────────────────
             item { StatusHeroCard(uiState) }
 
+            // ── Appearance ───────────────────────────────────────────────
+            item {
+                SettingsSection(
+                    title = "Appearance",
+                    icon = Icons.Default.Palette,
+                    accent = SettingsPalette.Appearance,
+                )
+            }
+            item {
+                val palette by viewModel.themePaletteId.collectAsStateWithLifecycle()
+                PaletteCard(selectedId = palette, onSelect = viewModel::selectPalette)
+            }
+
             // ── Network Configuration ────────────────────────────────────
             item {
                 SettingsSection(

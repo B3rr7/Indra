@@ -12,6 +12,8 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.indra.android.ui.components.FormError
 import org.indra.android.ui.components.PluginScaffold
+import org.indra.android.ui.components.ResultLine
+import org.indra.android.ui.components.ResultList
 
 @Composable
 fun NetworkRadarScreen(
@@ -20,7 +22,7 @@ fun NetworkRadarScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    PluginScaffold(title = "Network Radar", onNavigateBack = onNavigateBack) { paddingValues ->
+    PluginScaffold(title = "Network Radar", pluginId = "network_radar", onNavigateBack = onNavigateBack) { paddingValues ->
         Column(
             modifier =
                 Modifier
@@ -67,8 +69,19 @@ fun NetworkRadarScreen(
                 style = MaterialTheme.typography.titleSmall,
             )
 
-            Card(modifier = Modifier.fillMaxWidth().weight(1f)) {
-                if (uiState.hosts.isEmpty()) {
+            val rows =
+                uiState.hosts.map { host ->
+                    ResultLine(
+                        key = host.ip,
+                        title = host.ip,
+                        detail =
+                            listOfNotNull(host.mac.ifEmpty { null }, host.name.ifEmpty { null })
+                                .joinToString("  ")
+                                .ifEmpty { "no MAC/name yet" },
+                    )
+                }
+            if (uiState.hosts.isEmpty()) {
+                Card(modifier = Modifier.fillMaxWidth().weight(1f)) {
                     Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
                         Text(
                             text = if (uiState.isActive) "Listening for hosts…" else "No hosts discovered yet",
@@ -76,32 +89,12 @@ fun NetworkRadarScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                } else {
-                    LazyColumn(modifier = Modifier.fillMaxSize().padding(8.dp)) {
-                        items(
-                            items = uiState.hosts,
-                            key = { it.ip },
-                            contentType = { "radar-host" },
-                        ) { host ->
-                            Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                                Text(
-                                    text = host.ip,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontFamily = FontFamily.Monospace,
-                                )
-                                Text(
-                                    text =
-                                        listOfNotNull(
-                                            host.mac.ifEmpty { null },
-                                            host.name.ifEmpty { null },
-                                        ).joinToString("  ").ifEmpty { "no MAC/name yet" },
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
-                    }
                 }
+            } else {
+                ResultList(
+                    lines = rows,
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                )
             }
 
             if (uiState.note != null) {
