@@ -19,6 +19,10 @@ fun DuckyScriptScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
+    // The gadget state is a property of the phone, not of the script, so it is read on entry and
+    // again after Prepare — never guessed from a capability flag.
+    LaunchedEffect(Unit) { viewModel.checkGadget() }
+
     PluginScaffold(title = "DuckyScript", pluginId = "duckyscript", onNavigateBack = onNavigateBack) { paddingValues ->
         Column(
             modifier = Modifier
@@ -38,6 +42,8 @@ fun DuckyScriptScreen(
                 Button(onClick = { viewModel.run() }, modifier = Modifier.weight(1f)) { Text(if (uiState.status == "Running…") "Running…" else "Run") }
             }
             Text(uiState.status, style = MaterialTheme.typography.bodySmall)
+            uiState.notice?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+            GadgetSection(uiState.gadget, uiState.preparing, viewModel::prepareGadget)
             if (uiState.summary.isNotBlank()) {
                 Card(modifier = Modifier.fillMaxWidth()) {
                     Text(uiState.summary, modifier = Modifier.padding(12.dp), fontFamily = FontFamily.Monospace, fontSize = 11.sp)

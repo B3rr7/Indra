@@ -206,11 +206,21 @@ pure, tested encoder.
 
 ### Our design
 ```
-core/system/hid/HidLayout.kt   object HidLayout — Map<Char, Int> per locale, 8 locales as data
-core/system/hid/HidUdc.kt      object HidUdc — read /sys/class/udc/*, report bound/unbound + name
+core/system/hid/HidLayout.kt   object HidLayout — probe script, Facts, Gadget, Verdict
+core/system/hid/HidUdc.kt      object HidUdc — the boot-keyboard descriptor and the commands
+features/.../GadgetGate.kt     GadgetGate + GadgetSection — what a screen shows for each verdict
 ```
-`HidReports` gains a locale parameter; `usb_arsenal` stops reporting a capability it never binds and
-instead renders "UDC present but unbound: <name>" or "no UDC".
+`usb_arsenal` and the two HID screens stop reporting a capability they never measured and instead
+render one of four states: **ready** (`/dev/hidg0` exists), **one button away** (the gadget is live,
+nothing is linked in), **unbound** (no controller write), or **impossible** (no UDC / no gadget /
+the driver refuses) — each with the sentence that says what to do about it.
+
+Measured on the moto g60, in the app: `Prepare USB HID gadget` created the function, wrote the
+63-byte boot descriptor, linked `b.1/f3` and re-bound `a600000.dwc3`, which produced
+`/dev/hidg0` (`crw------- root root`), a real `if02-event-kbd` interface on the attached host, and
+`Typed 5 characters` from the screen. The multiply-by-two: the app's own probe cannot see
+`/sys/class/udc` or `/config` at all (SELinux), so the *only* honest answer is the root one — the
+capability card that used to print `HID function: true` on a phone with no `hidg0` is gone.
 
 ---
 
@@ -312,14 +322,14 @@ Every assumption in this plan was re-verified against the tree on 2026-11-14.
 *Design record, 2026-11-14, re-checked the same day. No source from the compared projects is copied;
 file names and type shapes above are ours.*
 
-### Status (2026-11-14)
+### Status (2026-11-15)
 
 | Phase | State |
 |---|---|
 | P0 handshake | **done** — 64 tests, `CrackRun` on `parsedData`, device-tested through the Handshakes screen |
 | P0 MSF | **done** — configure/run/follow, refusal sentence preserved, `Completed · job 0` verified on the g60 |
 | P1 source pins | **done** — `pins/sources.json` (8 trees + 5 files), `SourcePinGateTest` fails the gate on drift; caught a probe edit on demand |
-| P2 radio profile | not started — `Capability.MONITOR_RADIO` + a driver-capability reader |
-| P2 HID layout/UDC | not started — `HidLayout` as data, `HidUdc` bind probe |
+| P2 radio profile | **done** — `RadioProfile` + `Capability.MONITOR_RADIO`; the switch refuses with Wi-Fi still up and names `con_mode` (13 tests, device-verified) |
+| P2 HID layout/UDC | **done** — `HidLayout`/`HidUdc`/`GadgetGate`; the screen's own Prepare button created `/dev/hidg0` and a host keyboard (19 tests, device-verified) |
 | P3 link probe | not started |
 | P4 SDK 37 | blocked on AGP 9.1 / Nav3 1.2 |

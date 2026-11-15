@@ -7,6 +7,7 @@ import org.indra.android.core.engine.CapabilityFix
 import org.indra.android.core.engine.CapabilityState
 import org.indra.android.core.engine.EngineInstallState
 import org.indra.android.core.engine.EngineInstaller
+import org.indra.android.core.system.hid.HidLayout
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -89,6 +90,11 @@ class SmartToolBoxRunner
             iface: String,
             monitor: Boolean,
         ): Flow<ToolResult> = box.monitorMode(iface, monitor)
+
+        override suspend fun hidLayout(): HidLayout.Verdict = box.hidLayout()
+
+        override suspend fun prepareHidGadget(gadget: HidLayout.Verdict.Creatable): HidLayout.Prepared =
+            box.prepareHidGadget(gadget)
 
         override suspend fun msfProblem(root: String): String? = box.msfProblem(root)
 

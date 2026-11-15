@@ -10,10 +10,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.lastOrNull
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import org.indra.android.core.system.HidCapability
 import org.indra.android.core.system.HidReports
-import org.indra.android.core.system.SmartToolBox
 import org.indra.android.core.system.ToolHandle
+import org.indra.android.core.system.ToolRunner
+import org.indra.android.core.system.hid.HidLayout
 import javax.inject.Inject
 
 private fun hidKeyCode(name: String): Int = when (name.uppercase()) {
@@ -53,16 +53,19 @@ data class DuckyScriptUiState(
     val summary: String = "",
     val status: String = "Idle",
     val error: String? = null,
-    val capability: HidCapability.Capability? = null
+    /** The USB-gadget gate; null until the screen has asked the device. */
+    val gadget: GadgetGate? = null,
+    val preparing: Boolean = false,
+    /** A sentence after a successful prepare; cleared by the next action. */
+    val notice: String? = null
 )
 
 @HiltViewModel
 class DuckyScriptViewModel @Inject constructor(
     private val savedState: SavedStateHandle,
-    private val hidCapability: HidCapability,
-    private val toolBox: SmartToolBox
+    private val toolBox: ToolRunner
 ) : ViewModel() {
-    private val _uiState = MutableStateFlow(restoredInputs(DuckyScriptUiState(capability = hidCapability.detect())))
+    private val _uiState = MutableStateFlow(restoredInputs(DuckyScriptUiState()))
     val uiState: StateFlow<DuckyScriptUiState> = _uiState.asStateFlow()
 
     /**
@@ -84,6 +87,34 @@ class DuckyScriptViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(parsed = steps, summary = DuckyScriptParser.summarize(steps))
     }
 
+    /**
+     * Asks the device whether it can present a HID keyboard, on entry to the screen.
+     *
+     * One root shell, and it is what turns "hidg0 not available" into either a button or a reason.
+     */
+    fun checkGadget() {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(gadget = toolBox.gadgetGate())
+        }
+    }
+
+    /** Links a HID function into the live gadget, then re-reads the device instead of assuming. */
+    fun prepareGadget() {
+        val gate = _uiState.value.gadget
+        if (gate !is GadgetGate.NeedsPrepare || _uiState.value.preparing) return
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(preparing = true, error = null, notice = null)
+            val prepared = toolBox.prepareHidGadget(gate.gadget)
+            _uiState.value =
+                _uiState.value.copy(
+                    preparing = false,
+                    gadget = toolBox.gadgetGate(),
+                    notice = if (prepared.ready) HidLayout.PREPARED_MESSAGE else null,
+                    error = if (prepared.ready) null else HidLayout.notPreparedMessage(prepared.output),
+                )
+        }
+    }
+
     fun run() {
         val st = _uiState.value
         if (st.parsed.isEmpty()) {
@@ -96,11 +127,14 @@ class DuckyScriptViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(status = "Idle", error = gate.message)
                 return@launch
             }
-            _uiState.value = _uiState.value.copy(status = "Running…", error = null)
-            // /dev/hidg0 is the authority, not HidCapability (configfs is root-only and the
-            // app-side probe under-reports). Without it every write would silently vanish.
-            if (toolBox.shell("[ -e ${HidReports.DEVICE} ]").lastOrNull()?.success != true) {
-                _uiState.value = _uiState.value.copy(status = "Idle", error = HidReports.DEVICE_MISSING_MESSAGE)
+            _uiState.value = _uiState.value.copy(status = "Running…", error = null, notice = null)
+            // The node is the authority, but the *gate* is what explains it: without /dev/hidg0 every
+            // write would silently vanish, and the one sentence that used to say so named no fix.
+            val gadget = toolBox.gadgetGate()
+            val blocked = gadget.blockedMessage()
+            _uiState.value = _uiState.value.copy(gadget = gadget)
+            if (blocked != null) {
+                _uiState.value = _uiState.value.copy(status = "Idle", error = blocked)
                 return@launch
             }
 

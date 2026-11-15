@@ -16,7 +16,9 @@ fun HidScreen(
     viewModel: HidViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val cap = uiState.capability
+
+    // Read on entry: the gate is a property of the phone, and Prepare re-reads it.
+    LaunchedEffect(Unit) { viewModel.checkGadget() }
 
     PluginScaffold(title = "HID Attacks", pluginId = "hid", onNavigateBack = onNavigateBack) { paddingValues ->
         Column(
@@ -26,25 +28,11 @@ fun HidScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("Device capability", style = MaterialTheme.typography.titleSmall)
-                    Text("UDC: ${cap?.hasUdc == true}", style = MaterialTheme.typography.bodySmall)
-                    Text("Configfs: ${cap?.hasConfigfs == true}", style = MaterialTheme.typography.bodySmall)
-                    Text("HID function: ${cap?.hasHidFunction == true}", style = MaterialTheme.typography.bodySmall)
-                    Text("Mass storage: ${cap?.hasMassStorage == true}", style = MaterialTheme.typography.bodySmall)
-                    Text("RNDIS: ${cap?.hasRndis == true}", style = MaterialTheme.typography.bodySmall)
-                    Text("ECM: ${cap?.hasEcm == true}", style = MaterialTheme.typography.bodySmall)
-                    Text(
-                        if (cap?.isGadgetCapable == true) "Gadget-capable: YES" else "Gadget-capable: NO (HID unavailable)",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = if (cap?.isGadgetCapable == true) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
-                    )
-                }
-            }
-            // The card above is filled in from the app process, which cannot read the
-            // root-only configfs tree, so "NO" does not mean the device lacks HID. The run
-            // itself is the authoritative check: it looks for /dev/hidg0 as root.
+            // No capability card: SELinux keeps this process out of /sys/class/udc and /config
+            // (measured — the shell lists `a600000.dwc3`, the app sees nothing), so an app-side
+            // "capable: no" was as wrong as the old "HID function: true". The gate below is the
+            // kernel's own answer, read as root.
+            GadgetSection(uiState.gadget, uiState.preparing, viewModel::prepareGadget)
             OutlinedTextField(
                 value = uiState.text,
                 onValueChange = { viewModel.updateText(it) },
@@ -55,9 +43,10 @@ fun HidScreen(
                 Text("Type")
             }
             Text(uiState.status, style = MaterialTheme.typography.bodySmall)
+            uiState.notice?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
             Text(
-                "Sends boot-keyboard reports to /dev/hidg0, which only exists once a HID " +
-                    "function is bound to a UDC (CONFIG_USB_CONFIGFS_F_HID).",
+                "Sends boot-keyboard reports to /dev/hidg0, which exists once a HID function is " +
+                    "linked into the bound gadget (CONFIG_USB_CONFIGFS_F_HID).",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

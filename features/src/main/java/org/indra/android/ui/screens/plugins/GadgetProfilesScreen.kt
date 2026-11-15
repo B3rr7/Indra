@@ -34,8 +34,20 @@ fun GadgetProfilesScreen(
         ) {
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text("Capability: ${if (cap?.isGadgetCapable == true) "Gadget-capable" else "Not gadget-capable"}", style = MaterialTheme.typography.bodyMedium)
-                    Text("UDC: ${cap?.hasUdc == true}  Configfs: ${cap?.hasConfigfs == true}", style = MaterialTheme.typography.bodySmall)
+                    // Read from the app process, which SELinux keeps out of /sys/class/udc and
+                    // /config (measured on the moto g60: the shell lists `a600000.dwc3` while the app
+                    // sees nothing), so this card can only report what the app may look at. The
+                    // authoritative check is the Apply probe, which runs as root.
+                    Text("App-side view (not device truth)", style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        "UDC readable: ${cap?.hasUdc == true}  configfs head readable: ${cap?.hasConfigfs == true}",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Text(
+                        "SELinux denies this app the gadget tree, so a `false` here means “cannot see”, not " +
+                            "“not present”. Apply reports what the kernel actually did.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
                 }
             }
             // Shown unconditionally: the card is filled in from the app process, which

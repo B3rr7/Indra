@@ -27,6 +27,8 @@ import org.indra.android.core.client.KotlinDaemonClient
 import org.indra.android.core.engine.Capability
 import org.indra.android.core.engine.CapabilityState
 import org.indra.android.core.engine.ChrootEngine
+import org.indra.android.core.system.hid.HidLayout
+import org.indra.android.core.system.hid.HidUdc
 import org.indra.android.core.engine.ChrootScript
 import org.indra.android.core.engine.EnginePackages
 import org.indra.android.core.system.handshake.CrackRun
@@ -660,13 +662,50 @@ class SmartToolBox
                 } else {
                     RadioProfile.probeScript(iface)
                 }
+            return collectTranscript(script, "radio probe")
+                .takeIf { it.contains("=INDRA-IW=") }
+                ?.let { RadioProfile.parseProbe(it) }
+        }
+        /**
+         * Whether this phone can present itself as a USB keyboard, and if not, why.
+         *
+         * One root shell reads `/sys/class/udc`, `/dev/hidg*` and every gadget's functions and links
+         * — none of which the app uid can see — and [HidLayout] decides between "ready", "one bind
+         * away", "link a function in" and "this device cannot". The screens used to answer every one
+         * of those with the same dead-end sentence.
+         */
+        suspend fun hidLayout(): HidLayout.Verdict {
+            val output = collectTranscript(HidLayout.probeScript, "usb gadget probe")
+            val verdict = HidLayout.choose(HidLayout.parse(output))
+            Logger.d("hid layout: $verdict")
+            return verdict
+        }
+
+        /**
+         * Runs the layout's commands and reports whether `/dev/hidg0` exists afterwards.
+         *
+         * The verdict is the node, not the exit status: Android's USB manager re-binds the gadget on
+         * its own, so the rebind write returns 1 while the gadget comes back (measured).
+         */
+        suspend fun prepareHidGadget(gadget: HidLayout.Verdict.Creatable): HidLayout.Prepared {
+            val output = collectTranscript(HidUdc.script(gadget.commands), "usb hid gadget", CHROOT_SETUP_TIMEOUT_MS)
+            val prepared = HidLayout.Prepared(HidUdc.producedDevice(output), output)
+            Logger.d("hid gadget prepared=${prepared.ready}")
+            return prepared
+        }
+
+        /** A whole shell transcript, for a probe that reports by its text rather than its status. */
+        private suspend fun collectTranscript(
+            script: String,
+            label: String,
+            timeoutMs: Long = PROBE_TIMEOUT_MS,
+        ): String {
             val output = StringBuilder()
-            val flow = shell(script, label = "radio probe", timeoutMs = PROBE_TIMEOUT_MS)
-            flow.collect { result ->
+            shell(script, label = label, timeoutMs = timeoutMs).collect { result ->
                 result.streamedLine?.let { output.appendLine(it) }
                 result.rawOutput.takeIf { !result.isStreaming }?.let { output.appendLine(it) }
             }
-            return output.toString().takeIf { it.contains("=INDRA-IW=") }?.let { RadioProfile.parseProbe(it) }
+            return output.toString()
         }
 
         /**

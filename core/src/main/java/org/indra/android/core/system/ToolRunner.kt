@@ -3,6 +3,7 @@ package org.indra.android.core.system
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import org.indra.android.core.engine.Capability
+import org.indra.android.core.system.hid.HidLayout
 import org.indra.android.core.engine.CapabilityFix
 import org.indra.android.core.engine.CapabilityState
 import org.indra.android.core.engine.EngineInstallState
@@ -96,6 +97,18 @@ interface ToolRunner {
         iface: String,
         monitor: Boolean,
     ): Flow<ToolResult>
+
+    /**
+     * Whether this phone can present itself as a USB HID keyboard.
+     *
+     * The answer distinguishes "ready", "one bind away", "the function is not linked in" and "this
+     * device cannot", because each has a different fix and the screen used to print one sentence for
+     * all four.
+     */
+    suspend fun hidLayout(): HidLayout.Verdict
+
+    /** Runs the layout's commands; [HidLayout.Prepared.ready] is the node, never an exit status. */
+    suspend fun prepareHidGadget(gadget: HidLayout.Verdict.Creatable): HidLayout.Prepared
 
     /** Null when the Metasploit chroot is usable, else the fix. */
     suspend fun msfProblem(root: String): String?

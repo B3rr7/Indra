@@ -15,6 +15,8 @@ import org.indra.android.core.system.SmartTool
 import org.indra.android.core.system.ToolHandle
 import org.indra.android.core.system.ToolResult
 import org.indra.android.core.system.ToolRunner
+import org.indra.android.core.system.hid.HidLayout
+import org.indra.android.core.system.hid.HidUdc
 
 /**
  * A [ToolRunner] that answers from a table instead of a daemon.
@@ -150,6 +152,20 @@ class FakeToolRunner : ToolRunner {
         iface: String,
         monitor: Boolean,
     ): Flow<ToolResult> = record("monitor", "$iface $monitor")
+
+    /** What the HID screens see; tests set it to each verdict they exercise. */
+    var hidVerdict: HidLayout.Verdict =
+        HidLayout.Verdict.Creatable("/config/usb_gadget/g1", "a600000.dwc3", listOf("echo 1 > x"))
+
+    /** Whether preparing the gadget reports the node as appearing. */
+    var hidPrepared: Boolean = true
+
+    override suspend fun hidLayout(): HidLayout.Verdict = hidVerdict
+
+    override suspend fun prepareHidGadget(gadget: HidLayout.Verdict.Creatable): HidLayout.Prepared {
+        record("hid-prepare", gadget.gadget)
+        return HidLayout.Prepared(hidPrepared, if (hidPrepared) HidUdc.READY_MARK else HidUdc.MISSING_MARK)
+    }
 
     override suspend fun msfProblem(root: String): String? = msfProblem
 
