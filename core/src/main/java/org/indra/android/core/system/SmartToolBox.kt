@@ -90,6 +90,13 @@ class SmartToolBox
             /** Chroot preparation: a handful of mkdir/grep/mount calls. */
             private const val CHROOT_SETUP_TIMEOUT_MS = 30_000L
 
+            /**
+             * A capabilities read, not a scan: `iw list` plus two small sysfs strings. Long enough
+             * for a cold chroot, short enough that a wedged driver cannot block a toggle.
+             */
+            private const val PROBE_TIMEOUT_MS = 15_000L
+
+
             private const val WORDLIST_PATH = "wordlists/common-passwords.txt"
 
             /** Tool label every [crackHandshake] emission carries. */
@@ -590,6 +597,18 @@ class SmartToolBox
             iface: String,
             monitor: Boolean,
         ): Flow<ToolResult> {
+            val inChrootEarly = capability(Capability.IW) == CapabilityState.Available
+            // Read the driver before touching it. This driver advertises monitor mode and refuses
+            // both switch paths with EOPNOTSUPP/ENOENT, so the old code took the interface down,
+            // was refused, and brought it back up — while on wlan0 the radio was briefly off the
+            // air. The refusal names the only route left instead.
+            if (inChrootEarly && monitor) {
+                val path = radioPath(iface)
+                if (path is RadioProfile.Path.Refused) return failure("monitor mode", path.reason)
+                if (path is RadioProfile.Path.VendorParameter) {
+                    return failure("monitor mode", RadioProfile.vendorWarning(path.path, path.value))
+                }
+            }
             val script = MonitorMode.script(iface, monitor)
             // `capability()`, not `chrootEngine.capability()`: the engine answers by stat-ing
             // files in the rootfs (`isAlpineInstalled` → `File.canExecute`), and this screen
@@ -606,6 +625,48 @@ class SmartToolBox
                 )
             }
             return shell(script, label = "monitor mode", timeoutMs = CHROOT_SETUP_TIMEOUT_MS)
+        }
+
+        /**
+         * What this device can actually do about monitor mode, decided from one probe.
+         *
+         * Returns the route the switch should take; the caller must treat
+         * [RadioProfile.Path.VendorParameter] as disruptive (`con_mode` rebinds the radio).
+         */
+        suspend fun radioPath(iface: String): RadioProfile.Path {
+            val probe = probeRadio(iface)
+            val path =
+                probe?.let { RadioProfile.choosePath(it.facts, iface, it.phy) }
+                    ?: RadioProfile.Path.Refused("Could not read the Wi-Fi driver's capabilities (iw list returned nothing).")
+            // One short line: the facts set can hold hundreds of entries, and the decision is what
+            // a future debugging session needs (`path`), not the driver's whole capability dump.
+            val vendor = probe?.facts?.vendorParameterPath
+            Logger.d("radio path for $iface: $path (monitor=${probe?.facts?.advertisesMonitor}, vendor=$vendor)")
+            return path
+        }
+
+        private suspend fun probeRadio(iface: String): RadioProfile.Probe? {
+            val inChroot = capability(Capability.IW) == CapabilityState.Available
+            if (inChroot) ensureChroot(requireDns = false)
+            // Only the `iw` calls go through the chroot; the sysfs read must not, or a rootfs with
+            // no /sys reports no vendor parameter and the driver looks better than it is.
+            val script =
+                if (inChroot) {
+                    RadioProfile.probeScript(
+                        iface = iface,
+                        iwListCommand = chrootEngine.wrapShell("iw list 2>&1"),
+                        iwDevCommand = chrootEngine.wrapShell("iw dev ${shellQuote(iface)} info 2>&1"),
+                    )
+                } else {
+                    RadioProfile.probeScript(iface)
+                }
+            val output = StringBuilder()
+            val flow = shell(script, label = "radio probe", timeoutMs = PROBE_TIMEOUT_MS)
+            flow.collect { result ->
+                result.streamedLine?.let { output.appendLine(it) }
+                result.rawOutput.takeIf { !result.isStreaming }?.let { output.appendLine(it) }
+            }
+            return output.toString().takeIf { it.contains("=INDRA-IW=") }?.let { RadioProfile.parseProbe(it) }
         }
 
         /**

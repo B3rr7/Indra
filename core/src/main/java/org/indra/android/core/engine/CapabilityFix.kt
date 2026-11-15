@@ -72,6 +72,9 @@ sealed interface CapabilityFix {
                         // Templates are fetched by the screen that scans (Vulnerability Scanner's
                         // refresh button), and Metasploit is its own bundle in Settings.
                         Capability.NUCLEI_TEMPLATES, Capability.MSF -> None(state.fix)
+                        // No install changes what a driver allows: the sentence names the route
+                        // (the vendor parameter) or the honest alternative (another adapter).
+                        Capability.MONITOR_RADIO -> None(state.fix)
                     }
             }
 

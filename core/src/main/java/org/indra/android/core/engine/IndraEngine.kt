@@ -42,6 +42,17 @@ enum class Capability(val label: String) {
 
     /** `iw`, for monitor mode — the one thing no shipped core has. */
     IW("iw (monitor mode)"),
+
+    /**
+     * Whether this device's Wi-Fi driver will actually enter monitor mode.
+     *
+     * Separate from [IW] because having `iw` installed says nothing about the driver: the moto
+     * g60's qcacld firmware advertises `monitor` and a `#{ monitor } <= 3` combination, refuses
+     * `set type monitor` (EOPNOTSUPP) and `interface add` (ENOENT), and takes monitor mode only
+     * through `/sys/module/wlan/parameters/con_mode`. A gate that answered "iw installed" would be
+     * a half-truth the Packet Capture screen then hits.
+     */
+    MONITOR_RADIO("monitor-capable Wi-Fi driver"),
     ;
 
     val tool: String
@@ -54,6 +65,7 @@ enum class Capability(val label: String) {
                 NUCLEI_TEMPLATES -> "nuclei"
                 MSF -> "msfconsole"
                 IW -> "iw"
+                MONITOR_RADIO -> "iw"
             }
 }
 

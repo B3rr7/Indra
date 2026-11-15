@@ -88,6 +88,9 @@ class ChrootEngine
                     // `iw` alone is not enough: the mode switch also sets the link up/down,
                     // and Alpine's minirootfs ships no `ip` (iproute2 is a separate package).
                     Capability.IW -> hasIw() && hasIp()
+                    // A driver property, not a file in the rootfs: the radio probe answers this
+                    // (`SmartToolBox.radioPath`). Asking the engine for it would be a guess.
+                    Capability.MONITOR_RADIO -> false
                 }
             return if (present) {
                 CapabilityState.Available
@@ -213,6 +216,10 @@ class ChrootEngine
                     "Monitor mode needs `iw` and `ip`, neither of which the ROM ships. Add both here " +
                         "(or in the Terminal with chroot on: `apk add iw iproute2`). Whether the driver then " +
                         "allows monitor mode is a separate question — some vendor drivers reboot the device."
+                Capability.MONITOR_RADIO ->
+                    "This Wi-Fi driver does not take monitor mode through `iw`. Some vendor drivers (qcacld) " +
+                        "expose their own mode parameter instead; others refuse it entirely and need a device " +
+                        "with a monitor-capable driver or a USB adapter."
                 Capability.HASHCAT ->
                     "hashcat cannot be installed in this Alpine chroot: on aarch64 it exists only in " +
                         "`edge/testing` (not in this 3.24 rootfs) and Alpine ships no OpenCL runtime, so it " +
