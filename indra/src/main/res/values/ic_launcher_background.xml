@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="ic_launcher_background">#0082B2</color>
+    <!-- The default palette's page colour, so the icon is the app's own dark page with the mark on
+         it rather than a bright plate that matches nothing inside the app. -->
+    <color name="ic_launcher_background">#12081B</color>
 </resources>
