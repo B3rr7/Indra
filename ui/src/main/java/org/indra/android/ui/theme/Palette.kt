@@ -151,10 +151,15 @@ fun Color.blend(other: Color, fraction: Float): Color =
 /**
  * The palette catalogue.
  *
- * Eight moods rather than eight random sets: each is one band of the Color Hunt popular page
- * (night, neon, forest, ice, solar, crimson, mint, rose), and every one is a *dark* set so the
- * contrast rules above hold. The swatches are the palette's own colours — the derivation decides
- * which role each plays, so a palette that reads well on Color Hunt reads well here.
+ * Four operator sets, not a wardrobe of moods: each is one hue identity a pentest console can
+ * live in — Ember (violet and signal orange, the default), Forest Terminal (green phosphor),
+ * Ice Station (navy with ice and steel accents) and Solar Gold (amber on deep blue). Every one
+ * is a *dark* set on a neutral base page, so tool output keeps its own meaning — severity
+ * colours and transcripts read true on any of them — and the contrast rules above hold. The
+ * swatches are the palette's own colours — the derivation decides which role each plays.
+ *
+ * A stored id that is no longer in the catalogue (older builds shipped more) falls back to
+ * [default] through [byId] — the one path every reader of the preference takes.
  */
 @Suppress("MagicNumber") // A catalogue is data: each literal is a swatch from the palette itself.
 object Palettes {
@@ -166,16 +171,6 @@ object Palettes {
             surface = Color(0xFF1C0F29),
             primary = Color(0xFFC77DFF),
             secondary = Color(0xFFFF8906),
-        )
-
-    val Neon =
-        Palette(
-            id = "neon",
-            name = "Neon Nights",
-            background = Color(0xFF0F0E17),
-            surface = Color(0xFF1B1926),
-            primary = Color(0xFF00E5FF),
-            secondary = Color(0xFFFF2A6D),
         )
 
     val Forest =
@@ -195,7 +190,7 @@ object Palettes {
             background = Color(0xFF03045E),
             surface = Color(0xFF071A6B),
             primary = Color(0xFF90E0EF),
-            secondary = Color(0xFFCAF0F8),
+            secondary = Color(0xFF4895EF),
         )
 
     val Solar =
@@ -208,38 +203,8 @@ object Palettes {
             secondary = Color(0xFF4CC9F0),
         )
 
-    val Crimson =
-        Palette(
-            id = "crimson",
-            name = "Crimson Ops",
-            background = Color(0xFF140F18),
-            surface = Color(0xFF221A28),
-            primary = Color(0xFFE56B6F),
-            secondary = Color(0xFFB56576),
-        )
-
-    val Mint =
-        Palette(
-            id = "mint",
-            name = "Mint Circuit",
-            background = Color(0xFF05121A),
-            surface = Color(0xFF0B1E2A),
-            primary = Color(0xFF66FCF1),
-            secondary = Color(0xFF45A29E),
-        )
-
-    val Rose =
-        Palette(
-            id = "rose",
-            name = "Rose Quartz",
-            background = Color(0xFF160B12),
-            surface = Color(0xFF241220),
-            primary = Color(0xFFFF8FAB),
-            secondary = Color(0xFFB392AC),
-        )
-
     /** Everything the picker offers, in picker order. */
-    val all: List<Palette> = listOf(Ember, Neon, Forest, Ice, Solar, Crimson, Mint, Rose)
+    val all: List<Palette> = listOf(Ember, Forest, Ice, Solar)
 
     /** The palette used when nothing has been chosen (and when a stored id is unknown). */
     val default: Palette = Ember

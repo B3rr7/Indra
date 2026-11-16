@@ -95,7 +95,7 @@ class PaletteTest {
     }
 
     @Test
-    fun `the catalogue is varied rather than eight shades of one hue`() {
+    fun `the catalogue is varied rather than shades of one hue`() {
         // The complaint that started the palette work was "cyan everywhere": a catalogue whose
         // primaries all hug one hue would recreate it.
         val hues = Palettes.all.map { it.primary.hueBucket() }
@@ -123,6 +123,8 @@ class PaletteTest {
 
         /** Muted body text is allowed WCAG's large-text ratio. */
         const val MUTED_READABLE = 3.0f
+
+        /** Four palettes, four hue bands: every palette owns its own 60° slice. */
         const val MIN_DISTINCT_HUES = 4
     }
 }
