@@ -72,3 +72,4 @@ graphify-out/
 # Markdown is working material, not source: it stays on disk and out of git
 # ---------------------------------------------------------------------------
 *.md
+!/README.md
