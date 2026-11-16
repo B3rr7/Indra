@@ -28,6 +28,7 @@ import org.indra.android.ui.screens.plugins.HandshakesScreen
 import org.indra.android.ui.screens.plugins.HidScreen
 import org.indra.android.ui.screens.plugins.InspectorScreen
 import org.indra.android.ui.screens.plugins.IptablesScreen
+import org.indra.android.ui.screens.plugins.LinkProbeScreen
 import org.indra.android.ui.screens.plugins.LoginCrackerScreen
 import org.indra.android.ui.screens.plugins.MacChangerScreen
 import org.indra.android.ui.screens.plugins.MasscanScreen
@@ -151,6 +152,7 @@ private fun EntryProviderScope<NavKey>.networkEntries(navigator: Navigator) {
     entry<Screen.PacketCapture> { PacketCaptureScreen(onNavigateBack = { navigator.goBack() }) }
     entry<Screen.PacketForger> { PacketForgerScreen(onNavigateBack = { navigator.goBack() }) }
     entry<Screen.Masscan> { MasscanScreen(onNavigateBack = { navigator.goBack() }) }
+    entry<Screen.LinkProbe> { LinkProbeScreen(onNavigateBack = { navigator.goBack() }) }
 }
 
 /** Man-in-the-middle and routing attacks. */
@@ -185,7 +187,7 @@ private fun EntryProviderScope<NavKey>.wirelessEntries(navigator: Navigator) {
     entry<Screen.GeoMac> { GeoMacScreen(onNavigateBack = { navigator.goBack() }) }
     entry<Screen.MacChanger> { MacChangerScreen(onNavigateBack = { navigator.goBack() }) }
     entry<Screen.WhisperPair> { WhisperPairScreen(onNavigateBack = { navigator.goBack() }) }
-        entry<Screen.WifiKeygen> { WifiKeygenScreen(onNavigateBack = { navigator.goBack() }) }
+    entry<Screen.WifiKeygen> { WifiKeygenScreen(onNavigateBack = { navigator.goBack() }) }
 }
 
 /** Credential tooling. */

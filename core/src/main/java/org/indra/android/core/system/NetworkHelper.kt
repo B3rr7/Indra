@@ -179,6 +179,23 @@ class NetworkHelper
         }
 
         /**
+         * Every default-route gateway on the active network, IPv4 and IPv6, in platform order.
+         *
+         * [getGatewayAddress] answers "the first default route", and on a dual-stack link that
+         * route is often the IPv6 one — whose gateway is link-local (`fe80::…`) and therefore
+         * not dialable from a bare address string. A caller that needs an address it can
+         * actually connect to wants this list and [LinkTarget.preferred]; a caller that needs
+         * "the" gateway of a specific interface wants [gatewayFor].
+         */
+        fun defaultGateways(): List<String> {
+            val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+            val linkProperties = cm?.activeNetwork?.let { cm.getLinkProperties(it) }
+            return linkProperties?.routes.orEmpty()
+                .filter { it.isDefaultRoute }
+                .mapNotNull { it.gateway?.hostAddress }
+        }
+
+        /**
          * The **IPv4** default gateway **on [iface]**, or null when the platform has no `Network`
          * there.
          *

@@ -230,13 +230,40 @@ capability card that used to print `HID function: true` on a phone with no `hidg
 Link-level interference is detectable by probing and classifying the *response pattern*, not by
 inspecting the network.
 
-### Our design (P4, after the above)
+### Our design (P3 — built)
 ```
-core/system/LinkProbe.kt
-  sealed class LinkVerdict — Clean / Throttled / Reset / DnsTampered(detail)
-  suspend fun probe(): LinkVerdict      — N small requests, classify by failure shape
+core/system/LinkProbe.kt         pure classifier: Outcome / Sample / DnsCheck / Verdict
+core/system/LinkProbeRunner.kt   N sequential TCP connects + one `.invalid` lookup, per-probe lines
+core/system/LinkTarget.kt        which gateway is dialable at all (IPv4 first, no link-local v6)
+features/.../LinkProbeScreen.kt  verdict card + the evidence console
 ```
-Runs through the existing `execute()` path so the console shows real lines. No new dependency.
+
+**Two deviations from the sketch above, both deliberate:**
+
+* It runs **in the app process**, not through `execute()`. A diagnostic whose job is to report that
+  this link interferes with traffic cannot ask a root daemon (on this very link) to do the
+  measuring — and the phone may have no root or no core at all. It follows `PortScan`/`DirBrute`:
+  pure classification, an injected `Dial`/`Resolver` seam, registered daemon-free in `Rootless` and
+  `PluginAvailability.daemonFreePlugins`.
+* The default target is not "the gateway". Android lists an IPv6 default route beside the IPv4 one
+  on a dual-stack link, and its gateway is **link-local** (`fe80::384c:2bff:fe3b:bea5`, seen on the
+  g60), which no socket can dial without a scope id — the first device run prefilled exactly that.
+  `LinkTarget.preferred` picks IPv4 first, then a non-link-local IPv6, else nothing.
+
+**The classification rules that keep it honest**
+
+| Rule | Why |
+|---|---|
+| A refusal (`ECONNREFUSED`) is a **response**, not interference | the RST proves the packet made the round trip; a closed port on a healthy LAN is the normal case |
+| Throttling needs a **ratio past an absolute floor** (4×, ≥150 ms) and ≥6 samples | 1 ms → 3 ms is "3×" on a LAN and means nothing; one 1027 ms power-save outlier among ~15 ms answers stays Clean (device-verified) |
+| Late timeouts only count after the link already answered **twice** | one lost packet is not a rate limiter |
+| The DNS test is a name that **cannot exist** (`.invalid`, RFC 2606) | no reference answer and no public resolver needed, so it works on a LAN with no internet |
+| Priority: DNS tampering → reset → throttling → unreachable → clean | names rewritten means every other observation is about the interceptor |
+
+Tests: `LinkProbeTest` (18), `LinkProbeRunnerTest` (4), `LinkTargetTest` (6). Device-verified on the
+moto g60: gateway on port 80 → 8 refused probes → **Clean**; the same gateway with
+`iptables -D … --dport 8081 -j DROP` and a probe of `127.0.0.1:8081` → 8 × ~2010 ms → **No answer**
+(rule deleted afterwards).
 
 ### Explicitly deferred
 HTTP injection / SSL stripping (zAnti's one unreplaced capability). It needs a generated CA, a
@@ -256,6 +283,7 @@ own design around `Socket`/`SSLContext`, not a port.
 | Trust | `versions.env` + gpgv keyrings | `SignedEnvelope` extended + hash pins |
 | Radio | 1,650-line USB explorer | one `Capability` + pure `Radio.of()` |
 | HID | 38-file fragment package | two data/probe objects |
+| Link probe | none (their DPI feature is injection, not diagnosis) | one classifier + one runner + one dialable-target rule |
 | Tests | 0 / 1 / 117 / 0 | every unit above is pure and lands with its own test |
 
 ---
@@ -269,7 +297,7 @@ own design around `Socket`/`SSLContext`, not a port.
 | P1 | `SourcePin` + hash-pin CI job + `ci.yml`/`build-apk.yml`/`update-bundles.yml` | `HashingStream`, `BundleInstaller`, `SignedEnvelope` |
 | P2 | `RadioProfile` + `Capability.MONITOR_RADIO` | `Capability`, `CapabilityFix` |
 | P2 | `HidLayout` + `HidUdc` | `HidReports`, `usb_arsenal` |
-| P3 | `LinkProbe` | `execute()` |
+| P3 | `LinkProbe` + `LinkTarget` | `PortScan`/`DirBrute` shape (in-process, injected seam) — **not** `execute()`, see §6 |
 | P4 | compileSdk/targetSdk 37 | Nav3 1.2 / AGP 9.1 when available |
 
 ---
@@ -322,7 +350,7 @@ Every assumption in this plan was re-verified against the tree on 2026-11-14.
 *Design record, 2026-11-14, re-checked the same day. No source from the compared projects is copied;
 file names and type shapes above are ours.*
 
-### Status (2026-11-15)
+### Status (2026-11-16)
 
 | Phase | State |
 |---|---|
@@ -331,5 +359,5 @@ file names and type shapes above are ours.*
 | P1 source pins | **done** — `pins/sources.json` (8 trees + 5 files), `SourcePinGateTest` fails the gate on drift; caught a probe edit on demand |
 | P2 radio profile | **done** — `RadioProfile` + `Capability.MONITOR_RADIO`; the switch refuses with Wi-Fi still up and names `con_mode` (13 tests, device-verified) |
 | P2 HID layout/UDC | **done** — `HidLayout`/`HidUdc`/`GadgetGate`; the screen's own Prepare button created `/dev/hidg0` and a host keyboard (19 tests, device-verified) |
-| P3 link probe | not started |
+| P3 link probe | **done** — `LinkProbe`/`LinkProbeRunner`/`LinkTarget` (28 tests); in-app by design; device-verified Clean, No answer, and the `fe80::` default-target defect it found |
 | P4 SDK 37 | blocked on AGP 9.1 / Nav3 1.2 |

@@ -94,6 +94,8 @@ sealed class Screen : NavKey {
     @Serializable data object OneTapMitm : Screen()
 
     @Serializable data object WifiKeygen : Screen()
+
+    @Serializable data object LinkProbe : Screen()
 }
 
 /**
@@ -142,6 +144,7 @@ private val pluginDestinations: Map<String, Screen> =
         "dns_spoofer" to Screen.DnsSpoofer,
         "one_tap_mitm" to Screen.OneTapMitm,
         "wifi_keygen" to Screen.WifiKeygen,
+        "link_probe" to Screen.LinkProbe,
     )
 
 /** Resolves a plugin id to its destination, or `null` for an unknown id (ignored). */

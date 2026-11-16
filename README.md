@@ -150,10 +150,10 @@ currently bundled in the native core; cards for missing tools are dimmed with
 
 ### Plugins
 
-37 plugins (`PluginManager`): Port Scanner, Inspector, Traceroute, MITM,
+38 plugins (`PluginManager`): Port Scanner, Inspector, Traceroute, MITM,
 Network Radar, Packet Capture, Exploit Finder, Login Cracker, Packet Forger,
-RouterPwn, WiFi Audit, Vuln Scanner, Web Tester, Credential Tester, and more.
-Each declares a `requires` tool; unavailable tools disable the card.
+RouterPwn, WiFi Audit, Vuln Scanner, Web Tester, Credential Tester, Link Probe,
+and more. Each declares a `requires` tool; unavailable tools disable the card.
 
 ---
 

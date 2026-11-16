@@ -286,6 +286,15 @@ class PluginManager
             )
             registerPlugin(
                 Plugin(
+                    id = "link_probe",
+                    name = "Link Probe",
+                    description = "Classify link interference: resets, throttling, DNS rewriting",
+                    targetTypes = setOf("network", "endpoint"),
+                    requires = "shell",
+                ),
+            )
+            registerPlugin(
+                Plugin(
                     id = "usb_arsenal",
                     name = "USB Arsenal",
                     description = "USB gadget profile manager",

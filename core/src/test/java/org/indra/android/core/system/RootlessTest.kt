@@ -19,6 +19,9 @@ class RootlessTest {
         // The Terminal runs `/system/bin/sh` as the app uid (LocalShell). The Alpine chroot
         // inside it stays root-only — that is a transport question, not a plugin one.
         assertTrue(Rootless.supports("terminal"))
+        // Link Probe is TCP connects plus one DNS lookup in the app process (LinkProbe). It must
+        // run on the link it diagnoses, so a daemon this link could be blocking is not consulted.
+        assertTrue(Rootless.supports("link_probe"))
     }
 
     @Test
@@ -55,6 +58,7 @@ class RootlessTest {
                 "wifi_keygen",
                 "gobuster",
                 "terminal",
+                "link_probe",
             ),
             Rootless.SUPPORTED_PLUGINS,
         )

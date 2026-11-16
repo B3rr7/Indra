@@ -109,6 +109,7 @@ fun accentFor(id: String?): Accent {
             "handshakes" -> Color(0xFF00B8D4) // aqua
             "whisperpair" -> Color(0xFF3D5AFE) // bluetooth blue
             "wifi_keygen" -> Color(0xFF76FF03) // signal green
+            "link_probe" -> Color(0xFFF50057) // interference pink
             // Web / service enumeration
             "vuln_scanner" -> Color(0xFFC6FF00) // lime
             "web_tester" -> Color(0xFF18FFFF) // bright aqua

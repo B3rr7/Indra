@@ -94,7 +94,7 @@ class PluginAvailability
          * arithmetic over a BSSID, so gating it on a running `indrad` would dim a card that
          * works perfectly on a phone with no root, no core and no daemon.
          */
-        private val daemonFreePlugins: Set<String> = setOf("wifi_keygen")
+        private val daemonFreePlugins: Set<String> = setOf("wifi_keygen", "link_probe")
 
         /**
          * Rooted path: the card needs a live daemon, a handler it can see and any artifact.

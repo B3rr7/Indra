@@ -32,6 +32,9 @@ object Rootless {
      * - `terminal` — `/system/bin/sh` as the app's own uid ([LocalShell]). It runs no bundled
      *   binary and needs no privilege; the Alpine chroot inside it stays root-only, because
      *   `chroot(2)` and `mount(2)` need `CAP_SYS_ADMIN` ([TerminalTransport]).
+     * - `link_probe` — TCP connects and one DNS lookup in the app process ([LinkProbe]). A
+     *   diagnostic has to run on the network it is diagnosing, so it cannot wait for a daemon
+     *   that this network may be blocking.
      */
     val SUPPORTED_PLUGINS: Set<String> =
         setOf(
@@ -42,6 +45,7 @@ object Rootless {
             "wifi_keygen",
             "gobuster",
             "terminal",
+            "link_probe",
         )
 
     /** Whether [pluginId] has a working rootless implementation. */
