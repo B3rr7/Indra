@@ -33,6 +33,33 @@ msfrpcd, the terminal, and the Settings/Core/OTA surfaces. Several features rema
 optional artifacts** (nuclei templates, the Metasploit chroot, Bettercap, ExploitDB), and a few are
 honestly marked as partial in [Known limitations](#known-limitations).
 
+> ### ⚠️ Expect some features not to work on your device
+>
+> **This is not a finished, uniform product: a real share of the feature list depends on your
+> device, ROM, kernel, driver and what you have installed.** That is normal for an Android pentest
+> suite — a stock AOSP phone, a vendor ROM and a NetHunter kernel behave differently — and Indra
+> reports the refusal instead of faking a result. When something fails you will see the tool's own
+> message or a fix card naming what is missing.
+>
+> What commonly does not work:
+>
+> | Symptom | Cause |
+> |---|---|
+> | "Alpine is not installed", `apk add …` cards | The chroot rootfs is an optional install (`iw`, `iproute2`, `hashcat`, `hcxtools` live in it) |
+> | Monitor-mode failures (`Not supported (-95)`, `No such device`) | The Wi-Fi driver refuses `iw … set type monitor` — hostapd/vendor aerial drivers often do, even when `iw list` advertises the mode |
+> | SYN scan / capture / ARP spoof "permission denied" | Magisk can strip `CAP_NET_RAW`/`CAP_NET_ADMIN` at uid 0; check the manager's settings |
+> | Nothing found by masscan on a hotspot | The AP does not forward client↔client frames, so frames reach one MAC and nothing answers |
+> | Nuclei, Metasploit, Bettercap, ExploitDB unavailable | Each is a separate download installed from its own screen; nothing large ships in the APK |
+> | HID, DuckyScript, USB Arsenal refuse | The device needs `configfs`, a HID function and a bound UDC; most phones expose none of that |
+> | WhisperPair, WiFi Scanner, Geolocation-ish tools silent | Radio off, permission not granted, or the ROM's `cmd wifi` behaving differently |
+> | A tool runs but produces nothing | Genuinely nothing to see (honest empty state) **or** the target filtered it — the console shows which |
+> | arpspoof/MITM reboots the phone | Vendor Wi-Fi drivers can crash on raw 802.11 writes; this is a driver defect, not something the app can fix |
+>
+> Rootless mode is a **subset of 8 plugins** ([below](#rootless-mode)); everything else needs root
+> and the daemon, and says `NEEDS_ROOT` rather than pretending. Treat this project as a working
+> toolkit under active development, not as a guarantee that every screen does what its name says on
+> every phone.
+
 ## What it is
 
 - **38 plugins**, each gated on the tool it needs, so a card never offers work the device cannot do.
