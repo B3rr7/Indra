@@ -67,3 +67,8 @@ hs_err_pid*
 # Generated knowledge graph output (rebuild with `graphify update .`)
 # ---------------------------------------------------------------------------
 graphify-out/
+
+# ---------------------------------------------------------------------------
+# Markdown is working material, not source: it stays on disk and out of git
+# ---------------------------------------------------------------------------
+*.md
