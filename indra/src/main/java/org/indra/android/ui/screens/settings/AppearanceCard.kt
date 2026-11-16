@@ -14,8 +14,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -26,6 +28,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import org.indra.android.ui.theme.Flat
 import org.indra.android.ui.theme.Palette
@@ -55,28 +58,79 @@ internal fun PaletteCard(
         elevation = CardDefaults.cardElevation(defaultElevation = Flat.elevation),
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
+            PaletteHeader(selectedId)
+            CardDivider()
             Palettes.all.forEachIndexed { index, palette ->
                 PaletteRow(
                     palette = palette,
                     // An empty preference means "the default palette", and the row must show that.
-                    selected =
-                        palette.id == selectedId ||
-                            (selectedId.isBlank() && palette.id == Palettes.default.id),
+                    selected = palette.id == Palettes.byId(selectedId).id,
                     onClick = { onSelect(palette.id) },
                 )
                 if (index != Palettes.all.lastIndex) {
-                    Box(
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = ROW_PADDING_H)
-                                .height(Flat.hairline)
-                                .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = DIVIDER_ALPHA)),
-                    )
+                    CardDivider()
                 }
             }
         }
     }
+}
+
+/**
+ * Card header: the picker now sits beside the background picker in one Appearance section, so it
+ * names itself and states what is currently chosen. Without it the section read as a list of eight
+ * unlabelled rows of colours next to an unrelated "App background" card.
+ */
+@Composable
+private fun PaletteHeader(selectedId: String) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = ROW_PADDING_H, vertical = ROW_PADDING_V),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(SettingsPalette.Appearance.copy(alpha = 0.18f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Icons.Default.Palette,
+                contentDescription = null,
+                modifier = Modifier.size(21.dp),
+                tint = SettingsPalette.Appearance,
+            )
+        }
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                text = "Colour palette",
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
+            )
+            Text(
+                text = Palettes.byId(selectedId).name,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+/** Hairline between rows, and under the header: one rule everywhere in the card. */
+@Composable
+private fun CardDivider() {
+    Box(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = ROW_PADDING_H)
+                .height(Flat.hairline)
+                .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = DIVIDER_ALPHA)),
+    )
 }
 
 @Composable

@@ -103,9 +103,13 @@ fun SettingsScreen(
             item { StatusHeroCard(uiState) }
 
             // ── Appearance ───────────────────────────────────────────────
+            // Everything that changes how Indra looks, in one place. The palette and the app
+            // background used to be two sections with the same title, which split one question —
+            // "what does Indra look like?" — across two scroll positions.
             item {
                 SettingsSection(
                     title = "Appearance",
+                    subtitle = "Colour palette and app background",
                     icon = Icons.Default.Palette,
                     accent = SettingsPalette.Appearance,
                 )
@@ -114,6 +118,7 @@ fun SettingsScreen(
                 val palette by viewModel.themePaletteId.collectAsStateWithLifecycle()
                 PaletteCard(selectedId = palette, onSelect = viewModel::selectPalette)
             }
+            item { WallpaperCard(uiState, viewModel) }
 
             // ── Network Configuration ────────────────────────────────────
             item {
@@ -190,16 +195,6 @@ fun SettingsScreen(
                     )
                 }
             }
-
-            // ── Appearance ───────────────────────────────────────────────
-            item {
-                SettingsSection(
-                    title = "Appearance",
-                    icon = Icons.Default.Wallpaper,
-                    accent = SettingsPalette.Wallpaper,
-                )
-            }
-            item { WallpaperCard(uiState, viewModel) }
 
             // ── Root Access ──────────────────────────────────────────────
             item {
@@ -474,6 +469,7 @@ private fun SettingsSection(
     title: String,
     icon: ImageVector,
     accent: Color,
+    subtitle: String? = null,
     modifier: Modifier = Modifier,
 ) {
     Row(
@@ -499,12 +495,21 @@ private fun SettingsSection(
                 modifier = Modifier.size(18.dp),
             )
         }
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = MaterialTheme.typography.titleSmall.letterSpacing,
-        )
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = MaterialTheme.typography.titleSmall.letterSpacing,
+            )
+            if (subtitle != null) {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
     }
 }
 
