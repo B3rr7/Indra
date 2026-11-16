@@ -12,6 +12,7 @@ import androidx.compose.foundation.border
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.SolidColor
 import org.indra.android.ui.components.entryStagger
+import org.indra.android.ui.components.BrandGlyph
 import org.indra.android.ui.components.GlowBox
 import org.indra.android.ui.components.GlowSpill
 import org.indra.android.ui.components.pressScale
@@ -115,12 +116,7 @@ fun HomeScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Security,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(28.dp),
-                        )
+                        BrandGlyph(modifier = Modifier.height(28.dp))
                         Text(
                             text = "INDRA",
                             style = MaterialTheme.typography.titleLarge,

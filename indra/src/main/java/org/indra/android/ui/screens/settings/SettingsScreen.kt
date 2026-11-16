@@ -27,6 +27,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.indra.android.BuildConfig
 import org.indra.android.core.system.NativeCoreState
+import org.indra.android.ui.components.BrandMark
 import org.indra.android.ui.theme.Flat
 import org.indra.android.ui.theme.chromeFill
 import org.indra.android.ui.theme.flatEdge
@@ -335,12 +336,7 @@ fun SettingsScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Security,
-                        contentDescription = null,
-                        modifier = Modifier.size(40.dp),
-                        tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f),
-                    )
+                    BrandMark(modifier = Modifier.height(56.dp))
                     Text(
                         text = "Indra",
                         style = MaterialTheme.typography.titleMedium,
