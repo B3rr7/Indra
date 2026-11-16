@@ -431,6 +431,7 @@ private fun heroHeadline(state: NativeCoreState): String =
         NativeCoreState.Rootless -> "Rootless mode"
     }
 
+@Composable
 private fun heroAccent(state: NativeCoreState): Color =
     when (state) {
         NativeCoreState.NotInstalled -> SettingsPalette.Stopped

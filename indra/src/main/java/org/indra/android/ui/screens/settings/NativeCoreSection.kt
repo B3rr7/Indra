@@ -202,6 +202,7 @@ private fun LiveBadge() {
 }
 
 /** The accent of the step the button would take: teal to install, green to start, red to stop. */
+@Composable
 private fun NativeCoreState.accent(): Color =
     when (this) {
         NativeCoreState.NotInstalled -> SettingsPalette.Core
@@ -220,6 +221,7 @@ private fun NativeCoreState.subtitle(version: String): String =
     }
 
 /** Traffic-light pill: needs attention, idle but healthy, alive. */
+@Composable
 private fun NativeCoreState.pillColor(): Color =
     when (this) {
         NativeCoreState.NotInstalled -> SettingsPalette.Stopped

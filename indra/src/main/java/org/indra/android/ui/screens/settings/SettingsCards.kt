@@ -2,7 +2,8 @@
 // and the self-contained cards (native core, tools status, OTA, OTA test host)
 // so the main file stays about screen structure, not card internals.
 //
-// The palette is a table of accent colours, so every literal below is a hue by design.
+// The palette below is a set of *resolvers* into the active theme palette, so every settings row
+// follows the colour-palette picker instead of carrying a hue of its own.
 @file:Suppress("MagicNumber")
 
 package org.indra.android.ui.screens.settings
@@ -26,25 +27,33 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import org.indra.android.ui.theme.LocalSettingsAccents
 
 internal object SettingsPalette {
-    val Network = Color(0xFF448AFF) // blue
-    val Ports = Color(0xFF00E5FF) // cyan
-    val HttpServer = Color(0xFF536DFE) // indigo
-    val Https = Color(0xFF7C4DFF) // violet
-    val MsfRpc = Color(0xFFE040FB) // magenta
-    val General = Color(0xFFFFC107) // amber
-    val WakeLock = Color(0xFFFF9800) // orange
-    val DebugLog = Color(0xFFC6FF00) // lime
-    val Core = Color(0xFF1DE9B6) // teal
-    val Ota = Color(0xFF69F0AE) // mint — native binary hot-swap
-    val AppUpdate = Color(0xFFB388FF) // lavender — APK update, deliberately not another blue
-    val About = Color(0xFFFF4081) // pink
-    val License = Color(0xFFFFD600) // yellow
-    val Running = Color(0xFF00E676) // green
-    val Stopped = Color(0xFFFF5252) // red
-    val Wallpaper = Color(0xFF40C4FF) // sky — the app's own background image
-    val Appearance = Color(0xFFFF8FAB) // rose — the colour-palette picker
+    // Resolved from the active palette rather than listed here: this object used to be a second
+    // table of seventeen hues, which is why switching palettes recoloured every other screen and
+    // left Settings untouched. LocalSettingsAccents is provided by IndraTheme, so the getters cost
+    // one local read and the call sites below stay unchanged.
+    val Appearance: Color @Composable @ReadOnlyComposable get() = LocalSettingsAccents.current.appearance
+    val Network: Color @Composable @ReadOnlyComposable get() = LocalSettingsAccents.current.network
+    val Ports: Color @Composable @ReadOnlyComposable get() = LocalSettingsAccents.current.ports
+    val HttpServer: Color @Composable @ReadOnlyComposable get() = LocalSettingsAccents.current.httpServer
+    val Https: Color @Composable @ReadOnlyComposable get() = LocalSettingsAccents.current.https
+    val MsfRpc: Color @Composable @ReadOnlyComposable get() = LocalSettingsAccents.current.msfRpc
+    val General: Color @Composable @ReadOnlyComposable get() = LocalSettingsAccents.current.general
+    val DebugLog: Color @Composable @ReadOnlyComposable get() = LocalSettingsAccents.current.debugLog
+    val Wallpaper: Color @Composable @ReadOnlyComposable get() = LocalSettingsAccents.current.wallpaper
+    val Core: Color @Composable @ReadOnlyComposable get() = LocalSettingsAccents.current.core
+    val Ota: Color @Composable @ReadOnlyComposable get() = LocalSettingsAccents.current.ota
+    val AppUpdate: Color @Composable @ReadOnlyComposable get() = LocalSettingsAccents.current.appUpdate
+    val About: Color @Composable @ReadOnlyComposable get() = LocalSettingsAccents.current.about
+    val License: Color @Composable @ReadOnlyComposable get() = LocalSettingsAccents.current.license
+
+    // The three that are also used as state colours. They are deliberately fixed: green means alive
+    // and amber means "needs a look" in every palette, so a red palette cannot paint Running red.
+    val Running: Color @Composable @ReadOnlyComposable get() = LocalSettingsAccents.current.running
+    val Stopped: Color @Composable @ReadOnlyComposable get() = LocalSettingsAccents.current.stopped
+    val WakeLock: Color @Composable @ReadOnlyComposable get() = LocalSettingsAccents.current.attention
 }
 
 @Composable

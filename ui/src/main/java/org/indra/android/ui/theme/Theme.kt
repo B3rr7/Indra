@@ -32,7 +32,13 @@ fun IndraTheme(
 ) {
     val scheme = palette.scheme()
     val animated = scheme.animated(animate = true)
-    CompositionLocalProvider(LocalPalette provides palette) {
+    // Anchored on the animated primary, not on `palette.primary`: Settings' accents derive from this
+    // colour, so they cross-fade with the rest of the theme instead of snapping 420 ms early.
+    val accents = settingsAccentsFor(animated.primary)
+    CompositionLocalProvider(
+        LocalPalette provides palette,
+        LocalSettingsAccents provides accents,
+    ) {
         MaterialTheme(
             colorScheme = animated,
             typography = IndraTypography,
