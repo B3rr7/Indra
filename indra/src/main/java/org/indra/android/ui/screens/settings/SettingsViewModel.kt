@@ -367,7 +367,7 @@ class SettingsViewModel
                             alpineExtraPackages =
                                 EnginePackages.installedByApp(ChrootPackages.names(alpinePackages)),
                             debugErrorLogging = settings.debugErrorLogging,
-                            wallpaper = wallpaperStore.state(),
+                            wallpaper = wallpaperStore.snapshot(),
                             crashLogCount = crashReporter.getCrashFiles().size,
                             debugLogSizeBytes = crashReporter.getLogFile()?.length() ?: 0,
                             allFilesAccess = IndraWorkspace.hasAllFilesAccess(),
@@ -643,9 +643,28 @@ class SettingsViewModel
             }
         }
 
+        /**
+         * Clears the message under the wallpaper card.
+         *
+         * That message reports the **last pick attempt**. Re-entering Settings after walking away
+         * from it leaves a red line about something the user is no longer doing, and there is no
+         * button that would dismiss it. The card calls this when it enters composition; returning
+         * from the system picker does not recompose it from scratch, so a failure that just
+         * happened is not swallowed by this.
+         */
+        fun dismissWallpaperError() {
+            if (_uiState.value.wallpaperError == null) return
+            _uiState.value = _uiState.value.copy(wallpaperError = null)
+        }
+
         /** Changes the scrim weight without touching the stored image. */
         fun setWallpaperDim(dim: WallpaperDim) {
-            _uiState.value = _uiState.value.copy(wallpaper = wallpaperStore.setDim(dim))
+            // The store reads prefs and stats a file to build the new state, so it runs on IO; a
+            // dim change is a re-read, not a value this screen can compute from what it has.
+            viewModelScope.launch {
+                val state = wallpaperStore.setDim(dim)
+                _uiState.value = _uiState.value.copy(wallpaper = state)
+            }
         }
 
         fun checkAppUpdate() {

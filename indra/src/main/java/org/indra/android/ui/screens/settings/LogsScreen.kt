@@ -20,6 +20,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -44,6 +45,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.indra.android.core.system.CrashReporter
 import org.indra.android.core.system.Logger
+import org.indra.android.ui.theme.chromeFill
+import org.indra.android.ui.theme.pageFill
 import java.io.File
 import javax.inject.Inject
 
@@ -117,6 +120,7 @@ fun LogsScreen(
     LaunchedEffect(Unit) { viewModel.refresh() }
 
     Scaffold(
+        containerColor = pageFill(),
         topBar = {
             TopAppBar(
                 title = { Text("Log") },
@@ -128,6 +132,10 @@ fun LogsScreen(
                 actions = {
                     TextButton(onClick = viewModel::refresh) { Text("Refresh") }
                 },
+                colors =
+                    TopAppBarDefaults.topAppBarColors(
+                        containerColor = chromeFill(),
+                    ),
             )
         },
     ) { padding ->

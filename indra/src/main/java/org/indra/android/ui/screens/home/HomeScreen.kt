@@ -48,6 +48,7 @@ import org.indra.android.ui.theme.Flat
 import org.indra.android.ui.theme.StatusRed
 import org.indra.android.ui.theme.flatEdge
 import org.indra.android.ui.theme.flatSurfaceColor
+import org.indra.android.ui.theme.pageFill
 
 /** How visible the section rule is: a separator, not a border. */
 private const val CARD_EDGE_ALPHA = 0.16f
@@ -106,6 +107,7 @@ fun HomeScreen(
     LaunchedEffect(Unit) { viewModel.refresh() }
 
     Scaffold(
+        containerColor = pageFill(),
         topBar = {
             TopAppBar(
                 title = {
@@ -152,7 +154,7 @@ fun HomeScreen(
                         Brush.verticalGradient(
                             listOf(
                                 MaterialTheme.colorScheme.primaryContainer.copy(alpha = PAGE_GLOW_ALPHA),
-                                MaterialTheme.colorScheme.background,
+                                pageFill(),
                             ),
                         ),
                     )

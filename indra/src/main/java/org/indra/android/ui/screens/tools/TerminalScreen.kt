@@ -33,6 +33,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -60,6 +61,8 @@ import org.indra.android.ui.screens.terminal.TerminalConsole
 import org.indra.android.ui.screens.terminal.TerminalConsoleState
 import org.indra.android.ui.screens.terminal.TerminalPalette
 import org.indra.android.ui.screens.terminal.TerminalTabStrip
+import org.indra.android.ui.theme.chromeFill
+import org.indra.android.ui.theme.pageFill
 
 /** Height of the zoom rocker; two halves of 22dp still reach the 44dp the bar has room for. */
 private const val ROCKER_HEIGHT = 44
@@ -118,6 +121,7 @@ fun TerminalScreen(
     LaunchedEffect(Unit) { sessions.refresh() }
 
     Scaffold(
+        containerColor = pageFill(),
         topBar = {
             TerminalTopBar(
                 state = state,
@@ -239,6 +243,10 @@ private fun TerminalTopBar(
                 expanded = menuOpen,
             )
         },
+        colors =
+            TopAppBarDefaults.topAppBarColors(
+                containerColor = chromeFill(),
+            ),
     )
 }
 

@@ -24,6 +24,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -59,6 +60,12 @@ internal fun WallpaperCard(
             // Null means the user backed out of the picker, which is not an error.
             if (uri != null) viewModel.setWallpaper(uri)
         }
+
+    // A message about the last pick attempt should not outlive the visit it belongs to. This is
+    // keyed on nothing, so it runs once when the card first composes (navigating into Settings),
+    // and not when the system picker returns over the same composition — a failure that just
+    // happened stays on screen.
+    LaunchedEffect(Unit) { viewModel.dismissWallpaperError() }
 
     Card(
         modifier =

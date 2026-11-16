@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -19,6 +20,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.indra.android.core.system.wallpaper.WallpaperDim
 import org.indra.android.core.system.wallpaper.WallpaperState
+import org.indra.android.ui.theme.LocalWallpaperActive
 
 /**
  * Paints the user's app background behind [content].
@@ -67,7 +69,12 @@ fun WallpaperBackground(
                 )
             }
         }
-        content()
+        // `bitmap != null` rather than `state.active`: a path whose file could not be decoded leaves
+        // the plain background on screen, so the app must keep painting opaque surfaces in that
+        // case instead of becoming see-through into a window with nothing behind it.
+        CompositionLocalProvider(LocalWallpaperActive provides (bitmap != null)) {
+            content()
+        }
     }
 }
 

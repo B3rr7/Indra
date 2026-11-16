@@ -39,6 +39,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import org.indra.android.ui.theme.chromeFill
 import androidx.compose.ui.unit.sp
 import androidx.navigation3.runtime.NavKey
 import org.indra.android.ui.theme.StatusGreen
@@ -94,7 +95,7 @@ fun BottomNavBar(
     LaunchedEffect(matchedIndex) { if (matchedIndex >= 0) lastIndex = matchedIndex }
     val selectedIndex = if (matchedIndex >= 0) matchedIndex else lastIndex
 
-    Column(modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface)) {
+    Column(modifier = Modifier.fillMaxWidth().background(chromeFill())) {
         // A hairline instead of a shadow: the flat separation other Indra surfaces use.
         HorizontalDivider(
             color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = DIVIDER_ALPHA),

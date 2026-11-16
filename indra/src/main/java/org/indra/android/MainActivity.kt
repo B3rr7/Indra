@@ -39,7 +39,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.indra.android.core.system.CoreManager
@@ -50,7 +49,6 @@ import org.indra.android.core.system.RootManager
 import org.indra.android.core.system.RuntimePermissions
 import org.indra.android.core.system.SettingsRepository
 import org.indra.android.core.system.terminal.TerminalSessions
-import org.indra.android.core.system.wallpaper.WallpaperState
 import org.indra.android.core.system.wallpaper.WallpaperStore
 import org.indra.android.terminal.TerminalBubbleHost
 import org.indra.android.ui.components.WallpaperBackground
@@ -62,6 +60,7 @@ import org.indra.android.ui.navigation.rememberNavigationState
 import org.indra.android.ui.screens.settings.openAllFilesAccessSettings
 import org.indra.android.ui.theme.IndraTheme
 import org.indra.android.ui.theme.Palettes
+import org.indra.android.ui.theme.pageFill
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -88,14 +87,13 @@ class MainActivity : ComponentActivity() {
     lateinit var wallpaperStore: WallpaperStore
 
     /**
-     * The current app background, as Compose state.
+     * The app background is owned by [WallpaperStore] and collected in `setContent`.
      *
-     * Refreshed in [onResume] rather than only at startup: the picker is a separate activity, so
-     * the user returns through `onResume` and the new image has to be picked up there. Reading it
-     * once in `setContent` would leave the old background on screen until the app was restarted.
+     * It used to live here and be re-read in [onResume] — which runs *before* the photo picker
+     * delivers its result, so picking an image appeared to do nothing until the app had been
+     * backgrounded and resumed. The store publishes on every write instead, and this class only
+     * re-reads it on resume to catch a file the system deleted behind our back.
      */
-    private val wallpaperState = MutableStateFlow(WallpaperState())
-
     // What the launch-time permission pass wants the UI to show. A data class (not three
     // separate states) so the dialog, the snackbar and the retry all read one consistent
     // snapshot instead of disagreeing mid-recomposition.
@@ -178,7 +176,7 @@ class MainActivity : ComponentActivity() {
                 // than in a ViewModel because it has to survive navigation: the background is the
                 // window's, not a screen's, and re-reading it per screen would flash the plain
                 // colour on every tab switch.
-                val wallpaper by wallpaperState.collectAsStateWithLifecycle()
+                val wallpaper by wallpaperStore.state.collectAsStateWithLifecycle()
                 WallpaperBackground(state = wallpaper) {
                     MainScaffold(
                         permissionPrompt = permissionPrompt,
@@ -251,10 +249,16 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /** Reads the stored background off the main thread and publishes it to Compose. */
+    /**
+     * Re-reads the stored background off the main thread and publishes it.
+     *
+     * The store publishes on every write, so this is not how a pick reaches the screen; it is the
+     * resume-time re-check, so a file the system deleted under storage pressure stops being
+     * reported as the background.
+     */
     private fun refreshWallpaper() {
         lifecycleScope.launch(Dispatchers.IO) {
-            wallpaperState.value = wallpaperStore.state()
+            wallpaperStore.snapshot()
         }
     }
 
@@ -391,6 +395,10 @@ fun MainScaffold(
     }
 
     Scaffold(
+        // Transparent, not the default background: the wallpaper is painted *outside* this
+        // scaffold (it belongs to the window, not to a destination), and an opaque page fill here
+        // covered it completely — the image was decoded, drawn and invisible on every screen.
+        containerColor = pageFill(),
         bottomBar = { BottomNavBar(navigationState, navigator::navigateToTab) },
         snackbarHost = { SnackbarHost(snackbarHostState) },
         // Every destination draws its own TopAppBar, and a TopAppBar already pads itself for

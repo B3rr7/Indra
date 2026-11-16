@@ -16,6 +16,8 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.indra.android.ui.screens.home.ModernToolCard
 import org.indra.android.ui.screens.home.PluginInfo
+import org.indra.android.ui.theme.chromeFill
+import org.indra.android.ui.theme.pageFill
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -30,6 +32,7 @@ fun ToolsScreen(
     LaunchedEffect(Unit) { viewModel.refresh() }
 
     Scaffold(
+        containerColor = pageFill(),
         topBar = {
             TopAppBar(
                 title = {
@@ -39,6 +42,10 @@ fun ToolsScreen(
                         fontWeight = FontWeight.Bold,
                     )
                 },
+                colors =
+                    TopAppBarDefaults.topAppBarColors(
+                        containerColor = chromeFill(),
+                    ),
             )
         },
     ) { paddingValues ->

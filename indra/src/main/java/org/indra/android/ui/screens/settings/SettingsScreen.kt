@@ -28,8 +28,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.indra.android.BuildConfig
 import org.indra.android.core.system.NativeCoreState
 import org.indra.android.ui.theme.Flat
+import org.indra.android.ui.theme.chromeFill
 import org.indra.android.ui.theme.flatEdge
 import org.indra.android.ui.theme.flatSurfaceColor
+import org.indra.android.ui.theme.pageFill
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -67,6 +69,7 @@ fun SettingsScreen(
     }
 
     Scaffold(
+        containerColor = pageFill(),
         topBar = {
             TopAppBar(
                 title = {
@@ -83,7 +86,7 @@ fun SettingsScreen(
                 },
                 colors =
                     TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface,
+                        containerColor = chromeFill(),
                     ),
             )
         },

@@ -6,6 +6,9 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 import org.indra.android.core.system.Logger
 import org.indra.android.core.system.SettingsRepository
@@ -55,14 +58,35 @@ class WallpaperStore
 
         private val file: File get() = File(context.filesDir, FILE_NAME)
 
-        /** The current wallpaper, as the UI should draw it. */
-        fun state(): WallpaperState {
+        /**
+         * The current background, as Compose state.
+         *
+         * The store owns this rather than the activity that paints it, because the picker, the
+         * Remove button and the dim chips are three different writers, and none of them is the
+         * window: the activity used to read the background in `onResume`, which runs *before* the
+         * photo picker hands its result back — so a pick appeared to do nothing until the app was
+         * backgrounded and resumed. Every write here publishes, and the window just collects.
+         *
+         * It starts at "no background": reading the real one is a preference read plus a file
+         * stat, and neither belongs on Main. `snapshot()` corrects it on an IO thread.
+         */
+        private val _state = MutableStateFlow(WallpaperState())
+        val state: StateFlow<WallpaperState> = _state.asStateFlow()
+
+        /**
+         * Reads the current wallpaper off disk and publishes it to [state].
+         *
+         * IO by contract: callers run this on `Dispatchers.IO`. Every write path returns through
+         * here, so there is exactly one place that decides what the UI should draw.
+         */
+        fun snapshot(): WallpaperState {
             val dim = WallpaperDim.fromStored(settings.wallpaperDim)
             // A path is only reported when the file is really there: the system can clear
             // app-private files under storage pressure, and a stale path would make the UI try to
             // decode a file that is gone.
             val present = file.exists() && file.length() > 0
             return WallpaperState(path = file.absolutePath.takeIf { present }, dim = dim)
+                .also { _state.value = it }
         }
 
         /**
@@ -75,63 +99,90 @@ class WallpaperStore
         suspend fun set(uri: Uri): Result<WallpaperState> =
             withContext(Dispatchers.IO) {
                 runCatching {
-                    val header = readHeader(uri)
-                    if (!WallpaperFormat.looksLikeImage(header)) {
-                        error("That file is not an image Indra can use. Pick a JPEG, PNG, WEBP or HEIF photo.")
-                    }
-                    // Decode bounds first, so a huge photo is downscaled before it is allocated.
-                    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                    context.contentResolver.openInputStream(uri)?.use {
-                        BitmapFactory.decodeStream(it, null, bounds)
-                    } ?: error("Could not open that file.")
-                    if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
-                        error("That image could not be read — it may be corrupt.")
-                    }
-
-                    val options =
-                        BitmapFactory.Options().apply {
-                            inSampleSize = sampleSizeFor(bounds.outWidth, bounds.outHeight)
-                        }
-                    val bitmap =
-                        context.contentResolver.openInputStream(uri)?.use {
-                            BitmapFactory.decodeStream(it, null, options)
-                        } ?: error("Could not decode that image.")
-
-                    // Write to a temp file and rename, so a failure halfway through cannot leave a
-                    // half-written image where the UI expects a valid one.
-                    val tmp = File(context.filesDir, "$FILE_NAME.tmp")
+                    // The picked stream is opened **once** and copied to a local file; everything
+                    // after that reads the file.
+                    //
+                    // This is not tidiness. A picker grant is not guaranteed to survive a second
+                    // `openInputStream` — the media provider can hand out a single descriptor and
+                    // refuse the next — and this used to open the stream three times (header,
+                    // bounds, decode). The result was a pick that had arrived perfectly well
+                    // failing on the second open with "Could not open that file.", an error about
+                    // the provider that read as an error about the image. One open cannot have
+                    // that failure mode, and decoding a local file is faster than a second trip
+                    // through the content resolver anyway.
+                    val source = File(context.filesDir, "$FILE_NAME.source")
                     try {
-                        tmp.outputStream().use { out ->
-                            if (!bitmap.compress(Bitmap.CompressFormat.JPEG, QUALITY, out)) {
-                                error("Could not save that image.")
-                            }
+                        val input =
+                            context.contentResolver.openInputStream(uri)
+                                ?: error(
+                                    "Could not open that file. It may have been moved or deleted " +
+                                        "since it was picked.",
+                                )
+                        input.use { stream -> source.outputStream().use { out -> stream.copyTo(out) } }
+
+                        val header = readHeader(source)
+                        if (!WallpaperFormat.looksLikeImage(header)) {
+                            error("That file is not an image Indra can use. Pick a JPEG, PNG, WEBP or HEIF photo.")
                         }
-                        if (!tmp.renameTo(file)) {
-                            // renameTo fails across some filesystems; fall back to a copy.
-                            tmp.copyTo(file, overwrite = true)
-                            tmp.delete()
+                        // Decode bounds first, so a huge photo is downscaled before it is allocated.
+                        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                        BitmapFactory.decodeFile(source.absolutePath, bounds)
+                        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
+                            error("That image could not be read — it may be corrupt.")
+                        }
+
+                        val options =
+                            BitmapFactory.Options().apply {
+                                inSampleSize = sampleSizeFor(bounds.outWidth, bounds.outHeight)
+                            }
+                        val bitmap =
+                            BitmapFactory.decodeFile(source.absolutePath, options)
+                                ?: error("Could not decode that image.")
+
+                        // Write to a temp file and rename, so a failure halfway through cannot
+                        // leave a half-written image where the UI expects a valid one.
+                        val tmp = File(context.filesDir, "$FILE_NAME.tmp")
+                        try {
+                            tmp.outputStream().use { out ->
+                                if (!bitmap.compress(Bitmap.CompressFormat.JPEG, QUALITY, out)) {
+                                    error("Could not save that image.")
+                                }
+                            }
+                            if (!tmp.renameTo(file)) {
+                                // renameTo fails across some filesystems; fall back to a copy.
+                                tmp.copyTo(file, overwrite = true)
+                                tmp.delete()
+                            }
+                        } finally {
+                            bitmap.recycle()
+                            if (tmp.exists()) tmp.delete()
                         }
                     } finally {
-                        bitmap.recycle()
-                        if (tmp.exists()) tmp.delete()
+                        // A picked photo can be tens of megabytes, so the copy goes even when the
+                        // decode above threw.
+                        source.delete()
                     }
                     Logger.i("App wallpaper set (${file.length() / BYTES_PER_KB} KB)")
-                    state()
+                    snapshot()
                 }.onFailure { Logger.w("Could not set the app wallpaper: ${it.message}") }
             }
 
         /** Removes the background. The app falls back to its plain theme colour. */
         suspend fun clear(): WallpaperState =
             withContext(Dispatchers.IO) {
-                file.delete()
-                state()
+                // Logged because this is the one write that leaves no trace otherwise: a
+                // background that is simply gone is indistinguishable from one that was never
+                // set, which made an accidental Remove look like the file vanishing on its own.
+                if (file.delete()) Logger.i("App wallpaper removed") else Logger.i("No app wallpaper to remove")
+                snapshot()
             }
 
         /** Changes how heavily the image is dimmed, without touching the image. */
-        fun setDim(dim: WallpaperDim): WallpaperState {
-            settings.wallpaperDim = dim.name
-            return state()
-        }
+        suspend fun setDim(dim: WallpaperDim): WallpaperState =
+            withContext(Dispatchers.IO) {
+                settings.wallpaperDim = dim.name
+                snapshot()
+            }
 
         /**
          * The largest power-of-two sample size that still leaves the image above [MAX_EDGE].
@@ -153,11 +204,11 @@ class WallpaperStore
             return sample
         }
 
-        /** The first [WallpaperFormat.MIN_HEADER] bytes, for the format check. */
-        private fun readHeader(uri: Uri): ByteArray {
+        /** The first [WallpaperFormat.MIN_HEADER] bytes of [file], for the format check. */
+        private fun readHeader(file: File): ByteArray {
             val buffer = ByteArray(WallpaperFormat.MIN_HEADER)
             val read =
-                context.contentResolver.openInputStream(uri)?.use { input ->
+                file.inputStream().use { input ->
                     var total = 0
                     while (total < buffer.size) {
                         val n = input.read(buffer, total, buffer.size - total)
@@ -165,7 +216,7 @@ class WallpaperStore
                         total += n
                     }
                     total
-                } ?: 0
+                }
             return if (read == buffer.size) buffer else ByteArray(0)
         }
     }

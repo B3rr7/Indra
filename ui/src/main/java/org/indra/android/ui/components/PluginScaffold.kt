@@ -29,6 +29,8 @@ import org.indra.android.ui.theme.Accent
 import org.indra.android.ui.theme.Brand
 import org.indra.android.ui.theme.LocalAccent
 import org.indra.android.ui.theme.accentFor
+import org.indra.android.ui.theme.chromeFill
+import org.indra.android.ui.theme.pageFill
 
 /**
  * The one plugin screen frame: back arrow, title, optional actions, and the content slot.
@@ -80,6 +82,9 @@ fun PluginScaffold(
     CompositionLocalProvider(LocalAccent provides accent) {
     MaterialTheme(colorScheme = toolScheme) {
     Scaffold(
+        // The page is transparent so a wallpaper behind the app is the background; with none set
+        // this resolves to the theme background and the screen looks exactly as it did.
+        containerColor = pageFill(),
         topBar = {
             Column {
                 TopAppBar(
@@ -102,7 +107,7 @@ fun PluginScaffold(
                     actions = actions,
                     colors =
                         TopAppBarDefaults.topAppBarColors(
-                            containerColor = MaterialTheme.colorScheme.surface,
+                            containerColor = chromeFill(),
                             titleContentColor = MaterialTheme.colorScheme.onSurface,
                         ),
                 )
