@@ -68,7 +68,9 @@ private const val DISABLED_ALPHA = 0.3f
  *
  * Each pill shows its own running dot, so a scan left in another tab is visible without opening it.
  * The `×` only appears while more than one tab is open — the last tab cannot be closed (there would
- * be nothing left to show), so offering the button would be a lie.
+ * be nothing left to show), so offering the button would be a lie. `exit` / `logout` typed into a
+ * tab is the same request from the command line: it closes that tab, and on the last one it
+ * restarts it rather than leaving the strip empty.
  */
 @Composable
 fun TerminalTabStrip(

@@ -93,6 +93,27 @@ class TerminalSessions
             closing.session.dispose()
         }
 
+        /**
+         * Ends a tab because `exit` / `logout` was typed in it.
+         *
+         * More than one tab: the tab closes exactly as the pill's `×` closes it, and its
+         * neighbour takes the screen. The last tab cannot close — a terminal with no tab has no
+         * surface — so it is restarted empty under the same number and told why, rather than
+         * vanishing into a blank screen that reads as a bug.
+         */
+        fun exit(id: Int) {
+            val current = _state.value
+            val closing = current.tabs.firstOrNull { it.id == id } ?: return
+            if (current.tabs.size > 1) {
+                close(id)
+                return
+            }
+            val fresh = newTab(id)
+            _state.update { TerminalTabs(listOf(fresh), id) }
+            closing.session.dispose()
+            fresh.session.append(TerminalSession.Kind.INFO, LAST_TAB_EXIT)
+        }
+
         /** Re-reads the environment/preferences for every tab (resume, or after a setting change). */
         fun refresh() {
             _state.value.tabs.forEach { it.session.refresh() }
@@ -123,10 +144,22 @@ class TerminalSessions
             refresh()
         }
 
-        private fun newTab(id: Int): TerminalTab = TerminalTab(id, TerminalSession(id, toolBox, coreManager, settings))
+        private fun newTab(id: Int): TerminalTab =
+            TerminalTab(
+                id,
+                TerminalSession(id, toolBox, coreManager, settings, onExit = { exit(id) }),
+            )
 
         private companion object {
             /** Tab labels are the small numbers the strip shows; the first one is 1. */
             const val FIRST_TAB = 1
+
+            /**
+             * Said by the tab that `exit` could not close. Both halves matter: that the transcript
+             * is gone on purpose, and which control does close a tab (the `+` makes a second one).
+             */
+            const val LAST_TAB_EXIT =
+                "This is the only terminal tab, so it was restarted instead of closed. " +
+                    "Tap + for a second tab (its × closes it), or Back to leave the terminal."
         }
     }

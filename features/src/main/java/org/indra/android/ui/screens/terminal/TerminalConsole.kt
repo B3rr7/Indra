@@ -230,7 +230,7 @@ private fun Transcript(
                 Text(
                     text =
                         "Indra shell — type a command and press ↵.\n" +
-                            "▲ ▼ walk the history; \"clear\" wipes the screen.",
+                            "▲ ▼ walk the history; \"clear\" wipes the screen, \"exit\" closes the tab.",
                     color = TerminalPalette.info,
                     fontFamily = FontFamily.Monospace,
                     fontSize = font.sp,

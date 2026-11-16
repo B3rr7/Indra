@@ -45,6 +45,14 @@ class TerminalSession(
     private val toolBox: SmartToolBox,
     private val coreManager: CoreManager,
     private val settings: SettingsRepository,
+    /**
+     * Asked to end this tab when the user types `exit`/`logout` (see [TerminalExit]).
+     *
+     * The decision is the owner's, not the session's: [TerminalSessions] knows how many tabs are
+     * open, so it closes this one or restarts the last one. A session that decided for itself
+     * could close the only tab and leave the terminal with no surface at all.
+     */
+    private val onExit: () -> Unit = {},
 ) {
     enum class Kind { COMMAND, OUTPUT, INFO, ERROR }
 
@@ -173,6 +181,7 @@ class TerminalSession(
             job?.isActive == true ->
                 append(Kind.INFO, "[busy] '$command' not run — a command is still running")
             command == "clear" -> clear()
+            TerminalExit.isExit(command) -> onExit()
             handleExport(command) -> Unit
             _state.value.chroot && !_state.value.rootless && !coreManager.isAlpineInstalled() ->
                 append(Kind.ERROR, ALPINE_MISSING)
@@ -309,7 +318,14 @@ class TerminalSession(
         return name != null
     }
 
-    private fun append(
+    /**
+     * Writes one line into this tab's transcript.
+     *
+     * Public because the tab registry has something to say to a tab it just restarted (the last
+     * tab cannot be closed, so `exit` clears it instead and says so). Everything else goes through
+     * [run]/[stop]/[clear]; nothing outside should narrate into a session arbitrarily.
+     */
+    fun append(
         kind: Kind,
         raw: String,
     ) {
